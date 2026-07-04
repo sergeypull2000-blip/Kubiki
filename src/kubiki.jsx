@@ -1182,7 +1182,7 @@ const CSS = `
 .kb-layout{display:flex; align-items:stretch; min-height:calc(100vh - 60px)}
 .kb-palette{width:248px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--line-strong);
   padding:14px 12px 22px; position:sticky; top:60px; align-self:flex-start; display:flex; flex-direction:column; gap:2px}
-.kb-canvas{flex:1; min-width:0; padding:20px 28px 120px}
+.kb-canvas{flex:1; min-width:0; max-width:960px; margin:0 auto; padding:20px 28px 120px}
 
 /* palette accordion */
 .kb-palette-section{padding-bottom:4px; margin-bottom:6px}
