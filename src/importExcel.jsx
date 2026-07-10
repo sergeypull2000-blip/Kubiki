@@ -22,9 +22,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
    разбор моделью. Источник (Excel или PDF) влияет только на способ
    извлечения текста (шаг 1) — дальше единый пайплайн.
 
-   LLM-вызов: в бою (Клайн/Vercel) — POST /api/parse-excel → DeepSeek
-   (ключ на сервере). В превью-артефакте — прямой вызов Anthropic API
-   (он доступен внутри артефакта), чтобы разбор реально работал.
+   LLM-вызов: POST /api/parse-excel → DeepSeek
+   (ключ в переменной окружения DEEPSEEK_API_KEY на Vercel).
    ============================================================ */
 
 const IMPORT_SYSTEM_PROMPT = `Ты разбираешь смету видеопродакшна из таблицы (источник — Excel или текстовый слой PDF). Верни ТОЛЬКО JSON по схеме, без пояснений и markdown.
@@ -97,33 +96,17 @@ const serializePdfRows = (rows) => rows.map((line, i) => `R${i + 1} | ${line}`).
    (лист Excel или страницы PDF) на этот момент уже сведён к одному и тому же
    строково-табличному виду — дальше пайплайн общий. */
 async function llmParseText(sheetText, filename) {
-  // 1) боевой путь: серверлесс с DeepSeek (ключ на сервере Vercel)
-  try {
-    const r = await fetch("/api/parse-excel", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sheet: sheetText, filename }),
-    });
-    if (r.ok) {
-      const j = await r.json();
-      if (j && Array.isArray(j.stages)) return j;
-    }
-  } catch (_) { /* нет эндпоинта (превью) — идём в Anthropic API */ }
-
-  // 2) превью: прямой вызов Anthropic API (доступен внутри артефакта)
-  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+  const r = await fetch("/api/parse-excel", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 2000,
-      system: IMPORT_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: `Файл: ${filename}\nСодержимое (геометрия таблицы):\n\n${sheetText}` }],
-    }),
+    body: JSON.stringify({ sheet: sheetText, filename }),
   });
-  if (!resp.ok) throw new Error("LLM-сервис недоступен. Попробуйте ещё раз.");
-  const data = await resp.json();
-  const text = (data.content || []).map((i) => i.text || "").join("").trim();
-  const clean = text.replace(/```json/gi, "").replace(/```/g, "").trim();
-  return JSON.parse(clean);
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.error || `Ошибка DeepSeek API (${r.status}). Попробуйте ещё раз.`);
+  }
+  const j = await r.json();
+  if (!j || !Array.isArray(j.stages)) throw new Error("Модель вернула некорректный ответ.");
+  return j;
 }
 
 /* Валидация ответа модели ДО превью. Кривой ответ — не роняем приложение. */

@@ -10,10 +10,12 @@ export function Dashboard({ projects, onOpen, onCreate, onDelete }) {
   return (
     <div className="kb-root">
       <header className="kb-header kb-header-dash">
-        <Logo size={21} />
-        <div className="kb-brand">
-          <span className="kb-brand-name">Kubiki</span>
-          <span className="kb-brand-sub">умная смета для CG-производства</span>
+        <div className="kb-header-inner">
+          <Logo size={21} />
+          <div className="kb-brand">
+            <span className="kb-brand-name">Kubiki</span>
+            <span className="kb-brand-sub">умная смета для CG-производства</span>
+          </div>
         </div>
       </header>
 
