@@ -1,7 +1,7 @@
-import KubikiApp from "./kubiki";
+import KubikiApp from './kubiki.jsx'
 
 function App() {
-  return <KubikiApp />;
+  return <KubikiApp />
 }
 
-export default App;
+export default App
