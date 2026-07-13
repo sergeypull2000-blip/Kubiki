@@ -487,7 +487,7 @@ export const CSS = `
 .kb-modal{background:var(--surface); border:1px solid var(--line); border-radius:12px; box-shadow:0 24px 60px rgba(20,30,50,.22); width:100%; max-width:560px; max-height:86vh; display:flex; flex-direction:column; overflow:hidden}
 .kb-modal-head{display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid var(--line)}
 .kb-modal-title{font-size:var(--fs-md); font-weight:var(--fw-semibold); color:var(--text)}
-.kb-modal-body{padding:16px 18px; overflow-y:auto; min-height:0; flex:1 1 0}
+.kb-modal-body{padding:16px 18px; overflow-y:auto; min-height:0; flex:1 1 auto}
 .kb-modal-note{font-size:12px; color:var(--text-muted); margin-bottom:12px; line-height:1.5}
 .kb-modal-status{display:flex; align-items:center; gap:10px; padding:32px 18px; justify-content:center; color:var(--text-muted); font-size:var(--fs-sm)}
 .kb-modal-status.is-error{color:#C0392B}
@@ -525,4 +525,19 @@ export const CSS = `
 .kb-import-kind-result{font-size:12px; color:var(--text); font-variant-numeric:tabular-nums}
 .kb-import-kind-warn{font-size:12px; color:#B36B00; display:flex; flex-direction:column; gap:2px}
 .kb-import-kind-hint{font-size:11px; color:var(--text-faint); line-height:1.5}
+
+/* ---- крупная пометка «черновая оценка» и допущения ИИ в превью генерации по описанию ---- */
+.kb-draft-notice{display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:8px; margin-bottom:12px;
+  background:#FFF4E0; border:1px solid #F0C57A; color:#7A4E00; font-size:12px; font-weight:var(--fw-medium); line-height:1.4}
+.kb-prev-warnings-lg{border:1.5px solid #F0C57A; background:#FFF9EE; padding:12px 14px}
+.kb-prev-warnings-lg .kb-prev-warn-title{font-size:13px; font-weight:var(--fw-semibold); color:#7A4E00; margin-bottom:8px}
+.kb-prev-warnings-lg .kb-prev-warn-item{font-size:13px; color:#8A5A00; padding:3px 0}
+
+/* ---- поле «опишите проект» рядом с плашкой импорта ---- */
+.kb-generate-box{width:100%; max-width:520px; display:flex; flex-direction:column; gap:8px; padding:20px; border:1.5px solid var(--line); border-radius:12px; background:var(--surface)}
+.kb-generate-title{display:flex; align-items:center; gap:7px; font-size:var(--fs-sm); font-weight:var(--fw-semibold); color:var(--text)}
+.kb-generate-textarea{width:100%; resize:vertical; min-height:64px; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface-sunken); color:var(--text); font:inherit; font-size:13px; line-height:1.5}
+.kb-generate-textarea:focus{outline:none; border-color:var(--accent)}
+.kb-generate-hint{font-size:11px; color:var(--text-faint); line-height:1.5}
+.kb-generate-btn{align-self:flex-end}
 `;

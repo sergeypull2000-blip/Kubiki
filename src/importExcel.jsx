@@ -4,7 +4,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import {
   X, Trash2, ChevronDown, AlertTriangle,
-  UploadCloud, Loader2, FileSpreadsheet, Download, FolderOpen,
+  UploadCloud, Loader2, FileSpreadsheet, Download, FolderOpen, Sparkles,
 } from "lucide-react";
 import { uid, fmt, numVal } from "./utils.js";
 import { Logo } from "./Logo.jsx";
@@ -109,6 +109,24 @@ async function llmParseText(sheetText, filename) {
   return j;
 }
 
+/* ЗАДАЧА 6 — генерация черновой сметы из текстового описания проекта.
+   Тот же пайплайн, что и импорт из Excel/PDF (validateParsed →
+   превью → costFromExternalPrice → stagesFromParsed), меняется только
+   вход (описание вместо таблицы) и системный промпт на сервере. */
+async function llmGenerateEstimate(description) {
+  const r = await fetch("/api/generate-estimate", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ description }),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.error || `Ошибка DeepSeek API (${r.status}). Попробуйте ещё раз.`);
+  }
+  const j = await r.json();
+  if (!j || !Array.isArray(j.stages)) throw new Error("Модель вернула некорректный ответ.");
+  return j;
+}
+
 /* Валидация ответа модели ДО превью. Кривой ответ — не роняем приложение. */
 function validateParsed(json) {
   if (!json || typeof json !== "object") throw new Error("Модель вернула не-JSON.");
@@ -181,6 +199,145 @@ function stagesFromParsed(parsed) {
   }));
 }
 
+/* Состояние и правки редактируемого превью (общее для импорта из файла и
+   генерации по описанию — единый пайплайн, разный только источник parsed). */
+function useEstimateEditor(initialMarkupPct = "") {
+  const [parsed, setParsed] = useState(null);
+  const [warnings, setWarnings] = useState([]);
+  // ЗАДАЧА 5: вид сметы — «внутренняя как есть» / «внешняя → развернуть
+  // в себестоимость по единому маркапу». Дефолт — «внешняя».
+  const [importKind, setImportKind] = useState("external"); // "internal" | "external"
+  const [markupPct, setMarkupPct] = useState(initialMarkupPct);
+
+  const load = (valid) => { setParsed(valid); setWarnings(valid.warnings); };
+
+  const setStageName = (si, name) => setParsed((p) => ({ ...p, stages: p.stages.map((s, i) => i === si ? { ...s, name } : s) }));
+  const setTaskField = (si, ti, field, val) => setParsed((p) => ({
+    ...p, stages: p.stages.map((s, i) => i !== si ? s : { ...s, tasks: s.tasks.map((t, j) => j === ti ? { ...t, [field]: val } : t) }),
+  }));
+  const delTask = (si, ti) => setParsed((p) => ({ ...p, stages: p.stages.map((s, i) => i !== si ? s : { ...s, tasks: s.tasks.filter((_, j) => j !== ti) }).filter((s) => s.tasks.length > 0) }));
+  const delStage = (si) => setParsed((p) => ({ ...p, stages: p.stages.filter((_, i) => i !== si) }));
+
+  const total = parsed ? parsed.stages.reduce((a, s) => a + s.tasks.reduce((x, t) => x + numVal(t.cost), 0), 0) : 0;
+  const taskCount = parsed ? parsed.stages.reduce((a, s) => a + s.tasks.length, 0) : 0;
+
+  // пересчёт себестоимости из клиентской цены живьём, по мере ввода маркапа
+  const converted = useMemo(() => (parsed ? computeInsertCosts(parsed, importKind, markupPct) : null), [parsed, importKind, markupPct]);
+  const convertedCostTotal = converted ? converted.stages.reduce((a, s) => a + s.tasks.reduce((x, t) => x + numVal(t.cost), 0), 0) : 0;
+
+  const buildConfirm = () => {
+    const clean = { ...parsed, stages: parsed.stages.map((s) => ({ ...s, tasks: s.tasks.filter((t) => t.name.trim()) })).filter((s) => s.tasks.length > 0) };
+    if (clean.stages.length === 0) return { ok: false, message: "Нечего импортировать." };
+    const { stages: costedStages } = computeInsertCosts(clean, importKind, markupPct);
+    const meta = importKind === "external" ? { globalMarkup: numVal(markupPct) } : null;
+    return { ok: true, stages: stagesFromParsed({ ...clean, stages: costedStages }), meta };
+  };
+
+  return {
+    parsed, warnings, importKind, setImportKind, markupPct, setMarkupPct,
+    load, setStageName, setTaskField, delTask, delStage,
+    total, taskCount, converted, convertedCostTotal, buildConfirm,
+  };
+}
+
+/* Редактируемое превью распознанной/сгенерированной сметы — общий шаг
+   для импорта из файла и генерации по описанию. showKindToggle скрывает
+   выбор «внутренняя/внешняя», когда источник всегда клиентские цены
+   (генерация по описанию) — тогда пересчёт по маркапу применяется всегда. */
+function EstimatePreviewStep({ editor, noteText, draftNotice, warnTitle, warnProminent, showKindToggle = true, confirmLabel = "Импортировать", onClose, onConfirm }) {
+  const {
+    parsed, warnings, importKind, setImportKind, markupPct, setMarkupPct,
+    setStageName, setTaskField, delTask, delStage,
+    total, taskCount, converted, convertedCostTotal, buildConfirm,
+  } = editor;
+  const [localError, setLocalError] = useState("");
+
+  const confirm = () => {
+    const res = buildConfirm();
+    if (!res.ok) { setLocalError(res.message); return; }
+    onConfirm(res.stages, res.meta);
+  };
+
+  const showMarkupBlock = showKindToggle ? importKind === "external" : true;
+
+  return (
+    <>
+      <div className="kb-modal-body kb-import-preview">
+        {draftNotice && <div className="kb-draft-notice"><AlertTriangle size={14} strokeWidth={1.5} /> {draftNotice}</div>}
+        <div className="kb-modal-note">{noteText}</div>
+
+        <div className="kb-import-kind">
+          {showKindToggle ? (
+            <>
+              <div className="kb-import-kind-q">Вы импортируете внутреннюю смету или внешнюю?</div>
+              <div className="kb-import-kind-opts">
+                <button type="button" className={"kb-import-kind-opt" + (importKind === "internal" ? " is-active" : "")}
+                  onClick={() => setImportKind("internal")}>Внутреннюю</button>
+                <button type="button" className={"kb-import-kind-opt" + (importKind === "external" ? " is-active" : "")}
+                  onClick={() => setImportKind("external")}>Внешнюю</button>
+              </div>
+            </>
+          ) : (
+            <div className="kb-import-kind-q">Маркап, заложенный в цены модели, %</div>
+          )}
+          {showMarkupBlock && (
+            <>
+              <div className="kb-import-kind-markup">
+                <label className="kb-import-kind-marklbl">Маркап в этих ценах, %</label>
+                <input className="kb-input kb-input-num" value={markupPct} placeholder="20"
+                  onChange={(e) => setMarkupPct(e.target.value)} />
+              </div>
+              <div className="kb-import-kind-result">Восстановленная себестоимость: {fmt(convertedCostTotal)} ₽ (Kubiki накрутит те же {fmt(numVal(markupPct))}% обратно)</div>
+              {converted.extraWarnings.length > 0 && (
+                <div className="kb-import-kind-warn">
+                  {converted.extraWarnings.slice(0, 5).map((w, i) => <div key={i}>{w}</div>)}
+                </div>
+              )}
+              <div className="kb-import-kind-hint">
+                Пересчёт использует единый маркап на всю смету. Если в исходных цифрах маржа размазана
+                по позициям по-разному — восстановленная себестоимость будет приблизительной, точные значения
+                продюсер поправит вручную после вставки. Это осознанное упрощение, не баг.
+              </div>
+            </>
+          )}
+        </div>
+
+        {parsed.stages.map((s, si) => (
+          <div key={si} className="kb-prev-stage">
+            <div className="kb-prev-stage-head">
+              <input className="kb-input kb-prev-stage-name" value={s.name} onChange={(e) => setStageName(si, e.target.value)} />
+              <button type="button" className="kb-icon-btn" title="Убрать этап" onClick={() => delStage(si)}><Trash2 size={13} strokeWidth={1.5} /></button>
+            </div>
+            {s.tasks.map((t, ti) => (
+              <div key={ti} className="kb-prev-task">
+                <input className="kb-input kb-prev-task-name" value={t.name} onChange={(e) => setTaskField(si, ti, "name", e.target.value)} />
+                <input className="kb-input kb-input-num kb-prev-task-cost" value={t.cost}
+                  onChange={(e) => setTaskField(si, ti, "cost", e.target.value)} />
+                <span className="kb-prev-cur">₽</span>
+                <button type="button" className="kb-icon-btn" title="Убрать задачу" onClick={() => delTask(si, ti)}><X size={13} strokeWidth={1.5} /></button>
+              </div>
+            ))}
+          </div>
+        ))}
+        {warnings.length > 0 && (
+          <div className={"kb-prev-warnings" + (warnProminent ? " kb-prev-warnings-lg" : "")}>
+            <div className="kb-prev-warn-title"><AlertTriangle size={warnProminent ? 15 : 13} strokeWidth={1.5} /> {warnTitle || `Не распозналось однозначно (${warnings.length}):`}</div>
+            {warnings.slice(0, 8).map((w, i) => <div key={i} className="kb-prev-warn-item">{w}</div>)}
+          </div>
+        )}
+        {localError && <div className="kb-modal-status is-error"><AlertTriangle size={16} strokeWidth={1.5} /> {localError}</div>}
+      </div>
+      <div className="kb-modal-foot">
+        <div className="kb-prev-summary">Этапов: {parsed.stages.length} · задач: {taskCount} · сумма: {fmt(total)} ₽</div>
+        <div className="kb-modal-actions">
+          <button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button>
+          <button type="button" className="kb-btn kb-btn-primary" onClick={confirm} disabled={taskCount === 0}>{confirmLabel}</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 /* Модалка импорта: извлечение текста (Excel-лист / PDF-страницы) → разбор →
    редактируемое превью (вид сметы + обратный пересчёт) → вставка. */
 export function ImportModal({ file, onClose, onConfirm }) {
@@ -188,13 +345,8 @@ export function ImportModal({ file, onClose, onConfirm }) {
   const [step, setStep] = useState("reading"); // reading|sheet|parsing|preview|error
   const [wb, setWb] = useState(null);
   const [sheetNames, setSheetNames] = useState([]);
-  const [parsed, setParsed] = useState(null);
-  const [warnings, setWarnings] = useState([]);
   const [errorMsg, setErrorMsg] = useState("");
-  // ЗАДАЧА 5: вид импортируемой сметы. Дефолт — «внешняя» (продюсеры чаще
-  // импортируют смету с уже зашитым маркапом, чем чистую себестоимость).
-  const [importKind, setImportKind] = useState("external"); // "internal" | "external"
-  const [markupPct, setMarkupPct] = useState("");
+  const editor = useEstimateEditor();
 
   // шаг 1: извлечение текста из файла (в коде, не в LLM) — способ зависит
   // от расширения, дальше единый пайплайн (LLM-разбор/превью/вставка)
@@ -241,9 +393,7 @@ export function ImportModal({ file, onClose, onConfirm }) {
     setStep("parsing");
     try {
       const raw = await llmParseText(text, sourceLabel);
-      const valid = validateParsed(raw);
-      setParsed(valid);
-      setWarnings(valid.warnings);
+      editor.load(validateParsed(raw));
       setStep("preview");
     } catch (e) {
       setErrorMsg(e.message || "Не удалось разобрать смету.");
@@ -257,30 +407,6 @@ export function ImportModal({ file, onClose, onConfirm }) {
       runParseText(serializePdfRows(rows), file.name);
     }).catch(() => { setErrorMsg("Не удалось прочитать PDF-файл."); setStep("error"); }); return; }
     if (wb) { sheetNames.length > 1 ? setStep("sheet") : runParseSheet(wb, sheetNames[0]); }
-  };
-
-  // редактирование превью
-  const setStageName = (si, name) => setParsed((p) => ({ ...p, stages: p.stages.map((s, i) => i === si ? { ...s, name } : s) }));
-  const setTaskField = (si, ti, field, val) => setParsed((p) => ({
-    ...p, stages: p.stages.map((s, i) => i !== si ? s : { ...s, tasks: s.tasks.map((t, j) => j === ti ? { ...t, [field]: field === "cost" ? val : val } : t) }),
-  }));
-  const delTask = (si, ti) => setParsed((p) => ({ ...p, stages: p.stages.map((s, i) => i !== si ? s : { ...s, tasks: s.tasks.filter((_, j) => j !== ti) }).filter((s) => s.tasks.length > 0) }));
-  const delStage = (si) => setParsed((p) => ({ ...p, stages: p.stages.filter((_, i) => i !== si) }));
-
-  const total = parsed ? parsed.stages.reduce((a, s) => a + s.tasks.reduce((x, t) => x + numVal(t.cost), 0), 0) : 0;
-  const taskCount = parsed ? parsed.stages.reduce((a, s) => a + s.tasks.length, 0) : 0;
-
-  // ЗАДАЧА 5: пересчёт себестоимости из внешней цены живьём, по мере ввода
-  // маркапа — чтобы предупреждения о некорректных позициях были видны ДО подтверждения.
-  const converted = useMemo(() => (parsed ? computeInsertCosts(parsed, importKind, markupPct) : null), [parsed, importKind, markupPct]);
-  const convertedCostTotal = converted ? converted.stages.reduce((a, s) => a + s.tasks.reduce((x, t) => x + numVal(t.cost), 0), 0) : 0;
-
-  const confirm = () => {
-    const clean = { ...parsed, stages: parsed.stages.map((s) => ({ ...s, tasks: s.tasks.filter((t) => t.name.trim()) })).filter((s) => s.tasks.length > 0) };
-    if (clean.stages.length === 0) { setErrorMsg("Нечего импортировать."); setStep("error"); return; }
-    const { stages: costedStages } = computeInsertCosts(clean, importKind, markupPct);
-    const meta = importKind === "external" ? { globalMarkup: numVal(markupPct) } : null;
-    onConfirm(stagesFromParsed({ ...clean, stages: costedStages }), meta);
   };
 
   return (
@@ -318,87 +444,84 @@ export function ImportModal({ file, onClose, onConfirm }) {
           </div>
         )}
 
-        {step === "preview" && parsed && (
-          <>
-            <div className="kb-modal-body kb-import-preview">
-              <div className="kb-modal-note">Проверьте распознанное и при необходимости поправьте. Каждая задача добавится с кубиком «фикс за всё».</div>
-
-              <div className="kb-import-kind">
-                <div className="kb-import-kind-q">Вы импортируете внутреннюю смету или внешнюю?</div>
-                <div className="kb-import-kind-opts">
-                  <button type="button" className={"kb-import-kind-opt" + (importKind === "internal" ? " is-active" : "")}
-                    onClick={() => setImportKind("internal")}>Внутреннюю</button>
-                  <button type="button" className={"kb-import-kind-opt" + (importKind === "external" ? " is-active" : "")}
-                    onClick={() => setImportKind("external")}>Внешнюю</button>
-                </div>
-                {importKind === "external" && (
-                  <>
-                    <div className="kb-import-kind-markup">
-                      <label className="kb-import-kind-marklbl">Маркап в этих ценах, %</label>
-                      <input className="kb-input kb-input-num" value={markupPct} placeholder="20"
-                        onChange={(e) => setMarkupPct(e.target.value)} />
-                    </div>
-                    <div className="kb-import-kind-result">Восстановленная себестоимость: {fmt(convertedCostTotal)} ₽ (при импорте Kubiki накрутит те же {fmt(numVal(markupPct))}% обратно)</div>
-                    {converted.extraWarnings.length > 0 && (
-                      <div className="kb-import-kind-warn">
-                        {converted.extraWarnings.slice(0, 5).map((w, i) => <div key={i}>{w}</div>)}
-                      </div>
-                    )}
-                    <div className="kb-import-kind-hint">
-                      Обратный пересчёт использует единый маркап на всю смету. Если в исходном файле маржа размазана
-                      по позициям по-разному — восстановленная себестоимость будет приблизительной, точные значения
-                      продюсер поправит вручную после импорта. Это осознанное упрощение, не баг.
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {parsed.stages.map((s, si) => (
-                <div key={si} className="kb-prev-stage">
-                  <div className="kb-prev-stage-head">
-                    <input className="kb-input kb-prev-stage-name" value={s.name} onChange={(e) => setStageName(si, e.target.value)} />
-                    <button type="button" className="kb-icon-btn" title="Убрать этап" onClick={() => delStage(si)}><Trash2 size={13} strokeWidth={1.5} /></button>
-                  </div>
-                  {s.tasks.map((t, ti) => (
-                    <div key={ti} className="kb-prev-task">
-                      <input className="kb-input kb-prev-task-name" value={t.name} onChange={(e) => setTaskField(si, ti, "name", e.target.value)} />
-                      <input className="kb-input kb-input-num kb-prev-task-cost" value={t.cost}
-                        onChange={(e) => setTaskField(si, ti, "cost", e.target.value)} />
-                      <span className="kb-prev-cur">₽</span>
-                      <button type="button" className="kb-icon-btn" title="Убрать задачу" onClick={() => delTask(si, ti)}><X size={13} strokeWidth={1.5} /></button>
-                    </div>
-                  ))}
-                </div>
-              ))}
-              {warnings.length > 0 && (
-                <div className="kb-prev-warnings">
-                  <div className="kb-prev-warn-title"><AlertTriangle size={13} strokeWidth={1.5} /> Не распозналось однозначно ({warnings.length}):</div>
-                  {warnings.slice(0, 8).map((w, i) => <div key={i} className="kb-prev-warn-item">{w}</div>)}
-                </div>
-              )}
-            </div>
-            <div className="kb-modal-foot">
-              <div className="kb-prev-summary">Этапов: {parsed.stages.length} · задач: {taskCount} · сумма: {fmt(total)} ₽</div>
-              <div className="kb-modal-actions">
-                <button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button>
-                <button type="button" className="kb-btn kb-btn-primary" onClick={confirm} disabled={taskCount === 0}>Импортировать</button>
-              </div>
-            </div>
-          </>
+        {step === "preview" && editor.parsed && (
+          <EstimatePreviewStep editor={editor}
+            noteText="Проверьте распознанное и при необходимости поправьте. Каждая задача добавится с кубиком «фикс за всё»."
+            onClose={onClose} onConfirm={onConfirm} />
         )}
       </div>
     </div>
   );
 }
 
-/* Крупная плашка импорта в центре пустой рабочей зоны (нет ни одного этапа). */
-export function ImportEmptyState({ onPickFile }) {
+/* ЗАДАЧА 6 — модалка генерации черновой сметы по текстовому описанию.
+   Пайплайн такой же, как у ImportModal, только вход — не файл, а
+   уже введённое описание, поэтому шагов "reading"/"sheet" нет:
+   сразу parsing → preview (общий EstimatePreviewStep) → error. */
+export function GenerateEstimateModal({ description, onClose, onConfirm }) {
+  const [step, setStep] = useState("parsing"); // parsing|preview|error
+  const [errorMsg, setErrorMsg] = useState("");
+  const editor = useEstimateEditor("25"); // дефолт маркапа для клиентских цен модели
+
+  const run = () => {
+    setStep("parsing");
+    llmGenerateEstimate(description)
+      .then((raw) => { editor.load(validateParsed(raw)); setStep("preview"); })
+      .catch((e) => { setErrorMsg(e.message || "Не удалось собрать смету."); setStep("error"); });
+  };
+
+  useEffect(() => { run(); // eslint-disable-next-line
+  }, [description]);
+
+  return (
+    <div className="kb-modal-overlay" onMouseDown={onClose}>
+      <div className="kb-modal kb-import-modal" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="kb-modal-head">
+          <span className="kb-modal-title">Черновая смета по описанию</span>
+          <button type="button" className="kb-icon-btn" onClick={onClose}><X size={16} strokeWidth={1.5} /></button>
+        </div>
+
+        {step === "parsing" && <div className="kb-modal-status"><Loader2 className="kb-spin" size={20} strokeWidth={1.5} /> ИИ собирает черновую смету…</div>}
+
+        {step === "error" && (
+          <div className="kb-modal-body">
+            <div className="kb-modal-status is-error"><AlertTriangle size={20} strokeWidth={1.5} /> {errorMsg}</div>
+            <div className="kb-modal-actions">
+              <button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Закрыть</button>
+              <button type="button" className="kb-btn kb-btn-primary" onClick={run}>Попробовать снова</button>
+            </div>
+          </div>
+        )}
+
+        {step === "preview" && editor.parsed && (
+          <EstimatePreviewStep editor={editor}
+            draftNotice="Черновая оценка. Цены примерные — поправьте под свой проект."
+            noteText="Проверьте распознанную структуру и при необходимости поправьте. Каждая задача добавится с кубиком «фикс за всё»."
+            warnTitle={`Допущения ИИ, проверьте (${editor.warnings.length}):`}
+            warnProminent showKindToggle={false} confirmLabel="Вставить в смету"
+            onClose={onClose} onConfirm={onConfirm} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* Крупная плашка импорта в центре пустой рабочей зоны (нет ни одного этапа):
+   импорт файла и генерация черновой сметы по текстовому описанию — рядом,
+   как два равноправных входа в один и тот же пайплайн (разбор LLM → превью → вставка). */
+export function ImportEmptyState({ onPickFile, onGenerate }) {
   const [over, setOver] = useState(false);
   const inputRef = useRef(null);
+  const [desc, setDesc] = useState("");
   const pick = (file) => {
     if (!file) return;
     if (!/\.(xlsx|xls|csv|pdf)$/i.test(file.name)) return;
     onPickFile(file);
+  };
+  const submit = () => {
+    const text = desc.trim();
+    if (!text) return;
+    onGenerate(text);
   };
   return (
     <div className="kb-import-empty">
@@ -412,6 +535,24 @@ export function ImportEmptyState({ onPickFile }) {
         <div className="kb-import-hero-title">ИИ-импорт сметы</div>
         <div className="kb-import-hero-sub">Перетащите файл .xlsx / .csv / .pdf или нажмите — ИИ распознает структуру, вы проверите и подтвердите</div>
       </div>
+
+      {onGenerate && (
+        <>
+          <div className="kb-import-empty-or">или</div>
+          <div className="kb-generate-box">
+            <div className="kb-generate-title"><Sparkles size={16} strokeWidth={1.5} /> Опишите проект — соберём черновую смету</div>
+            <textarea className="kb-generate-textarea" rows={3} value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") submit(); }}
+              placeholder="Ролик для мультимедиа-экрана, 30 сек, луп, 2000×5000, фулл CG с партиклами, ресайзы под 3 формата" />
+            <div className="kb-generate-hint">Укажите тип, хронометраж, технику (2D / 3D / AI), назначение, срок и особенности (луп, нестандартное разрешение, ресайзы)</div>
+            <button type="button" className="kb-btn kb-btn-primary kb-generate-btn" onClick={submit} disabled={!desc.trim()}>
+              Сгенерировать смету
+            </button>
+          </div>
+        </>
+      )}
+
       <div className="kb-import-empty-or">или соберите смету вручную ниже</div>
     </div>
   );

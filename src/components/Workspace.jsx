@@ -13,7 +13,7 @@ import {
   mapStage, withTask,
   findExecutor, cloneExecutor, insertStage, applyTagToExecutor,
 } from "../store.js";
-import { ImportModal, ImportEmptyState, LogoMenu } from "../importExcel.jsx";
+import { ImportModal, GenerateEstimateModal, ImportEmptyState, LogoMenu } from "../importExcel.jsx";
 import { useOutsideClose } from "../hooks.js";
 import { PalettePanel } from "./LeftPanel.jsx";
 import { StageCard, CanvasDropZone } from "./Stage.jsx";
@@ -27,6 +27,7 @@ export function Workspace({ project, onChange, onBack }) {
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
   // в Клайне можно persist'ить в localStorage.
   const [importFile, setImportFile] = useState(null);
+  const [generateDescription, setGenerateDescription] = useState(null);
   const [activeExecutorId, setActiveExecutorId] = useState(null);
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [activeStageId, setActiveStageId] = useState(null);
@@ -181,6 +182,16 @@ export function Workspace({ project, onChange, onBack }) {
     }
   };
 
+  // вставка этапов, подтверждённых в превью импорта/генерации — общая точка
+  // для обоих входов в пайплайн (файл и текстовое описание)
+  const insertParsedStages = (stages, meta) => {
+    dispatch((p) => ({
+      ...p,
+      stages: [...(p.stages || []), ...stages],
+      ...(meta && Number.isFinite(meta.globalMarkup) ? { globalMarkup: meta.globalMarkup } : {}),
+    }));
+  };
+
   const isEmpty = project.stages.length === 0;
   // п.4: смена вида снимает любое выделение (и в панели «Свойства»).
   const changeView = (v) => { clearSelection(); setView(v); };
@@ -193,14 +204,11 @@ export function Workspace({ project, onChange, onBack }) {
     <div className="kb-root kb-root-workspace">
       {importFile && (
         <ImportModal file={importFile} onClose={() => setImportFile(null)}
-          onConfirm={(stages, meta) => {
-            dispatch((p) => ({
-              ...p,
-              stages: [...(p.stages || []), ...stages],
-              ...(meta && Number.isFinite(meta.globalMarkup) ? { globalMarkup: meta.globalMarkup } : {}),
-            }));
-            setImportFile(null);
-          }} />
+          onConfirm={(stages, meta) => { insertParsedStages(stages, meta); setImportFile(null); }} />
+      )}
+      {generateDescription && (
+        <GenerateEstimateModal description={generateDescription} onClose={() => setGenerateDescription(null)}
+          onConfirm={(stages, meta) => { insertParsedStages(stages, meta); setGenerateDescription(null); }} />
       )}
       <header className="kb-header kb-header-min">
         <div className="kb-header-inner">
@@ -235,7 +243,7 @@ export function Workspace({ project, onChange, onBack }) {
           {/* клик по нейтральной зоне листа снимает все выделения. */}
           <main className="kb-canvas" onMouseDown={clearSelection}>
             <div className="kb-canvas-inner">
-              {isEmpty && <ImportEmptyState onPickFile={setImportFile} />}
+              {isEmpty && <ImportEmptyState onPickFile={setImportFile} onGenerate={setGenerateDescription} />}
               {project.stages.map((s) => (
                 <StageCard key={s.id} stage={s} dispatch={dispatch}
                   activeStageId={activeStageId} activeTaskId={activeTaskId}
