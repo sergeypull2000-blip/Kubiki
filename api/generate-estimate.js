@@ -8,7 +8,7 @@
    ============================================================ */
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
-const MODEL = "deepseek-chat";
+const MODEL = "deepseek-v4-flash";
 
 const SYSTEM_PROMPT = `Ты — опытный продюсер CG/моушн-студии. По описанию проекта собери ЧЕРНОВУЮ смету. Верни ТОЛЬКО JSON, без пояснений и markdown:
 {"projectName": "...", "stages": [{"name": "...", "tasks": [{"name": "...", "cost": 150000}]}], "warnings": ["допущения, которые ты сделал"]}

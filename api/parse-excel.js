@@ -7,7 +7,7 @@
    ============================================================ */
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
-const MODEL = "deepseek-chat";
+const MODEL = "deepseek-v4-flash";
 
 const SYSTEM_PROMPT = `Ты разбираешь смету видеопродакшна из таблицы (источник — Excel или текстовый слой PDF). Верни ТОЛЬКО JSON по схеме, без пояснений и markdown.
 
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
           { role: "user", content: userContent },
         ],
         temperature: 0,
-        max_tokens: 4000,
+        max_tokens: 16000,
       }),
     });
 
@@ -66,12 +66,47 @@ export default async function handler(req, res) {
     }
 
     const data = await r.json();
-    const raw = data.choices?.[0]?.message?.content;
+    const choice = data.choices?.[0];
+    const raw = choice?.message?.content;
     if (!raw) return res.status(502).json({ error: "DeepSeek вернул пустой ответ" });
+
+    if (choice.finish_reason === "length") {
+      console.error(
+        `parse-excel: ответ обрезан по длине (finish_reason=length), длина ответа ${raw.length} символов`
+      );
+      return res.status(502).json({
+        error:
+          "Смета слишком большая — не удалось разобрать целиком. Попробуйте импортировать по частям или обратитесь к разработчику.",
+      });
+    }
 
     // Очистка от markdown-обёрток
     const clean = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
-    const parsed = JSON.parse(clean);
+
+    // Быстрая проверка, что ответ похож на завершённый JSON-объект,
+    // прежде чем пытаться его парсить
+    if (!clean.startsWith("{") || !clean.endsWith("}")) {
+      console.error(
+        `parse-excel: ответ не похож на завершённый JSON (длина ${clean.length} символов), начало: "${clean.slice(0, 50)}", конец: "${clean.slice(-50)}"`
+      );
+      return res.status(502).json({
+        error:
+          "Смета слишком большая — не удалось разобрать целиком. Попробуйте импортировать по частям или обратитесь к разработчику.",
+      });
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(clean);
+    } catch (parseErr) {
+      console.error(
+        `parse-excel: JSON.parse упал (${parseErr.message}), длина ответа ${clean.length} символов`
+      );
+      return res.status(502).json({
+        error:
+          "Смета слишком большая — не удалось разобрать целиком. Попробуйте импортировать по частям или обратитесь к разработчику.",
+      });
+    }
 
     return res.status(200).json(parsed);
   } catch (e) {
