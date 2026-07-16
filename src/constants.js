@@ -97,7 +97,7 @@ export const TAG_DEFS = [
   { key: "spec",    label: "Специализация",  short: "Специализация", icon: Palette,    kind: "select", options: SPECIALIZATION_OPTIONS },
   { key: "grade",   label: "Грейд",          short: "Грейд",         icon: BadgeCheck, kind: "select", options: GRADE_OPTIONS },
   { key: "soft",    label: "Софт",           short: "Софт",          icon: Monitor,    kind: "select", options: SOFTWARE_OPTIONS },
-  { key: "payment", label: "Кубик оплаты",   short: "Оплата",        icon: Wallet,     kind: "payment", options: PAYMENT_OPTIONS },
+  { key: "payment", label: "Тип оплаты",     short: "Оплата",        icon: Wallet,     kind: "payment", options: PAYMENT_OPTIONS },
   { key: "tax",     label: "Налог",          short: "Налог",         icon: Percent,    kind: "tax" },
 ];
 export const TAG_DEF = Object.fromEntries(TAG_DEFS.map((t) => [t.key, t]));

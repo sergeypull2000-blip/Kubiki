@@ -243,19 +243,29 @@ export function Workspace({ project, onChange, onBack }) {
           {/* клик по нейтральной зоне листа снимает все выделения. */}
           <main className="kb-canvas" onMouseDown={clearSelection}>
             <div className="kb-canvas-inner">
-              {isEmpty && <ImportEmptyState onPickFile={setImportFile} onGenerate={setGenerateDescription} />}
-              {project.stages.map((s) => (
-                <StageCard key={s.id} stage={s} dispatch={dispatch}
-                  activeStageId={activeStageId} activeTaskId={activeTaskId}
-                  activeExecutorId={activeExecutorId}
-                  onActivateStage={activateStage}
-                  onActivateTask={activateTask}
-                  onActivateExecutor={activateExecutor}
-                  onRemove={() => removeStage(s.id)} />
-              ))}
-              <CanvasDropZone isEmpty={isEmpty}
-                onDropStage={(payload) => dispatch((p) => insertStage(p, payload, null))}
-                onAddStage={() => addStageByClick(CUSTOM_STAGE)} />
+              {isEmpty ? (
+                <>
+                  <CanvasDropZone isEmpty
+                    onDropStage={(payload) => dispatch((p) => insertStage(p, payload, null))}
+                    onAddStage={() => addStageByClick(CUSTOM_STAGE)} />
+                  <ImportEmptyState onPickFile={setImportFile} onGenerate={setGenerateDescription} />
+                </>
+              ) : (
+                <>
+                  {project.stages.map((s) => (
+                    <StageCard key={s.id} stage={s} dispatch={dispatch}
+                      activeStageId={activeStageId} activeTaskId={activeTaskId}
+                      activeExecutorId={activeExecutorId}
+                      onActivateStage={activateStage}
+                      onActivateTask={activateTask}
+                      onActivateExecutor={activateExecutor}
+                      onRemove={() => removeStage(s.id)} />
+                  ))}
+                  <CanvasDropZone isEmpty={false}
+                    onDropStage={(payload) => dispatch((p) => insertStage(p, payload, null))}
+                    onAddStage={() => addStageByClick(CUSTOM_STAGE)} />
+                </>
+              )}
             </div>
           </main>
           {rightPanel}

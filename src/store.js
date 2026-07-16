@@ -13,7 +13,7 @@ export const makeTag = (key, value = "") => {
   return tag;
 };
 export const makeExecutor = () => ({ id: uid(), tags: [], amount: "" });
-export const makeTask = () => ({ id: uid(), name: "", executors: [], markupOverride: null, collapsed: false });
+export const makeTask = () => ({ id: uid(), name: "", executors: [], markupOverride: null, collapsed: false, directCost: null });
 export const makeStage = (preset) => ({
   id: uid(), presetKey: preset.key, name: preset.name, tasks: [], collapsed: false,
 });

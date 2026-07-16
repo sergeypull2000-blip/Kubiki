@@ -73,7 +73,7 @@ function PropertiesPanel({ project, view, activeStageId, activeTaskId, activeExe
         <div className="kb-props-name">{R.name}</div>
         {(R.role || R.grade) && <div className="kb-props-meta">{[R.role, R.grade].filter(Boolean).join(" · ")}</div>}
         <div className="kb-props-figure">{fmt(R.sum)} ₽</div>
-        <div className="kb-props-row"><span>{R.payLabel || "Кубик оплаты не задан"}</span>{detail && <span>{detail}</span>}</div>
+        <div className="kb-props-row"><span>{R.payLabel || "Тип оплаты не задан"}</span>{detail && <span>{detail}</span>}</div>
       </div>
     );
   }

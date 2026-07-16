@@ -24,7 +24,12 @@ export const executorSum = (e) => {
   const taxPct = taxTag ? numVal(taxTag.value) : 0;
   return base * (1 + taxPct / 100);
 };
-export const taskSum = (t) => (t.executors || []).reduce((a, e) => a + executorSum(e), 0);
+/* Быстрый ввод стоимости: если у задачи есть хотя бы один исполнитель — сумма
+   считается по исполнителям (как обычно), directCost игнорируется. Нет
+   исполнителей — берётся напрямую вписанная в задачу стоимость. */
+export const taskSum = (t) => (t.executors && t.executors.length > 0)
+  ? t.executors.reduce((a, e) => a + executorSum(e), 0)
+  : numVal(t.directCost);
 export const stageSum = (s) => (s.tasks || []).reduce((a, t) => a + taskSum(t), 0);
 export const projectSum = (p) => (p.stages || []).reduce((a, s) => a + stageSum(s), 0);
 

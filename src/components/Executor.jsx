@@ -7,6 +7,10 @@ import { DND_TYPES, dndPayload, useDragSource, useDropTarget, applyTagToExecutor
 import { useOutsideClose } from "../hooks.js";
 import { SuggestInput } from "./SuggestInput.jsx";
 
+// «Ядро» строки исполнителя — всегда на виду, пока исполнитель выделен.
+// Остальные кубики (роль, специализация, грейд, софт) — по требованию, через «+».
+const CORE_TAG_KEYS = ["name", "payment", "tax"];
+
 /* ============================================================
    Тег НА исполнителе (чип). Пустой → клик открывает состояния.
    Заполненный → показывает значение, можно перетащить (копия) или
@@ -202,15 +206,14 @@ function PaymentInlineFields({ payment, onSetPayment }) {
 }
 
 /* ============================================================
-   Кнопка «+» на строке исполнителя — выпадающий список кубиков
-   исполнителя прямо на месте (как «Добавить стикер» в YouGile).
-   Клик по типу добавляет пустой тег; заполняется он уже инлайн.
+   Кнопка «+» на строке исполнителя — доп. кубики (роль, специализация,
+   грейд, софт), не входящие в постоянную тройку «Имя / Тип оплаты / Налог».
    ============================================================ */
 function AddCubeButton({ onAddCube, usedKeys = [] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useOutsideClose(ref, () => setOpen(false));
-  const available = TAG_DEFS.filter((d) => !usedKeys.includes(d.key));
+  const available = TAG_DEFS.filter((d) => !CORE_TAG_KEYS.includes(d.key) && !usedKeys.includes(d.key));
   if (available.length === 0) return null;
   return (
     <span className="kb-addcube" ref={ref}>
@@ -255,36 +258,32 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
   // не даёт кубикам открываться «толпой» друг поверх друга
   const [openTagId, setOpenTagId] = useState(null);
 
-  // п.1: свежий исполнитель (без тегов) появляется со ВСЕМИ кубиками-слотами,
-  // чтобы сразу заполнять нужные без нажатия «+». При снятии выделения пустые
-  // слоты отбрасываются — остаются только заполненные. При повторном выделении
-  // показываем заполненные + «+» со списком неиспользованных кубиков.
+  // Пока исполнитель выделен — на строке всегда видна тройка «Имя / Тип
+  // оплаты / Налог» (заполненная или нет) + уже заполненные доп. кубики;
+  // недостающие доп. кубики добавляются через «+». При снятии выделения
+  // пустые слоты отбрасываются — остаются только заполненные.
   const isTagFilled = (t) => (t.key === "payment" ? !!t.payment?.type : !!(t.value && String(t.value).trim()));
-  const [expanded, setExpanded] = useState(executor.tags.length === 0);
-  const prevActive = useRef(active);
+  const prevActive = useRef(null);
 
-  // разворот: до-материализовать недостающие кубики как пустые слоты.
-  // Только для ПОЛНОСТЬЮ пустого исполнителя (0 тегов) — импортированный
-  // (уже есть кубик оплаты) не трогаем, чтобы не появлялся пустой «имя».
   useEffect(() => {
-    if (!(active && expanded) || executor.tags.length !== 0) return;
-    const merged = TAG_DEFS.map((d) => makeTag(d.key));
-    onPatch({ tags: merged });
-  }, [active, expanded, executor.tags]);
-
-  // снятие выделения: схлопнуть и отбросить пустые слоты
-  useEffect(() => {
-    if (prevActive.current && !active) {
-      setExpanded(false);
+    if (active) {
+      if (prevActive.current !== true) {
+        const missingCore = CORE_TAG_KEYS.filter((k) => !executor.tags.some((t) => t.key === k)).map((k) => makeTag(k));
+        if (missingCore.length > 0) {
+          const merged = [...executor.tags, ...missingCore]
+            .sort((a, b) => TAG_DEFS.findIndex((d) => d.key === a.key) - TAG_DEFS.findIndex((d) => d.key === b.key));
+          onPatch({ tags: merged });
+        }
+      }
+    } else if (prevActive.current === true) {
       const filled = executor.tags.filter(isTagFilled);
       if (filled.length !== executor.tags.length) onPatch({ tags: filled });
     }
     prevActive.current = active;
   }, [active]);
 
-  const usedKeys = executor.tags.map((t) => t.key);
-
   const setTags = (fn) => onPatch({ tags: fn(executor.tags) });
+  const usedKeys = executor.tags.map((t) => t.key);
 
   const { isOver, dropHandlers } = useDropTarget(DND_TYPES.TAG, (payload) => {
     setTags((tags) => applyTagToExecutor(tags, payload));
@@ -295,18 +294,19 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
     setTags((tags) => tags.map((t) => (t.id === tagId ? { ...t, value } : t)));
   const setTagPayment = (tagId, patch) =>
     setTags((tags) => tags.map((t) => (t.id === tagId ? { ...t, payment: { ...(t.payment || {}), ...patch } } : t)));
+  // ядро (имя/тип оплаты/налог) — очищаем, слот остаётся на строке, пока
+  // исполнитель выделен; доп. кубик — убираем совсем, освобождая место в «+»
   const removeTag = (tagId) => {
-    // ручное удаление кубика посреди активной сессии редактирования должно
-    // сразу возвращать кнопку «+» (иначе при expanded=true она скрыта и
-    // удалённый кубик нечем добавить обратно, пока строка не потеряет фокус)
-    setExpanded(false);
-    setTags((tags) => tags.filter((t) => t.id !== tagId));
+    const tag = executor.tags.find((t) => t.id === tagId);
+    if (!tag) return;
+    if (CORE_TAG_KEYS.includes(tag.key)) setTags((tags) => tags.map((t) => (t.id === tagId ? { ...makeTag(t.key), id: t.id } : t)));
+    else setTags((tags) => tags.filter((t) => t.id !== tagId));
   };
 
   // Перетаскивание всей строки. Не стартуем drag, если тянут за интерактив
   // (поле/кнопка/тег/кубик) — чтобы ввод и клики работали как раньше.
   const onRowDragStart = (e) => {
-    if (e.target.closest("input, textarea, select, button, .kb-tag, .kb-addcube")) {
+    if (e.target.closest("input, textarea, select, button, .kb-tag")) {
       e.preventDefault();
       return;
     }
@@ -361,8 +361,8 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
               onSetPayment={(patch) => setTagPayment(payTag.id, patch)} />
           )}
 
-          {/* «+» — только когда не развёрнуты все слоты; список неиспользованных (п.1) */}
-          {!expanded && (
+          {/* «+» — доп. кубики (роль/специализация/грейд/софт), справа от «Налог» */}
+          {active && (
             <AddCubeButton usedKeys={usedKeys}
               onAddCube={(payload) => { setTags((tags) => applyTagToExecutor(tags, payload)); onActivate(); }} />
           )}

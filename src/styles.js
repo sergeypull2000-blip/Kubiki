@@ -154,6 +154,10 @@ export const CSS = `
 .kb-sum{font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right; margin-left:auto}
 .kb-sum-stage{font-size:var(--fs-md); font-weight:var(--fw-semibold); color:var(--text); letter-spacing:-.01em; min-width:120px}
 .kb-sum-task{font-size:var(--fs-sm); font-weight:var(--fw-medium); color:var(--text-muted); min-width:120px}
+/* быстрый ввод стоимости задачи напрямую, пока нет исполнителей */
+.kb-task-directcost{display:inline-flex; align-items:center; justify-content:flex-end; gap:4px}
+.kb-task-directcost-input{max-width:88px; font-size:var(--fs-sm); font-weight:var(--fw-medium)}
+.kb-task-directcost-cur{color:var(--text-faint)}
 
 /* task */
 .kb-task{padding:9px 0; border-radius:6px; transition:background .12s}
@@ -218,9 +222,16 @@ export const CSS = `
 .kb-tag-input::placeholder{color:var(--text-faint); font-weight:var(--fw-regular)}
 .kb-tag-x{background:none; border:none; color:var(--text-faint); cursor:pointer; padding:1px; border-radius:3px; display:flex; flex-shrink:0}
 .kb-tag-x:hover{color:var(--text); background:var(--surface-sunken)}
-.kb-suggest-tagstates{min-width:150px}
+/* пока исполнитель выделен, ширина кубика не меняется между состояниями
+   (пусто/редактирование/заполнено) — иначе клик по соседнему кубику
+   промахивается: строка успевает перестроиться между mousedown и mouseup */
+.kb-erow-group-active .kb-tag-input,
+.kb-erow-group-active .kb-tag-val,
+.kb-erow-group-active .kb-tag-placeholder,
+.kb-erow-group-active .kb-tag-taxwrap{min-width:128px}
+.kb-erow-group-active .kb-tag-val{overflow:hidden; text-overflow:ellipsis}
 
-/* «+» добавить кубик исполнителя на строке (п.1) */
+/* «+» добавить доп. кубик (роль/специализация/грейд/софт) на строке */
 .kb-addcube{position:relative; display:inline-flex}
 .kb-addcube-btn{display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px;
   border:1px dashed var(--line-strong); border-radius:5px; background:transparent; color:var(--text-muted);
@@ -232,6 +243,7 @@ export const CSS = `
 .kb-addcube-item{display:flex; align-items:center; gap:9px; color:var(--text)}
 .kb-addcube-item svg{color:var(--text-faint); flex-shrink:0}
 .kb-addcube-item:hover svg{color:var(--accent)}
+.kb-suggest-tagstates{min-width:150px}
 
 /* payment inline (hourly/shift) — справа от тегов, на той же строке (п.4) */
 .kb-payinline{display:inline-flex; align-items:center; gap:4px}
@@ -472,15 +484,19 @@ export const CSS = `
 .kb-brand-actions{display:flex; justify-content:flex-end; gap:8px}
 .kb-brand-save{border:1px solid var(--line-strong)}
 
-/* ---- крупная плашка импорта в пустой зоне ---- */
-.kb-import-empty{display:flex; flex-direction:column; align-items:center; gap:14px; padding:24px 0 8px}
-.kb-import-hero{width:100%; max-width:520px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center;
-  padding:40px 28px; border:1.5px dashed var(--line-strong); border-radius:12px; background:var(--surface-sunken); color:var(--text-muted); cursor:pointer; transition:border-color .15s ease, background .15s ease}
-.kb-import-hero.is-over{border-color:var(--accent); background:var(--accent-soft)}
-.kb-import-hero-title{font-size:var(--fs-lg); font-weight:var(--fw-semibold); color:var(--text)}
-.kb-import-hero-sub{font-size:13px; max-width:360px; line-height:1.5}
-.kb-import-hero-sub.is-error{color:#C0392B} .kb-import-hero-sub.is-success{color:#1E874B}
+/* ---- панели импорта/ИИ-описания под большой кнопкой «Новый этап» в пустой зоне ---- */
+.kb-import-empty{display:flex; flex-direction:column; align-items:center; gap:10px; padding:14px 0 8px; width:100%}
 .kb-import-empty-or{font-size:12px; color:var(--text-faint)}
+.kb-import-panels{display:flex; gap:12px; width:100%; max-width:720px}
+.kb-import-panel{flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; text-align:center;
+  padding:18px 16px; border:1.5px dashed var(--line-strong); border-radius:10px; background:var(--surface-sunken); color:var(--text-muted);
+  cursor:pointer; transition:border-color .15s ease, background .15s ease}
+.kb-import-panel.is-over{border-color:var(--accent); background:var(--accent-soft)}
+.kb-import-panel-generate{cursor:default; border-style:solid; border-color:var(--line); background:var(--surface); align-items:stretch; text-align:left; gap:7px}
+.kb-import-panel-title{font-size:var(--fs-sm); font-weight:var(--fw-semibold); color:var(--text); display:flex; align-items:center; gap:6px; justify-content:center}
+.kb-import-panel-generate .kb-import-panel-title{justify-content:flex-start}
+.kb-import-panel-sub{font-size:11px; line-height:1.4; max-width:220px}
+.kb-import-panel-btn{align-self:flex-end}
 
 /* ---- модалка импорта: превью и выбор листа ---- */
 .kb-modal-overlay{position:fixed; inset:0; z-index:100; background:rgba(20,30,50,.28); display:flex; align-items:center; justify-content:center; padding:24px}
@@ -533,11 +549,21 @@ export const CSS = `
 .kb-prev-warnings-lg .kb-prev-warn-title{font-size:13px; font-weight:var(--fw-semibold); color:#7A4E00; margin-bottom:8px}
 .kb-prev-warnings-lg .kb-prev-warn-item{font-size:13px; color:#8A5A00; padding:3px 0}
 
-/* ---- поле «опишите проект» рядом с плашкой импорта ---- */
-.kb-generate-box{width:100%; max-width:520px; display:flex; flex-direction:column; gap:8px; padding:20px; border:1.5px solid var(--line); border-radius:12px; background:var(--surface)}
-.kb-generate-title{display:flex; align-items:center; gap:7px; font-size:var(--fs-sm); font-weight:var(--fw-semibold); color:var(--text)}
-.kb-generate-textarea{width:100%; resize:vertical; min-height:64px; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface-sunken); color:var(--text); font:inherit; font-size:13px; line-height:1.5}
+/* ---- поле «опишите проект» в компактной панели ИИ-описания ---- */
+.kb-generate-textarea{width:100%; resize:vertical; min-height:40px; padding:8px 9px; border:1px solid var(--line); border-radius:7px; background:var(--surface-sunken); color:var(--text); font:inherit; font-size:12.5px; line-height:1.4}
 .kb-generate-textarea:focus{outline:none; border-color:var(--accent)}
-.kb-generate-hint{font-size:11px; color:var(--text-faint); line-height:1.5}
-.kb-generate-btn{align-self:flex-end}
+.kb-generate-head{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.kb-generate-tooltip-wrap{position:relative; display:inline-flex}
+.kb-generate-help-icon{display:inline-flex; align-items:center; justify-content:center;
+  color:var(--text-muted); cursor:help; transition:color .15s ease}
+.kb-generate-help-icon:hover{color:var(--accent)}
+.kb-generate-tooltip{position:absolute; top:calc(100% + 8px); right:0; z-index:50;
+  width:280px; padding:10px 12px; border-radius:8px; border:1px solid var(--line);
+  background:var(--surface); box-shadow:0 8px 28px rgba(20,30,50,.14);
+  font-size:11px; line-height:1.55; color:var(--text-muted);
+  opacity:0; visibility:hidden; pointer-events:none; transition:opacity .18s ease, visibility .18s ease}
+.kb-generate-tooltip::before{content:""; position:absolute; top:-6px; right:8px;
+  width:10px; height:10px; background:var(--surface); border:1px solid var(--line);
+  border-bottom:none; border-right:none; transform:rotate(45deg)}
+.kb-generate-tooltip-wrap:hover .kb-generate-tooltip{opacity:1; visibility:visible}
 `;

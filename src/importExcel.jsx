@@ -4,7 +4,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import {
   X, Trash2, ChevronDown, AlertTriangle,
-  UploadCloud, Loader2, FileSpreadsheet, Download, FolderOpen, Sparkles,
+  UploadCloud, Loader2, FileSpreadsheet, Download, FolderOpen, Sparkles, CircleHelp,
 } from "lucide-react";
 import { uid, fmt, numVal } from "./utils.js";
 import { Logo } from "./Logo.jsx";
@@ -506,9 +506,10 @@ export function GenerateEstimateModal({ description, onClose, onConfirm }) {
   );
 }
 
-/* Крупная плашка импорта в центре пустой рабочей зоны (нет ни одного этапа):
-   импорт файла и генерация черновой сметы по текстовому описанию — рядом,
-   как два равноправных входа в один и тот же пайплайн (разбор LLM → превью → вставка). */
+/* Компактная пара панелей под большой кнопкой «Новый этап» в пустой рабочей
+   зоне: импорт файла и генерация черновой сметы по текстовому описанию —
+   два равноправных альтернативных входа в один и тот же пайплайн
+   (разбор LLM → превью → вставка). */
 export function ImportEmptyState({ onPickFile, onGenerate }) {
   const [over, setOver] = useState(false);
   const inputRef = useRef(null);
@@ -525,35 +526,40 @@ export function ImportEmptyState({ onPickFile, onGenerate }) {
   };
   return (
     <div className="kb-import-empty">
-      <div className={"kb-import-hero" + (over ? " is-over" : "")}
-        onDragOver={(e) => { e.preventDefault(); setOver(true); }}
-        onDragLeave={() => setOver(false)}
-        onDrop={(e) => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files?.[0]); }}
-        onClick={() => inputRef.current?.click()}>
-        <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv,.pdf" hidden onChange={(e) => pick(e.target.files?.[0])} />
-        <UploadCloud size={30} strokeWidth={1.5} />
-        <div className="kb-import-hero-title">ИИ-импорт сметы</div>
-        <div className="kb-import-hero-sub">Перетащите файл .xlsx / .csv / .pdf или нажмите — ИИ распознает структуру, вы проверите и подтвердите</div>
-      </div>
+      <div className="kb-import-empty-or">или</div>
+      <div className="kb-import-panels">
+        <div className={"kb-import-panel" + (over ? " is-over" : "")}
+          onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(e) => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files?.[0]); }}
+          onClick={() => inputRef.current?.click()}>
+          <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv,.pdf" hidden onChange={(e) => pick(e.target.files?.[0])} />
+          <UploadCloud size={18} strokeWidth={1.5} />
+          <div className="kb-import-panel-title">ИИ-импорт сметы</div>
+          <div className="kb-import-panel-sub">Перетащите .xlsx / .csv / .pdf или нажмите</div>
+        </div>
 
-      {onGenerate && (
-        <>
-          <div className="kb-import-empty-or">или</div>
-          <div className="kb-generate-box">
-            <div className="kb-generate-title"><Sparkles size={16} strokeWidth={1.5} /> Опишите проект — соберём черновую смету</div>
-            <textarea className="kb-generate-textarea" rows={3} value={desc}
+        {onGenerate && (
+          <div className="kb-import-panel kb-import-panel-generate">
+            <div className="kb-generate-head">
+              <div className="kb-import-panel-title"><Sparkles size={14} strokeWidth={1.5} /> Опишите проект</div>
+              <div className="kb-generate-tooltip-wrap">
+                <span className="kb-generate-help-icon"><CircleHelp size={16} strokeWidth={1.5} /></span>
+                <div className="kb-generate-tooltip">
+                  Чем подробнее — тем точнее смета. Можно указать хронометраж, технику, сроки, правки, разрешение. Пример: 30-секундный зацикленный CG-ролик с партиклами для вертикального экрана 2000×5000, срок 3 недели, заказчик сложный — будут правки
+                </div>
+              </div>
+            </div>
+            <textarea className="kb-generate-textarea" rows={4} value={desc}
               onChange={(e) => setDesc(e.target.value)}
               onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") submit(); }}
-              placeholder="Ролик для мультимедиа-экрана, 30 сек, луп, 2000×5000, фулл CG с партиклами, ресайзы под 3 формата" />
-            <div className="kb-generate-hint">Укажите тип, хронометраж, технику (2D / 3D / AI), назначение, срок и особенности (луп, нестандартное разрешение, ресайзы)</div>
-            <button type="button" className="kb-btn kb-btn-primary kb-generate-btn" onClick={submit} disabled={!desc.trim()}>
+              placeholder="Ролик 30 сек, луп, фулл CG с партиклами" />
+            <button type="button" className="kb-btn kb-btn-ghost kb-import-panel-btn" onClick={submit} disabled={!desc.trim()}>
               Сгенерировать смету
             </button>
           </div>
-        </>
-      )}
-
-      <div className="kb-import-empty-or">или соберите смету вручную ниже</div>
+        )}
+      </div>
     </div>
   );
 }

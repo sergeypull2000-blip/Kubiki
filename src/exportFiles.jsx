@@ -100,9 +100,12 @@ function buildExportModel(project, view) {
     })),
   }));
   const commission = (external && mode === "transparent" && projectMarkupAmount(project) > 0)
-    ? { label: `Агентская комиссия / Маркап (${fmt(projectEffectiveMarkupPct(project))}%)`, amount: projectMarkupAmount(project) } : null;
+    ? { label: `Агентская комиссия / Маркап (${fmt(projectEffectiveMarkupPct(project))}%)`, amount: projectMarkupAmount(project), pct: gm } : null;
   const tax = (external && projectTaxPct(project) > 0)
-    ? { label: `Налог ${project.tax?.type === "nds" ? "НДС" : "ИП"} (${fmt(projectTaxPct(project))}%)`, amount: projectTaxAmount(project) } : null;
+    ? {
+      label: `Налог ${project.tax?.type === "nds" ? "НДС" : "ИП"} (${fmt(projectTaxPct(project))}%)`, amount: projectTaxAmount(project),
+      pct: projectTaxPct(project), typeText: project.tax?.type === "nds" ? "НДС" : "ИП",
+    } : null;
   return {
     external, stages, commission, tax,
     total: external ? projectTotalWithTax(project) : projectSum(project),
@@ -149,16 +152,22 @@ async function buildAndDownloadExcelJS(M, C, filename) {
   const headers = M.external ? ["Позиция", "Цена"] : ["Позиция / исполнитель", "Оплата", "Кол-во", "Сумма"];
   headers.forEach((h, i) => { const c = ws.getCell(r, i + 1); c.value = h; c.font = { bold: true, color: { argb: "FFFFFFFF" } }; c.fill = fill(ink); c.alignment = { horizontal: i === ncols - 1 ? "right" : "left" }; c.border = border; });
   ws.getRow(r).height = 18; r++;
+  const paramsRow0 = r; // верхняя строка блока «Параметры» (маркап/налог %) — колонки правее таблицы
+  const stageCellAddrs = [];
   for (const s of M.stages) {
     ws.mergeCells(r, 1, r, ncols - 1);
     const sc = ws.getCell(r, 1); sc.value = s.name.toUpperCase(); sc.font = { bold: true, color: { argb: ink } }; sc.fill = fill(sunken); sc.alignment = { indent: 1 };
-    const sv = ws.getCell(r, ncols); sv.value = Math.round(s.subtotal); sv.numFmt = money; sv.font = { bold: true, color: { argb: ink } }; sv.fill = fill(sunken); sv.alignment = { horizontal: "right" };
+    const sv = ws.getCell(r, ncols); sv.numFmt = money; sv.font = { bold: true, color: { argb: ink } }; sv.fill = fill(sunken); sv.alignment = { horizontal: "right" };
     for (let c = 1; c <= ncols; c++) ws.getCell(r, c).border = border;
     r++;
+    const taskCellAddrs = [];
     for (const t of s.tasks) {
       if (M.external) ws.mergeCells(r, 1, r, ncols - 1);
       const tc = ws.getCell(r, 1); tc.value = "  " + t.name; tc.font = { bold: !M.external, color: { argb: ink } };
+      // база сметы: стоимость задачи — живое значение, которое меняет продюсер;
+      // всё остальное (этап/проект/маркап/налог/итог) — формулы поверх этих ячеек
       const pv = ws.getCell(r, ncols); pv.value = Math.round(t.price); pv.numFmt = money; pv.font = { color: { argb: ink } }; pv.alignment = { horizontal: "right" };
+      taskCellAddrs.push(pv.address);
       for (let c = 1; c <= ncols; c++) ws.getCell(r, c).border = border;
       r++;
       for (const e of t.execs) {
@@ -169,24 +178,59 @@ async function buildAndDownloadExcelJS(M, C, filename) {
         r++;
       }
     }
+    sv.value = taskCellAddrs.length ? { formula: `SUM(${taskCellAddrs.join(",")})` } : 0;
+    stageCellAddrs.push(sv.address);
   }
+  const totalBase = stageCellAddrs.length ? `SUM(${stageCellAddrs.join(",")})` : "0";
+
+  // маркап % и ставка налога — в отдельных помеченных ячейках справа от таблицы,
+  // чтобы формулы комиссии/налога/итога ссылались на них (продюсер меняет процент — всё пересчитывается)
+  let markupPctAddr = null, taxPctAddr = null;
+  if (M.commission || M.tax) {
+    const pcol = ncols + 2;
+    let pr = paramsRow0;
+    const pt = ws.getCell(pr, pcol); pt.value = "Параметры"; pt.font = { bold: true, size: 10, color: { argb: ink } }; pr++;
+    if (M.commission) {
+      ws.getCell(pr, pcol).value = "Маркап, %"; ws.getCell(pr, pcol).font = { size: 10, color: { argb: muted } };
+      const pv = ws.getCell(pr, pcol + 1); pv.value = M.commission.pct; pv.numFmt = '0.##"%"'; pv.font = { size: 10, bold: true, color: { argb: ink } }; pv.alignment = { horizontal: "right" };
+      markupPctAddr = pv.address; pr++;
+    }
+    if (M.tax) {
+      ws.getCell(pr, pcol).value = "Налог, %"; ws.getCell(pr, pcol).font = { size: 10, color: { argb: muted } };
+      const pv = ws.getCell(pr, pcol + 1); pv.value = M.tax.pct; pv.numFmt = '0.##"%"'; pv.font = { size: 10, bold: true, color: { argb: ink } }; pv.alignment = { horizontal: "right" };
+      taxPctAddr = pv.address; pr++;
+    }
+    ws.getColumn(pcol).width = 14; ws.getColumn(pcol + 1).width = 10;
+  }
+
+  let commissionAddr = null, taxAddr = null;
   if (M.commission) {
     ws.mergeCells(r, 1, r, ncols - 1);
-    const cc = ws.getCell(r, 1); cc.value = M.commission.label; cc.font = { italic: true, color: { argb: muted } };
-    const cv = ws.getCell(r, ncols); cv.value = Math.round(M.commission.amount); cv.numFmt = money; cv.font = { italic: true, color: { argb: ink } }; cv.alignment = { horizontal: "right" };
+    const cc = ws.getCell(r, 1);
+    cc.value = { formula: `"Агентская комиссия / Маркап ("&${markupPctAddr}&"%)"` };
+    cc.font = { italic: true, color: { argb: muted } };
+    const cv = ws.getCell(r, ncols); cv.value = { formula: `${totalBase}*${markupPctAddr}/100` }; cv.numFmt = money; cv.font = { italic: true, color: { argb: ink } }; cv.alignment = { horizontal: "right" };
     for (let c = 1; c <= ncols; c++) ws.getCell(r, c).border = border;
+    commissionAddr = cv.address;
     r++;
   }
   if (M.tax) {
     ws.mergeCells(r, 1, r, ncols - 1);
-    const cc = ws.getCell(r, 1); cc.value = M.tax.label; cc.font = { italic: true, color: { argb: muted } };
-    const cv = ws.getCell(r, ncols); cv.value = Math.round(M.tax.amount); cv.numFmt = money; cv.font = { italic: true, color: { argb: ink } }; cv.alignment = { horizontal: "right" };
+    const cc = ws.getCell(r, 1);
+    cc.value = { formula: `"Налог ${M.tax.typeText} ("&${taxPctAddr}&"%)"` };
+    cc.font = { italic: true, color: { argb: muted } };
+    const taxBase = commissionAddr ? `(${totalBase}+${commissionAddr})` : `(${totalBase})`;
+    const cv = ws.getCell(r, ncols); cv.value = { formula: `${taxBase}*${taxPctAddr}/100` }; cv.numFmt = money; cv.font = { italic: true, color: { argb: ink } }; cv.alignment = { horizontal: "right" };
     for (let c = 1; c <= ncols; c++) ws.getCell(r, c).border = border;
+    taxAddr = cv.address;
     r++;
   }
   ws.mergeCells(r, 1, r, ncols - 1);
   const gc = ws.getCell(r, 1); gc.value = M.external ? "ИТОГО" : "ИТОГО СЕБЕСТОИМОСТЬ"; gc.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } }; gc.fill = fill(ink); gc.alignment = { horizontal: "right", indent: 1 };
-  const gv = ws.getCell(r, ncols); gv.value = Math.round(M.total); gv.numFmt = money; gv.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } }; gv.fill = fill(ink); gv.alignment = { horizontal: "right" };
+  let totalFormula = totalBase;
+  if (commissionAddr) totalFormula += `+${commissionAddr}`;
+  if (taxAddr) totalFormula += `+${taxAddr}`;
+  const gv = ws.getCell(r, ncols); gv.value = stageCellAddrs.length ? { formula: totalFormula } : Math.round(M.total); gv.numFmt = money; gv.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } }; gv.fill = fill(ink); gv.alignment = { horizontal: "right" };
   ws.getRow(r).height = 22;
 
   // шрифт как в приложении (Inter) на все ячейки

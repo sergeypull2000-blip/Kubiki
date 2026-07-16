@@ -56,7 +56,18 @@ export function TaskBlock({ task, stageId, dispatch, taskDict, taskFeatured, act
         <SuggestInput className="kb-input kb-input-medium kb-task-name" value={task.name}
           dictionary={taskDict || []} featured={taskFeatured} placeholder="Название задачи…"
           onChange={(v) => onPatch({ name: v })} />
-        <span className="kb-sum kb-sum-task">{fmt(total)} ₽</span>
+        {task.executors.length === 0 ? (
+          <span className="kb-sum kb-sum-task kb-task-directcost">
+            <input className="kb-input kb-input-num kb-task-directcost-input" value={task.directCost ?? ""} placeholder="0"
+              title="Стоимость задачи напрямую — пока у неё нет исполнителей"
+              onChange={(e) => onPatch({ directCost: e.target.value === "" ? null : e.target.value })}
+              onMouseDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+            <span className="kb-task-directcost-cur">₽</span>
+          </span>
+        ) : (
+          <span className="kb-sum kb-sum-task">{fmt(total)} ₽</span>
+        )}
         <button type="button" className="kb-icon-btn" onClick={onRemove} title="Удалить задачу">
           <Trash2 size={13} strokeWidth={1.5} />
         </button>
