@@ -23,6 +23,9 @@ export const CSS = `
      держит шапку (лого / «ИТОГО») и layout в одной сетке, чтобы панели
      были прижаты к рабочему поле, а не растянуты по краям экрана */
   --layout-max: 1602px;
+
+  /* dashboard sidebar */
+  --dash-sidebar-w: 240px;
 }
 .kb-root *{box-sizing:border-box}
 .kb-root{
@@ -71,7 +74,7 @@ export const CSS = `
 /* поле глобального маркапа */
 .kb-markup-field{display:flex; align-items:center; gap:8px}
 .kb-markup-label{font-size:var(--fs-2xs); text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); font-weight:var(--fw-semibold); white-space:nowrap}
-.kb-markup-input{max-width:64px; border:1px solid var(--line-strong); background:var(--surface); text-align:right}
+.kb-markup-input{max-width:56px; border:1px solid var(--line-strong); background:var(--surface); text-align:right}
 
 /* внешний (клиентский) вид */
 .kb-canvas-ext{max-width:1010px; margin:0 auto; width:100%}
@@ -204,7 +207,7 @@ export const CSS = `
 
 /* tag chip on executor */
 .kb-tag{position:relative; display:inline-flex; align-items:center; gap:5px; border:1px solid var(--line-strong);
-  border-radius:5px; padding:3px 5px 3px 7px; background:var(--surface); font-size:var(--fs-xs); max-width:100%;
+  border-radius:5px; padding:3px 5px 3px 7px; background:var(--surface); font-size:var(--fs-xs); width:156px; flex:0 0 156px; min-width:156px; max-width:156px;
   transition:border-color .12s, background .12s, color .12s}
 .kb-tag:hover{border-color:var(--accent); background:var(--accent-soft)}
 .kb-tag:hover .kb-tag-ic{color:var(--accent)}
@@ -225,11 +228,8 @@ export const CSS = `
 /* пока исполнитель выделен, ширина кубика не меняется между состояниями
    (пусто/редактирование/заполнено) — иначе клик по соседнему кубику
    промахивается: строка успевает перестроиться между mousedown и mouseup */
-.kb-erow-group-active .kb-tag-input,
-.kb-erow-group-active .kb-tag-val,
-.kb-erow-group-active .kb-tag-placeholder,
-.kb-erow-group-active .kb-tag-taxwrap{min-width:128px}
-.kb-erow-group-active .kb-tag-val{overflow:hidden; text-overflow:ellipsis}
+.kb-tag-input,.kb-tag-val,.kb-tag-placeholder,.kb-tag-taxwrap{min-width:0; flex:1}
+.kb-tag-val,.kb-tag-placeholder{overflow:hidden; text-overflow:ellipsis}
 
 /* «+» добавить доп. кубик (роль/специализация/грейд/софт) на строке */
 .kb-addcube{position:relative; display:inline-flex}
@@ -290,19 +290,41 @@ export const CSS = `
 .kb-dropzone.kb-dropzone-over{background:var(--accent-soft); border-color:var(--accent); color:var(--accent)}
 
 /* dashboard */
-.kb-dashboard{max-width:1080px; margin:0 auto; padding:32px 24px}
+.kb-dashboard{width:100%; max-width:1200px; margin:0 auto; padding:32px 24px}
 .kb-board{display:grid; grid-template-columns:repeat(auto-fill,minmax(176px,1fr)); gap:12px}
 .kb-card{position:relative; aspect-ratio:1/1; background:var(--surface); border:1px solid var(--line); border-radius:8px;
   padding:15px; display:flex; flex-direction:column; gap:5px; cursor:pointer; transition:border-color .15s}
 .kb-card:hover{border-color:var(--line-strong)}
 .kb-card-icon{color:var(--text-faint)}
 .kb-card-name{font-weight:var(--fw-semibold); font-size:var(--fs-base); margin-top:auto; color:var(--text); letter-spacing:-.01em}
+.kb-card-name-input{display:block; width:100%; min-width:0; padding:2px 3px; margin-left:-3px; border:1px solid transparent; border-radius:4px; background:transparent; font-family:inherit; line-height:1.35; outline:none}
+.kb-card-name-input:hover{border-color:var(--line)}
+.kb-card-name-input:focus{border-color:var(--accent); background:var(--surface)}
+.kb-card-name-input::placeholder{color:var(--text-muted)}
 .kb-card-sum{font-weight:var(--fw-semibold); font-size:var(--fs-lg); color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-.01em}
 .kb-card-meta{font-size:var(--fs-xs); color:var(--text-muted)}
-.kb-card-del{position:absolute; top:8px; right:8px; background:none; border:none; color:var(--text-faint); border-radius:4px;
-  padding:4px; cursor:pointer; opacity:0; transition:.15s}
+.kb-card-del{position:absolute; top:8px; right:8px; background:none; border:none; color:var(--text-faint);
+  padding:2px; cursor:pointer; opacity:0; transition:.15s; display:flex; align-items:center; justify-content:center}
 .kb-card:hover .kb-card-del{opacity:1}
 .kb-card-del:hover{color:var(--text)}
+/* иконка «сохранить как шаблон» на карточке проекта */
+.kb-card-tpl-btn{position:absolute; right:8px; bottom:8px; background:none; border:none; color:var(--text-faint);
+  padding:4px; cursor:pointer; opacity:0; transition:.15s; display:flex; align-items:center; justify-content:center}
+.kb-card:hover .kb-card-tpl-btn{opacity:1}
+.kb-card-tpl-btn:hover{color:var(--text); background:var(--accent-soft)}
+.kb-card-actions{position:absolute; right:8px; bottom:8px; display:flex; gap:2px; opacity:0; transition:.15s}
+.kb-card:hover .kb-card-actions{opacity:1}
+.kb-card-actions .kb-card-tpl-btn{position:static; opacity:1}
+.kb-card-favorite.is-active{color:#E0A11A; opacity:1}
+.kb-card:has(.kb-card-favorite.is-active) .kb-card-actions{opacity:1}
+.kb-card-template{cursor:pointer}
+.kb-template-badge{position:absolute; left:13px; top:42px; padding:2px 6px; border-radius:10px; background:var(--accent-soft); color:var(--accent); font-size:10px; font-weight:var(--fw-medium)}
+.kb-card-menu-btn{position:absolute; top:7px; right:7px; display:flex; border:0; border-radius:5px; padding:4px; background:transparent; color:var(--text-faint); cursor:pointer}
+.kb-card-menu-btn:hover{background:var(--surface-sunken); color:var(--text)}
+.kb-card-context{position:absolute; z-index:20; top:34px; right:8px; min-width:150px; padding:4px; border:1px solid var(--line); border-radius:8px; background:var(--surface); box-shadow:0 8px 24px rgba(20,30,50,.12)}
+.kb-card-context button{display:flex; align-items:center; gap:7px; width:100%; padding:7px 8px; border:0; border-radius:5px; background:transparent; color:var(--text); font:inherit; font-size:12px; cursor:pointer}
+.kb-card-context button:hover{background:var(--surface-sunken)}
+.kb-card-context button.is-danger{color:#C0392B}
 .kb-card-new{align-items:center; justify-content:center; border-style:dashed; color:var(--text-muted); font-weight:var(--fw-medium); font-size:var(--fs-sm); gap:7px}
 .kb-card-new:hover{border-color:var(--accent); color:var(--accent)}
 
@@ -369,8 +391,8 @@ export const CSS = `
 .kb-rp-sec:last-child{border-bottom:none}
 .kb-rp-title{font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); font-weight:var(--fw-semibold); margin-bottom:10px}
 .kb-viewtoggle-full{width:100%} .kb-viewtoggle-full .kb-viewtoggle-btn{flex:1}
-.kb-rp-markup{display:flex; align-items:center; justify-content:space-between; margin-top:10px; gap:8px}
-.kb-rp-markup .kb-markup-input{max-width:72px}
+.kb-rp-markup{margin-top:0}
+.kb-rp-markup .kb-markup-input{max-width:56px}
 
 /* ---- свойства ---- */
 .kb-props{display:flex; flex-direction:column; gap:6px}
@@ -424,10 +446,19 @@ export const CSS = `
 .kb-newcube{width:100%; justify-content:flex-start; color:var(--text-muted)}
 .kb-newcube:hover{color:var(--text)}
 /* п.6 налог в правой панели */
-.kb-tax-row{display:flex; align-items:center; gap:8px; margin-top:8px}
-.kb-tax-row .kb-markup-label{flex:1}
-.kb-tax-type{width:56px; padding:5px 6px; border:1px solid var(--line-strong); border-radius:6px; background:var(--surface); font:inherit; font-size:var(--fs-sm); color:var(--text)}
+.kb-tax-row{display:grid; grid-template-columns:minmax(0,1fr) 70px 56px 28px; align-items:center; gap:8px; margin-top:8px}
+.kb-tax-row .kb-markup-label{min-width:0}
+.kb-tax-spacer{width:70px}
+.kb-switch-spacer{width:28px}
+.kb-tax-type{width:70px; padding:5px 6px; border:1px solid var(--line-strong); border-radius:6px; background:var(--surface); font:inherit; font-size:var(--fs-sm); color:var(--text)}
 .kb-tax-input{max-width:56px; border:1px solid var(--line-strong); background:var(--surface); text-align:right}
+.kb-mini-switch{width:28px; height:16px; padding:2px; border:0; border-radius:999px; background:var(--line-strong); cursor:pointer; flex:0 0 auto; transition:.15s}
+.kb-mini-switch span{display:block; width:12px; height:12px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(26,34,48,.25); transition:transform .15s}
+.kb-mini-switch.is-on{background:var(--accent)}
+.kb-mini-switch.is-on span{transform:translateX(12px)}
+.kb-task-reorder-over{box-shadow:inset 0 2px 0 var(--accent)}
+.kb-task-dragging{opacity:.45}
+.kb-tree-collapse{flex-shrink:0}
 /* п.7 кубик налога у исполнителя */
 .kb-tag-taxwrap{display:inline-flex; align-items:center; gap:4px}
 .kb-tag-taxlabel{color:var(--text-muted); font-size:var(--fs-xs); white-space:nowrap}
@@ -566,4 +597,145 @@ export const CSS = `
   width:10px; height:10px; background:var(--surface); border:1px solid var(--line);
   border-bottom:none; border-right:none; transform:rotate(45deg)}
 .kb-generate-tooltip-wrap:hover .kb-generate-tooltip{opacity:1; visibility:visible}
+
+/* ---- кнопка «Сохранить смету как шаблон» в шапке ---- */
+.kb-save-project-btn{display:inline-flex; align-items:center; gap:6px;
+  background:var(--accent-soft); border:1px solid var(--line); border-radius:7px;
+  color:var(--accent); font:inherit; font-size:var(--fs-sm); font-weight:var(--fw-medium);
+  padding:6px 13px; cursor:pointer; transition:all .15s ease}
+.kb-save-project-btn:hover{background:var(--accent); color:#fff; border-color:var(--accent)}
+.kb-collapse-all-btn{display:flex; align-items:center; gap:4px; width:max-content; margin:0 0 7px;
+  padding:3px 6px; border:1px solid var(--line); border-radius:5px; background:transparent;
+  color:var(--text-muted); font:inherit; font-size:11px; line-height:1.2; cursor:pointer}
+.kb-collapse-all-btn:hover{background:var(--surface-sunken); color:var(--text)}
+
+/* ---- шаблоны в левой панели ---- */
+.kb-pal-templates{margin-top:10px}
+.kb-pal-tmp-label{font-size:11px; color:var(--text-faint); text-transform:uppercase;
+  letter-spacing:.05em; font-weight:var(--fw-medium); padding:0 2px; margin-bottom:5px}
+.kb-template-item{display:flex; align-items:center; gap:6px; padding:5px 7px; border-radius:5px;
+  font-size:var(--fs-sm); cursor:grab; transition:background .12s ease;
+  user-select:none; color:var(--text)}
+.kb-template-item:hover{background:var(--accent-soft)}
+.kb-template-item:active{cursor:grabbing}
+.kb-template-item-name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.kb-template-item-sum{flex:none; color:var(--text-muted); font-size:11px; font-variant-numeric:tabular-nums; white-space:nowrap}
+.kb-template-item-del{flex-shrink:0; display:inline-flex; align-items:center; justify-content:center;
+  width:18px; height:18px; border:none; border-radius:4px; background:transparent;
+  color:var(--text-faint); cursor:pointer; transition:all .12s ease}
+.kb-template-item-del:hover{background:var(--surface-sunken); color:var(--text-muted)}
+.kb-template-empty{padding:7px 2px 3px; color:var(--text-faint); font-size:var(--fs-sm)}
+
+/* ---- модалка сохранения проекта как шаблона ---- */
+.kb-tpl-modal-overlay{position:fixed; inset:0; z-index:110;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(10,18,28,.35); backdrop-filter:blur(3px)}
+.kb-tpl-modal{background:var(--surface); border:1px solid var(--line); border-radius:12px;
+  padding:24px; min-width:360px; max-width:460px; box-shadow:0 16px 48px rgba(20,30,50,.16)}
+.kb-tpl-modal-title{font-size:var(--fs-md); font-weight:var(--fw-semibold); margin-bottom:14px; color:var(--text)}
+.kb-tpl-modal-input{display:block; width:100%; padding:8px 10px; border:1px solid var(--line);
+  border-radius:7px; font:inherit; font-size:var(--fs-base); background:var(--surface-sunken);
+  color:var(--text); margin-bottom:16px}
+.kb-tpl-modal-input:focus{outline:none; border-color:var(--accent)}
+.kb-tpl-modal-actions{display:flex; justify-content:flex-end; gap:8px}
+
+/* ---- выпадающее меню «Новый проект» на дашборде ---- */
+.kb-create-wrapper{position:relative}
+.kb-create-menu{position:absolute; top:calc(100% + 6px); left:0; z-index:30;
+  min-width:200px; background:var(--surface); border:1px solid var(--line);
+  border-radius:10px; padding:5px; box-shadow:0 12px 36px rgba(20,30,50,.12)}
+.kb-create-menu-item{display:flex; align-items:center; gap:8px; width:100%; padding:8px 10px;
+  border:none; border-radius:6px; background:transparent; color:var(--text);
+  font:inherit; font-size:var(--fs-sm); cursor:pointer; transition:background .1s ease}
+.kb-create-menu-item:hover{background:var(--accent-soft)}
+.kb-create-menu-divider{height:1px; background:var(--line); margin:3px 6px}
+.kb-create-menu-meta{font-size:10px; color:var(--text-faint); margin-left:auto}
+
+/* ---- иконка закладки на исполнителе ---- */
+.kb-executor-bookmark{flex-shrink:0; display:inline-flex; align-items:center; justify-content:center;
+  width:22px; height:22px; border:none; border-radius:4px; background:transparent;
+  color:var(--text-faint); cursor:pointer; transition:all .12s ease}
+.kb-executor-bookmark:hover{color:var(--accent); background:var(--accent-soft)}
+
+/* ============================================================
+   Dashboard: layout с навигационной боковой панелью
+   ============================================================ */
+.kb-dashboard-layout{display:flex; align-items:stretch; min-height:calc(100vh - 77px)}
+.kb-dash-sidebar{width:var(--dash-sidebar-w); flex-shrink:0; background:var(--surface);
+  border-right:1px solid var(--line-strong); padding:14px 12px 22px;
+  display:flex; flex-direction:column; gap:2px; overflow-y:auto; overflow-x:hidden}
+
+/* метка секции навигации */
+.kb-dash-nav-section-label{font-size:var(--fs-xs); font-weight:var(--fw-regular);
+  letter-spacing:.03em; color:var(--text-muted);
+  padding:8px 6px 6px; user-select:none}
+
+/* пункт навигации */
+.kb-dash-nav-item{display:flex; align-items:center; gap:8px; width:100%;
+  border:none; border-radius:6px; padding:7px 8px; background:transparent;
+  font:inherit; font-size:var(--fs-sm); font-weight:var(--fw-medium);
+  color:var(--text); cursor:pointer; transition:background .12s ease; text-align:left}
+.kb-dash-nav-item:hover{background:var(--accent-soft)}
+.kb-dash-nav-item > span{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.kb-dash-nav-item-active{background:var(--surface-sunken); color:var(--text); box-shadow:inset 2px 0 0 var(--line-strong)}
+
+/* разделитель секций */
+.kb-dash-nav-divider{height:1px; background:var(--line); margin:6px 4px 8px}
+
+/* строка папки категории с действиями */
+.kb-dash-nav-folder-row{display:flex; align-items:center; gap:2px;
+  border-radius:6px; transition:background .12s ease}
+.kb-dash-nav-folder-row:hover{background:var(--surface-sunken)}
+.kb-dash-nav-folder-row:hover .kb-dash-nav-folder-actions{opacity:1}
+.kb-dash-nav-folder-row > .kb-dash-nav-item{flex:1; min-width:0}
+.kb-dash-nav-folder-actions{display:flex; align-items:center; gap:1px;
+  opacity:0; padding-right:2px; transition:opacity .12s ease}
+.kb-dash-nav-folder-row.kb-dash-nav-item-active{background:var(--surface-sunken); box-shadow:inset 2px 0 0 var(--line-strong)}
+.kb-tree-toggle{display:flex; align-items:center; justify-content:center; flex:none; padding:4px 0 4px 4px; border:0; background:transparent; color:var(--text-faint); cursor:pointer}
+.kb-tree-folder-btn{padding-left:3px}
+.kb-tree-folder-btn svg{color:var(--text-faint); flex:none}
+.kb-template-tree-files{display:flex; flex-direction:column; margin-left:25px; padding:2px 0 4px; gap:1px}
+.kb-template-tree-file{display:flex; align-items:center; gap:6px; width:100%; min-width:0; padding:5px 6px; border:0; border-radius:5px; background:transparent; color:var(--text-muted); font:inherit; font-size:12px; text-align:left; cursor:grab}
+.kb-template-tree-file:hover{background:var(--accent-soft); color:var(--text)}
+.kb-template-tree-file span{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.kb-template-tree-file svg{flex:none}
+.kb-template-tree-actions{display:flex; flex:none; gap:1px; opacity:0; transition:opacity .12s ease}
+.kb-template-tree-file:hover .kb-template-tree-actions,.kb-template-tree-actions:focus-within{opacity:1}
+.kb-template-tree-input{flex:1; min-width:0; padding:2px 4px; border:1px solid var(--line-strong); border-radius:4px; background:var(--surface); color:var(--text); font:inherit; font-size:12px; outline:none}
+.kb-template-tree-input:focus{border-color:var(--accent)}
+.kb-toast{position:fixed; z-index:200; left:50%; top:50%; transform:translate(-50%,-50%); padding:10px 16px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--text); box-shadow:0 12px 40px rgba(20,30,50,.16); font-size:var(--fs-sm); font-weight:var(--fw-medium); pointer-events:none; animation:kb-toast-in .16s ease-out}
+@keyframes kb-toast-in{from{opacity:0; transform:translate(-50%,-46%)}to{opacity:1; transform:translate(-50%,-50%)}}
+
+/* поле ввода при редактировании названия */
+.kb-dash-nav-input{flex:1; border:1px solid var(--line-strong); border-radius:5px;
+  padding:5px 7px; font:inherit; font-size:var(--fs-sm); background:var(--surface);
+  color:var(--text); margin:3px 0}
+.kb-dash-nav-input:focus{outline:none; border-color:var(--accent)}
+
+/* кнопка «Новая категория» */
+.kb-dash-nav-new-row{padding:0 4px}
+.kb-dash-nav-new-btn{display:flex; align-items:center; gap:6px; width:100%;
+  border:1px dashed var(--line-strong); border-radius:6px; padding:7px 8px;
+  margin-top:4px; background:none; color:var(--text-muted);
+  font:inherit; font-size:var(--fs-sm); cursor:pointer; transition:all .12s ease}
+.kb-dash-nav-new-btn:hover{color:var(--text); border-color:var(--text-faint)}
+
+.kb-dash-empty{grid-column:1 / -1; padding:40px; text-align:center; color:var(--text-muted)}
+.kb-create-wrapper{width:100%}
+
+.kb-dash-section-title{font-size:var(--fs-sm); font-weight:var(--fw-semibold);
+  color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em;
+  padding:6px 0 10px; user-select:none}
+
+/* иконка кнопки «малая» без фона — для действий в строке */
+.kb-icon-btn-small{display:inline-flex; align-items:center; justify-content:center;
+  border:none; border-radius:4px; background:transparent; color:var(--text-faint);
+  cursor:pointer; padding:3px; transition:all .12s ease}
+.kb-icon-btn-small:hover{color:var(--text)}
+
+/* кнопка удаления шаблона в левой панели — простой серый крестик без фона */
+.kb-tpl-chip .kb-tpl-chip-del{display:inline-flex; align-items:center; justify-content:center;
+  border:none; background:transparent; color:var(--text-faint); cursor:pointer;
+  padding:1px; transition:all .12s ease}
+.kb-tpl-chip .kb-tpl-chip-del:hover{color:var(--text)}
 `;

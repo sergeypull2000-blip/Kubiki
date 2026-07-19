@@ -1,16 +1,17 @@
-import { useState, useRef, useEffect } from "react";
-import { Percent } from "lucide-react";
-import { fmt, numVal } from "../utils.js";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Percent, Save, ChevronsUp, ChevronsDown } from "lucide-react";
+import { fmt, numVal, uid } from "../utils.js";
 import {
   taskSum, projectSum,
   taskMarkup, getMarkupMode, externalTaskPrice, externalStagePrice,
   projectMarkupAmount, projectEffectiveMarkupPct,
-  projectTaxPct, projectTaxAmount, projectTotalWithTax,
+  projectTaxPct, projectTaxAmount, projectTaxSystemLabel, projectVatPct, projectVatAmount, projectTotalWithTax,
+  chargeIsVisible, externalTaskPriceWithCharges, externalStagePriceWithCharges,
 } from "../calculations.js";
 import { CUSTOM_STAGE } from "../constants.js";
 import {
   makeExecutor, makeTask, makeStage,
-  mapStage, withTask,
+  mapStage, withTask, withExecutorList, patchExecutorIn,
   findExecutor, cloneExecutor, insertStage, applyTagToExecutor,
 } from "../store.js";
 import { ImportModal, GenerateEstimateModal, ImportEmptyState, LogoMenu } from "../importExcel.jsx";
@@ -18,11 +19,16 @@ import { useOutsideClose } from "../hooks.js";
 import { PalettePanel } from "./LeftPanel.jsx";
 import { StageCard, CanvasDropZone } from "./Stage.jsx";
 import { RightPanel } from "./RightPanel.jsx";
+import {
+  TEMPLATE_KEYS, loadTemplates, saveTemplates, removeTemplate,
+  savePerformerTemplate, saveTaskTemplate, saveStageTemplate,
+  cloneExecutorTemplate, cloneTaskTemplate, cloneStageTemplate, cloneProjectTemplate,
+} from "../templates.js";
 
 /* ============================================================
    Рабочая зона
    ============================================================ */
-export function Workspace({ project, onChange, onBack }) {
+export function Workspace({ project, onChange, onBack, editingTemplate = false }) {
   const [view, setView] = useState("internal"); // 'internal' | 'external'
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
   // в Клайне можно persist'ить в localStorage.
@@ -195,6 +201,84 @@ export function Workspace({ project, onChange, onBack }) {
   const isEmpty = project.stages.length === 0;
   // п.4: смена вида снимает любое выделение (и в панели «Свойства»).
   const changeView = (v) => { clearSelection(); setView(v); };
+  /* ---- шаблоны (localStorage) ---- */
+  const [performerTemplates, setPerformerTemplates] = useState(() => loadTemplates(TEMPLATE_KEYS.performers));
+  const [taskTemplates, setTaskTemplates] = useState(() => loadTemplates(TEMPLATE_KEYS.tasks));
+  const [stageTemplates, setStageTemplates] = useState(() => loadTemplates(TEMPLATE_KEYS.stages));
+
+  const refreshPerformerTemplates = () => setPerformerTemplates(loadTemplates(TEMPLATE_KEYS.performers));
+  const refreshTaskTemplates = () => setTaskTemplates(loadTemplates(TEMPLATE_KEYS.tasks));
+  const refreshStageTemplates = () => setStageTemplates(loadTemplates(TEMPLATE_KEYS.stages));
+
+  // Уровень 1: сохранить исполнителя как шаблон
+  const handleSavePerformerTemplate = useCallback((executor) => {
+    savePerformerTemplate(executor);
+    refreshPerformerTemplates();
+  }, []);
+
+  // Уровень 2: сохранить задачу как шаблон
+  const handleSaveTaskTemplate = useCallback((task) => {
+    saveTaskTemplate(task);
+    refreshTaskTemplates();
+  }, []);
+
+  // Уровень 3: сохранить этап как шаблон
+  const handleSaveStageTemplate = useCallback((stage) => {
+    saveStageTemplate(stage);
+    refreshStageTemplates();
+  }, []);
+
+  // удаление шаблонов
+  const handleRemovePerformerTemplate = (id) => { removeTemplate(TEMPLATE_KEYS.performers, id); refreshPerformerTemplates(); };
+  const handleRemoveTaskTemplate = (id) => { removeTemplate(TEMPLATE_KEYS.tasks, id); refreshTaskTemplates(); };
+  const handleRemoveStageTemplate = (id) => { removeTemplate(TEMPLATE_KEYS.stages, id); refreshStageTemplates(); };
+
+  // применение шаблонов
+  const handleApplyPerformerTemplate = useCallback((template, overrideStageId, overrideTaskId) => {
+    let targetStageId = overrideStageId || activeStageId;
+    let targetTaskId = overrideTaskId || activeTaskId;
+    if (!targetTaskId) {
+      const stage = (activeStageId && project.stages.find((s) => s.id === activeStageId))
+        || project.stages[project.stages.length - 1];
+      if (!stage || stage.tasks.length === 0) return;
+      targetStageId = stage.id;
+      targetTaskId = stage.tasks[stage.tasks.length - 1].id;
+    }
+    const clone = cloneExecutorTemplate(template);
+    dispatch((p) => withTask(p, targetStageId, targetTaskId, (t) => ({ ...t, executors: [...t.executors, clone] })));
+    activateExecutor(targetStageId, targetTaskId, clone.id);
+  }, [activeStageId, activeTaskId, project]);
+
+  const handleApplyTaskTemplate = useCallback((template, overrideStageId) => {
+    let targetStageId = overrideStageId || activeStageId;
+    if (!targetStageId || !project.stages.some((s) => s.id === targetStageId)) {
+      targetStageId = project.stages[project.stages.length - 1]?.id;
+    }
+    if (!targetStageId) return;
+    const clone = cloneTaskTemplate(template);
+    dispatch((p) => mapStage(p, targetStageId, (s) => ({ ...s, tasks: [...s.tasks, clone] })));
+    activateTask(targetStageId, clone.id);
+  }, [activeStageId, project]);
+
+  const handleApplyStageTemplate = useCallback((template) => {
+    const clone = cloneStageTemplate(template);
+    dispatch((p) => ({ ...p, stages: [...p.stages, clone] }));
+    activateStage(clone.id);
+  }, []);
+
+  const allCollapsed = project.stages.length > 0 && project.stages.every((stage) =>
+    stage.collapsed && stage.tasks.every((task) => task.collapsed)
+  );
+
+  const toggleAllCollapsed = () => dispatch((current) => ({
+    ...current,
+    stages: current.stages.map((stage) => ({
+      ...stage,
+      collapsed: !allCollapsed,
+      tasks: stage.tasks.map((task) => ({ ...task, collapsed: !allCollapsed })),
+    })),
+  }));
+
   const rightPanel = (
     <RightPanel project={project} view={view} setView={changeView} dispatch={dispatch}
       activeStageId={activeStageId} activeTaskId={activeTaskId} activeExecutorId={activeExecutorId} />
@@ -214,10 +298,10 @@ export function Workspace({ project, onChange, onBack }) {
         <div className="kb-header-inner">
           <LogoMenu onPickFile={setImportFile} onSaveProject={saveProjectFile} onLoadProject={loadProjectFile} />
           <nav className="kb-crumbs">
-            <button type="button" className="kb-crumb-link" onClick={onBack}>Проекты</button>
+            <button type="button" className="kb-crumb-link" onClick={onBack}>{editingTemplate ? "Шаблоны" : "Проекты"}</button>
             <span className="kb-crumb-sep">/</span>
-            <input className="kb-input kb-project-name" value={project.name}
-              onChange={(e) => dispatch((p) => ({ ...p, name: e.target.value }))} />
+            <input className="kb-input kb-project-name" value={editingTemplate ? (project.templateName || project.name) : project.name}
+              onChange={(e) => dispatch((p) => editingTemplate ? { ...p, templateName: e.target.value, name: e.target.value } : { ...p, name: e.target.value })} />
           </nav>
 
           <div className="kb-spacer" />
@@ -239,14 +323,37 @@ export function Workspace({ project, onChange, onBack }) {
             onAddStage={addStageByClick}
             onAddTask={addTaskByClick}
             onAddExecutor={addExecutorByClick}
+            performerTemplates={performerTemplates}
+            taskTemplates={taskTemplates}
+            stageTemplates={stageTemplates}
+            onApplyPerformerTemplate={handleApplyPerformerTemplate}
+            onApplyTaskTemplate={handleApplyTaskTemplate}
+            onApplyStageTemplate={handleApplyStageTemplate}
+            onRemovePerformerTemplate={handleRemovePerformerTemplate}
+            onRemoveTaskTemplate={handleRemoveTaskTemplate}
+            onRemoveStageTemplate={handleRemoveStageTemplate}
           />
           {/* клик по нейтральной зоне листа снимает все выделения. */}
           <main className="kb-canvas" onMouseDown={clearSelection}>
             <div className="kb-canvas-inner">
+              {!isEmpty && <button type="button" className="kb-collapse-all-btn"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={toggleAllCollapsed}
+                title={allCollapsed ? "Развернуть все этапы и задачи" : "Свернуть все этапы и задачи"}>
+                {allCollapsed ? <ChevronsDown size={13} strokeWidth={1.7} /> : <ChevronsUp size={13} strokeWidth={1.7} />}
+                <span>{allCollapsed ? "Развернуть всё" : "Свернуть всё"}</span>
+              </button>}
               {isEmpty ? (
                 <>
                   <CanvasDropZone isEmpty
-                    onDropStage={(payload) => dispatch((p) => insertStage(p, payload, null))}
+                    onDropStage={(payload) => {
+                      if (payload.templateStageId) {
+                        const tpl = stageTemplates.find((t) => t.id === payload.templateStageId);
+                        if (tpl) handleApplyStageTemplate(tpl);
+                      } else {
+                        dispatch((p) => insertStage(p, payload, null));
+                      }
+                    }}
                     onAddStage={() => addStageByClick(CUSTOM_STAGE)} />
                   <ImportEmptyState onPickFile={setImportFile} onGenerate={setGenerateDescription} />
                 </>
@@ -259,10 +366,26 @@ export function Workspace({ project, onChange, onBack }) {
                       onActivateStage={activateStage}
                       onActivateTask={activateTask}
                       onActivateExecutor={activateExecutor}
-                      onRemove={() => removeStage(s.id)} />
+                      onRemove={() => removeStage(s.id)}
+                      onSaveStageTemplate={handleSaveStageTemplate}
+                      onSaveTaskTemplate={handleSaveTaskTemplate}
+                      onSavePerformerTemplate={handleSavePerformerTemplate}
+                      stageTemplates={stageTemplates}
+                      onApplyStageTemplate={handleApplyStageTemplate}
+                      taskTemplates={taskTemplates}
+                      onApplyTaskTemplate={handleApplyTaskTemplate}
+                      performerTemplates={performerTemplates}
+                      onApplyPerformerTemplate={handleApplyPerformerTemplate} />
                   ))}
                   <CanvasDropZone isEmpty={false}
-                    onDropStage={(payload) => dispatch((p) => insertStage(p, payload, null))}
+                    onDropStage={(payload) => {
+                      if (payload.templateStageId) {
+                        const tpl = stageTemplates.find((t) => t.id === payload.templateStageId);
+                        if (tpl) handleApplyStageTemplate(tpl);
+                      } else {
+                        dispatch((p) => insertStage(p, payload, null));
+                      }
+                    }}
                     onAddStage={() => addStageByClick(CUSTOM_STAGE)} />
                 </>
               )}
@@ -281,6 +404,15 @@ export function Workspace({ project, onChange, onBack }) {
             onAddStage={addStageByClick}
             onAddTask={addTaskByClick}
             onAddExecutor={addExecutorByClick}
+            performerTemplates={performerTemplates}
+            taskTemplates={taskTemplates}
+            stageTemplates={stageTemplates}
+            onApplyPerformerTemplate={handleApplyPerformerTemplate}
+            onApplyTaskTemplate={handleApplyTaskTemplate}
+            onApplyStageTemplate={handleApplyStageTemplate}
+            onRemovePerformerTemplate={handleRemovePerformerTemplate}
+            onRemoveTaskTemplate={handleRemoveTaskTemplate}
+            onRemoveStageTemplate={handleRemoveStageTemplate}
           />
           <ExternalView project={project} globalMarkup={globalMarkup}
             activeStageId={activeStageId} onActivateStage={activateStage} onClear={clearSelection}
@@ -296,7 +428,7 @@ export function Workspace({ project, onChange, onBack }) {
    Внешний (клиентский) вид: только Этапы → Задачи → цены.
    Исполнители/теги/себестоимость скрыты. Один источник данных.
    ============================================================ */
-function ExternalTaskRow({ task, stageId, globalMarkup, mode, onSetOverride }) {
+function ExternalTaskRow({ project, task, stageId, globalMarkup, mode, onSetOverride }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useOutsideClose(ref, () => setOpen(false));
@@ -307,6 +439,7 @@ function ExternalTaskRow({ task, stageId, globalMarkup, mode, onSetOverride }) {
   // В режиме «Отдельная строка» (Cost-Plus) строки показывают чистую себестоимость,
   // маркап вынесен вниз одной строкой. В «Размазать» — цена с зашитым маркапом.
   const price = externalTaskPrice(task, globalMarkup, mode);
+  const displayPrice = externalTaskPriceWithCharges(project, task);
 
   const onPercentInput = (val) => {
     onSetOverride(stageId, task.id, val === "" ? null : numVal(val));
@@ -333,7 +466,7 @@ function ExternalTaskRow({ task, stageId, globalMarkup, mode, onSetOverride }) {
         </button>
       )}
 
-      <span className="kb-ext-price">{fmt(price)} ₽</span>
+      <span className="kb-ext-price">{fmt(displayPrice)} ₽</span>
 
       {mode !== "transparent" && open && (
         <div className="kb-ext-pop" ref={ref}>
@@ -380,12 +513,12 @@ function ExternalView({ project, globalMarkup, activeStageId, onActivateStage, o
               onMouseDown={(e) => { e.stopPropagation(); onActivateStage(s.id); }}
               title="Показать сводку по этапу">
               <span className="kb-ext-stage-name">{s.name || "Без названия"}</span>
-              <span className="kb-sum kb-sum-stage">{fmt(externalStagePrice(s, globalMarkup, mode))} ₽</span>
+              <span className="kb-sum kb-sum-stage">{fmt(externalStagePriceWithCharges(project, s))} ₽</span>
             </div>
             {s.tasks.length > 0 && (
               <div className="kb-ext-stage-body">
                 {s.tasks.map((t) => (
-                  <ExternalTaskRow key={t.id} task={t} stageId={s.id}
+                  <ExternalTaskRow key={t.id} project={project} task={t} stageId={s.id}
                     globalMarkup={globalMarkup} mode={mode} onSetOverride={onSetTaskOverride} />
                 ))}
               </div>
@@ -404,11 +537,20 @@ function ExternalView({ project, globalMarkup, activeStageId, onActivateStage, o
         )}
 
         {/* п.6: налог поверх — прибавляется после маркапа */}
-        {projectTaxPct(project) > 0 && (
+        {projectTaxPct(project) > 0 && chargeIsVisible(project.tax) && (
           <div className="kb-ext-stage kb-ext-commission">
             <div className="kb-ext-stage-head">
-              <span className="kb-ext-stage-name">Налог {(project.tax?.type === "nds" ? "НДС" : "ИП")} ({fmt(projectTaxPct(project))}%)</span>
+              <span className="kb-ext-stage-name">Налог {projectTaxSystemLabel(project)} ({fmt(projectTaxPct(project))}%)</span>
               <span className="kb-sum kb-sum-stage">{fmt(projectTaxAmount(project))} ₽</span>
+            </div>
+          </div>
+        )}
+
+        {projectVatPct(project) > 0 && (
+          <div className="kb-ext-stage kb-ext-commission">
+            <div className="kb-ext-stage-head">
+              <span className="kb-ext-stage-name">НДС ({fmt(projectVatPct(project))}%)</span>
+              <span className="kb-sum kb-sum-stage">{fmt(projectVatAmount(project))} ₽</span>
             </div>
           </div>
         )}

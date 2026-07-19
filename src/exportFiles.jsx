@@ -8,7 +8,8 @@ import { fmt } from "./utils.js";
 import {
   getMarkupMode, externalTaskPrice, externalStagePrice,
   projectMarkupAmount, projectEffectiveMarkupPct,
-  projectTaxPct, projectTaxAmount, projectTotalWithTax,
+  projectTaxPct, projectTaxAmount, projectTaxSystemLabel, projectVatPct, projectVatAmount, projectTotalWithTax,
+  chargeIsVisible, externalTaskPriceWithCharges,
   stageSum, taskSum, projectSum, projectPrice,
   projectAnalytics, readExecutor,
 } from "./calculations.js";
@@ -87,10 +88,10 @@ function buildExportModel(project, view) {
   const external = view === "external";
   const stages = (project.stages || []).filter((s) => (s.tasks || []).length).map((s) => ({
     name: s.name || "Этап",
-    subtotal: external ? externalStagePrice(s, gm, mode) : stageSum(s),
+    subtotal: external ? (s.tasks || []).reduce((sum, task) => sum + externalTaskPriceWithCharges(project, task), 0) : stageSum(s),
     tasks: (s.tasks || []).map((t) => ({
       name: t.name || "Без названия",
-      price: external ? externalTaskPrice(t, gm, mode) : taskSum(t),
+      price: external ? externalTaskPriceWithCharges(project, t) : taskSum(t),
       execs: external ? [] : (t.executors || []).map((e) => {
         const R = readExecutor(e);
         const meta = [R.role, R.grade].filter(Boolean).join(", ");
@@ -101,13 +102,15 @@ function buildExportModel(project, view) {
   }));
   const commission = (external && mode === "transparent" && projectMarkupAmount(project) > 0)
     ? { label: `Агентская комиссия / Маркап (${fmt(projectEffectiveMarkupPct(project))}%)`, amount: projectMarkupAmount(project), pct: gm } : null;
-  const tax = (external && projectTaxPct(project) > 0)
+  const tax = (external && projectTaxPct(project) > 0 && chargeIsVisible(project.tax))
     ? {
-      label: `Налог ${project.tax?.type === "nds" ? "НДС" : "ИП"} (${fmt(projectTaxPct(project))}%)`, amount: projectTaxAmount(project),
-      pct: projectTaxPct(project), typeText: project.tax?.type === "nds" ? "НДС" : "ИП",
+      label: `Налог ${projectTaxSystemLabel(project)} (${fmt(projectTaxPct(project))}%)`, amount: projectTaxAmount(project),
+      pct: projectTaxPct(project), typeText: projectTaxSystemLabel(project),
     } : null;
+  const vat = (external && projectVatPct(project) > 0)
+    ? { label: `НДС (${fmt(projectVatPct(project))}%)`, amount: projectVatAmount(project), pct: projectVatPct(project) } : null;
   return {
-    external, stages, commission, tax,
+    external, stages, commission, tax, vat,
     total: external ? projectTotalWithTax(project) : projectSum(project),
     label: viewLabelText(view), projectName: project.name || "Проект", brand: project.branding || {},
   };
@@ -185,8 +188,8 @@ async function buildAndDownloadExcelJS(M, C, filename) {
 
   // маркап % и ставка налога — в отдельных помеченных ячейках справа от таблицы,
   // чтобы формулы комиссии/налога/итога ссылались на них (продюсер меняет процент — всё пересчитывается)
-  let markupPctAddr = null, taxPctAddr = null;
-  if (M.commission || M.tax) {
+  let markupPctAddr = null, taxPctAddr = null, vatPctAddr = null;
+  if (M.commission || M.tax || M.vat) {
     const pcol = ncols + 2;
     let pr = paramsRow0;
     const pt = ws.getCell(pr, pcol); pt.value = "Параметры"; pt.font = { bold: true, size: 10, color: { argb: ink } }; pr++;
@@ -200,6 +203,11 @@ async function buildAndDownloadExcelJS(M, C, filename) {
       const pv = ws.getCell(pr, pcol + 1); pv.value = M.tax.pct; pv.numFmt = '0.##"%"'; pv.font = { size: 10, bold: true, color: { argb: ink } }; pv.alignment = { horizontal: "right" };
       taxPctAddr = pv.address; pr++;
     }
+    if (M.vat) {
+      ws.getCell(pr, pcol).value = "НДС, %"; ws.getCell(pr, pcol).font = { size: 10, color: { argb: muted } };
+      const pv = ws.getCell(pr, pcol + 1); pv.value = M.vat.pct; pv.numFmt = '0.##"%"'; pv.font = { size: 10, bold: true, color: { argb: ink } }; pv.alignment = { horizontal: "right" };
+      vatPctAddr = pv.address; pr++;
+    }
     ws.getColumn(pcol).width = 14; ws.getColumn(pcol + 1).width = 10;
   }
 
@@ -209,7 +217,7 @@ async function buildAndDownloadExcelJS(M, C, filename) {
     const cc = ws.getCell(r, 1);
     cc.value = { formula: `"Агентская комиссия / Маркап ("&${markupPctAddr}&"%)"` };
     cc.font = { italic: true, color: { argb: muted } };
-    const cv = ws.getCell(r, ncols); cv.value = { formula: `${totalBase}*${markupPctAddr}/100` }; cv.numFmt = money; cv.font = { italic: true, color: { argb: ink } }; cv.alignment = { horizontal: "right" };
+    const cv = ws.getCell(r, ncols); cv.value = Math.round(M.commission.amount); cv.numFmt = money; cv.font = { italic: true, color: { argb: ink } }; cv.alignment = { horizontal: "right" };
     for (let c = 1; c <= ncols; c++) ws.getCell(r, c).border = border;
     commissionAddr = cv.address;
     r++;
@@ -219,19 +227,26 @@ async function buildAndDownloadExcelJS(M, C, filename) {
     const cc = ws.getCell(r, 1);
     cc.value = { formula: `"Налог ${M.tax.typeText} ("&${taxPctAddr}&"%)"` };
     cc.font = { italic: true, color: { argb: muted } };
-    const taxBase = commissionAddr ? `(${totalBase}+${commissionAddr})` : `(${totalBase})`;
-    const cv = ws.getCell(r, ncols); cv.value = { formula: `${taxBase}*${taxPctAddr}/100` }; cv.numFmt = money; cv.font = { italic: true, color: { argb: ink } }; cv.alignment = { horizontal: "right" };
+    const cv = ws.getCell(r, ncols); cv.value = Math.round(M.tax.amount); cv.numFmt = money; cv.font = { italic: true, color: { argb: ink } }; cv.alignment = { horizontal: "right" };
     for (let c = 1; c <= ncols; c++) ws.getCell(r, c).border = border;
     taxAddr = cv.address;
     r++;
   }
-  ws.mergeCells(r, 1, r, ncols - 1);
-  const gc = ws.getCell(r, 1); gc.value = M.external ? "ИТОГО" : "ИТОГО СЕБЕСТОИМОСТЬ"; gc.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } }; gc.fill = fill(ink); gc.alignment = { horizontal: "right", indent: 1 };
   let totalFormula = totalBase;
   if (commissionAddr) totalFormula += `+${commissionAddr}`;
   if (taxAddr) totalFormula += `+${taxAddr}`;
-  const gv = ws.getCell(r, ncols); gv.value = stageCellAddrs.length ? { formula: totalFormula } : Math.round(M.total); gv.numFmt = money; gv.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } }; gv.fill = fill(ink); gv.alignment = { horizontal: "right" };
+  ws.mergeCells(r, 1, r, ncols - 1);
+  const gc = ws.getCell(r, 1); gc.value = M.external ? "ИТОГО" : "ИТОГО СЕБЕСТОИМОСТЬ"; gc.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } }; gc.fill = fill(ink); gc.alignment = { horizontal: "right", indent: 1 };
+  const gv = ws.getCell(r, ncols); gv.value = stageCellAddrs.length ? { formula: totalFormula } : Math.round(M.total - (M.vat?.amount || 0)); gv.numFmt = money; gv.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } }; gv.fill = fill(ink); gv.alignment = { horizontal: "right" };
   ws.getRow(r).height = 22;
+  const totalAddr = gv.address;
+  r++;
+  if (M.vat) {
+    ws.mergeCells(r, 1, r, ncols - 1);
+    const cc = ws.getCell(r, 1); cc.value = { formula: `"НДС "&${vatPctAddr}&"%"` }; cc.font = { bold: true, color: { argb: ink } };
+    const cv = ws.getCell(r, ncols); cv.value = { formula: `${totalAddr}*(1+${vatPctAddr}/100)` }; cv.numFmt = money; cv.font = { bold: true, color: { argb: ink } }; cv.alignment = { horizontal: "right" };
+    for (let c = 1; c <= ncols; c++) ws.getCell(r, c).border = border;
+  }
 
   // шрифт как в приложении (Inter) на все ячейки
   ws.eachRow((row) => row.eachCell((cell) => { cell.font = { name: "Inter", ...(cell.font || {}) }; }));
@@ -288,6 +303,7 @@ function buildPdfDoc(M, C, b) {
     { text: M.tax.label, italics: true, color: GREY, margin: [2, 4, 2, 4] },
     { text: money(M.tax.amount), italics: true, color: GREY, alignment: "right", margin: [2, 4, 2, 4] },
   ]);
+  const totalBeforeVat = M.total - (M.vat?.amount || 0);
   return {
     pageSize: "A4", pageMargins: [40, 40, 40, 40],
     defaultStyle: { font: "Roboto", fontSize: 10, color: INK },
@@ -303,7 +319,8 @@ function buildPdfDoc(M, C, b) {
       ...(M.label ? [{ table: { widths: ["auto"], body: [[{ text: M.label, color: "#FFFFFF", bold: true, fontSize: 11, fillColor: INK, margin: [8, 5, 8, 5] }]] }, layout: "noBorders", margin: [0, 10, 0, 8] }] : []),
       { text: M.projectName, bold: true, fontSize: 15, margin: [0, M.label ? 0 : 10, 0, 12] },
       { table: { widths: ["*", "auto"], body }, layout: { hLineWidth: () => 0.5, vLineWidth: () => 0, hLineColor: () => LINE, paddingLeft: () => 0, paddingRight: () => 0 } },
-      { columns: [{ text: M.external ? "Итого" : "Итого себестоимость", bold: true, fontSize: 13 }, { text: money(M.total), bold: true, fontSize: 13, alignment: "right" }], margin: [0, 14, 0, 0] },
+      { columns: [{ text: M.external ? "Итого" : "Итого себестоимость", bold: true, fontSize: 13 }, { text: money(totalBeforeVat), bold: true, fontSize: 13, alignment: "right" }], margin: [0, 14, 0, 0] },
+      ...(M.vat ? [{ columns: [{ text: `НДС ${fmt(M.vat.pct)}%`, bold: true }, { text: money(M.total), bold: true, alignment: "right" }], margin: [0, 8, 0, 0] }] : []),
     ],
   };
 }
@@ -324,6 +341,7 @@ function exportPdfPrintFallback(project, view, filename, M, C, b) {
   }).join("");
   const commission = M.commission ? `<tr class="comm"><td>${esc(M.commission.label)}</td><td class="r">${money(M.commission.amount)}</td></tr>` : "";
   const taxRow = M.tax ? `<tr class="comm"><td>${esc(M.tax.label)}</td><td class="r">${money(M.tax.amount)}</td></tr>` : "";
+  const vatTotal = M.vat ? `<div class="vat-total"><span>НДС ${fmt(M.vat.pct)}%</span><span>${money(M.total)}</span></div>` : "";
   const totalLabel = M.external ? "Итого" : "Итого себестоимость";
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(filename)}</title>
 <style>
@@ -340,6 +358,7 @@ function exportPdfPrintFallback(project, view, filename, M, C, b) {
   tr.tk td:first-child{padding-left:20px} tr.ex td:first-child{padding-left:34px;color:${C.muted}}
   tr.comm td{font-style:italic;color:${C.muted}}
   .total{display:flex;justify-content:space-between;margin-top:18px;padding-top:14px;border-top:2px solid ${C.text};font-size:16px;font-weight:700}
+  .vat-total{display:flex;justify-content:space-between;margin-top:8px;font-weight:700}
   @media print{body{margin:0;padding:22px}}
 </style></head><body>
   <div class="head">
@@ -349,7 +368,8 @@ function exportPdfPrintFallback(project, view, filename, M, C, b) {
   ${M.label ? `<div class="label">${esc(M.label)}</div>` : ""}
   <h1>${esc(M.projectName)}</h1>
   <table>${body}${commission}${taxRow}</table>
-  <div class="total"><span>${totalLabel}</span><span>${money(M.total)}</span></div>
+  <div class="total"><span>${totalLabel}</span><span>${money(M.total - (M.vat?.amount || 0))}</span></div>
+  ${vatTotal}
 </body></html>`;
   printHtml(html, filename);
 }
@@ -430,14 +450,19 @@ function exportClientXlsx(project) {
   aoa.push(["Позиция", "Цена, ₽"]);
   for (const s of project.stages || []) {
     if (!(s.tasks || []).length) continue;
-    aoa.push([(s.name || "Этап").toUpperCase(), Math.round(externalStagePrice(s, gm, mode))]);
-    for (const t of s.tasks || []) aoa.push(["  " + (t.name || "Без названия"), Math.round(externalTaskPrice(t, gm, mode))]);
+    aoa.push([(s.name || "Этап").toUpperCase(), Math.round((s.tasks || []).reduce((sum, task) => sum + externalTaskPriceWithCharges(project, task), 0))]);
+    for (const t of s.tasks || []) aoa.push(["  " + (t.name || "Без названия"), Math.round(externalTaskPriceWithCharges(project, t))]);
   }
   const markupAmount = projectMarkupAmount(project);
   if (mode === "transparent" && markupAmount > 0)
     aoa.push([`Агентская комиссия / Маркап (${fmt(projectEffectiveMarkupPct(project))}%)`, Math.round(markupAmount)]);
+  if (projectTaxPct(project) > 0 && chargeIsVisible(project.tax))
+    aoa.push([`Налог ${projectTaxSystemLabel(project)} (${fmt(projectTaxPct(project))}%)`, Math.round(projectTaxAmount(project))]);
   aoa.push([]);
-  aoa.push(["ИТОГО", Math.round(projectPrice(project))]);
+  const totalBeforeVat = projectTotalWithTax(project) - projectVatAmount(project);
+  aoa.push(["ИТОГО", Math.round(totalBeforeVat)]);
+  if (projectVatPct(project) > 0)
+    aoa.push([`НДС ${fmt(projectVatPct(project))}%`, Math.round(totalBeforeVat * (1 + projectVatPct(project) / 100))]);
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws["!cols"] = [{ wch: 52 }, { wch: 16 }];
   ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];

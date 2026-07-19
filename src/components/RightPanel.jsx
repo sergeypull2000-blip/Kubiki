@@ -4,8 +4,9 @@ import { fmt, numVal } from "../utils.js";
 import {
   executorSum, taskSum, stageSum, projectSum,
   getMarkupMode, externalTaskPrice, externalStagePrice,
-  projectMarkupAmount, projectTaxPct, projectTaxAmount, projectTotalWithTax,
-  projectMargin, projectMarginPct, readExecutor,
+  externalTaskPriceWithCharges, externalStagePriceWithCharges,
+  projectMarkupAmount, projectTaxPct, projectTaxAmount, projectVatPct, projectVatAmount, projectTotalWithTax,
+  readExecutor,
 } from "../calculations.js";
 import { PAY_SHORT } from "../constants.js";
 import { ExportPanel } from "../exportFiles.jsx";
@@ -85,7 +86,7 @@ function PropertiesPanel({ project, view, activeStageId, activeTaskId, activeExe
         <div className="kb-props-kind">Задача</div>
         <div className="kb-props-name">{task.name || "Без названия"}</div>
         <div className="kb-props-meta">Исполнителей: {execs.length}</div>
-        <div className="kb-props-figure">{fmt(external ? externalTaskPrice(task, gm, mode) : taskSum(task))} ₽</div>
+        <div className="kb-props-figure">{fmt(external ? externalTaskPriceWithCharges(project, task) : taskSum(task))} ₽</div>
         {!external && <>
           <div className="kb-props-sub">Исполнители</div>
           {execs.length === 0 && <div className="kb-props-empty-sm">Нет исполнителей</div>}
@@ -113,7 +114,7 @@ function PropertiesPanel({ project, view, activeStageId, activeTaskId, activeExe
         <div className="kb-props-kind">Этап</div>
         <div className="kb-props-name">{stage.name || "Без названия"}</div>
         <div className="kb-props-meta">Задач: {tasks.length}</div>
-        <div className="kb-props-figure">{fmt(external ? externalStagePrice(stage, gm, mode) : stageSum(stage))} ₽</div>
+        <div className="kb-props-figure">{fmt(external ? externalStagePriceWithCharges(project, stage) : stageSum(stage))} ₽</div>
         {tasks.length === 0 && <div className="kb-props-empty-sm">Нет задач</div>}
         {tasks.map((t) => {
           const names = (t.executors || []).map(execName).filter(Boolean);
@@ -121,7 +122,7 @@ function PropertiesPanel({ project, view, activeStageId, activeTaskId, activeExe
             <div className="kb-props-taskblock" key={t.id}>
               <div className="kb-props-row kb-props-taskrow">
                 <span className="kb-person-task" title={t.name || "Без названия"}><span className="kb-person-taskname">{t.name || "Без названия"}</span></span>
-                <span className="kb-person-cellsum">{fmt(external ? externalTaskPrice(t, gm, mode) : taskSum(t))} ₽</span>
+                <span className="kb-person-cellsum">{fmt(external ? externalTaskPriceWithCharges(project, t) : taskSum(t))} ₽</span>
               </div>
               {names.length > 0 && <div className="kb-props-names" title={names.join(", ")}>{names.join(", ")}</div>}
             </div>
@@ -170,16 +171,15 @@ function PropertiesPanel({ project, view, activeStageId, activeTaskId, activeExe
         <div className="kb-props-count"><b>{people.size}</b><span>исполн.</span></div>
       </div>
       {external && <>
-        {/* п.9: текущая маржинальность = (цена с маркапом − себестоимость) / цена */}
-        <div className="kb-props-sub">Текущая маржинальность</div>
-        <div className="kb-props-row"><span>Маржа</span><span>{fmt(projectMargin(project))} ₽ · {projectMarginPct(project).toFixed(1)}%</span></div>
+        <div className="kb-props-sub">Структура внешней сметы</div>
         <div className="kb-props-row"><span>Себестоимость</span><span>{fmt(cost)} ₽</span></div>
         <div className="kb-props-row"><span>Маркап</span><span>{fmt(projectMarkupAmount(project))} ₽</span></div>
         {projectTaxPct(project) > 0 && <div className="kb-props-row"><span>Налог ({fmt(projectTaxPct(project))}%)</span><span>{fmt(projectTaxAmount(project))} ₽</span></div>}
+        {projectVatPct(project) > 0 && <div className="kb-props-row"><span>НДС ({fmt(projectVatPct(project))}%)</span><span>{fmt(projectVatAmount(project))} ₽</span></div>}
       </>}
       {!external && <>
         <button type="button" className="kb-props-sub kb-props-sub-toggle" onClick={() => setStructOpen((o) => !o)}>
-          <span>Структура себестоимости</span>
+          <span>Структура внутренней сметы</span>
           <ChevronDown size={12} strokeWidth={2} className={"kb-person-chev" + (structOpen ? " is-open" : "")} />
         </button>
         {structOpen && <>
@@ -191,17 +191,14 @@ function PropertiesPanel({ project, view, activeStageId, activeTaskId, activeExe
   );
 }
 
-/* ЗАДАЧА 3 — переключатель режима маркапа */
-function MarkupModeToggle({ project, onChange }) {
-  const mode = getMarkupMode(project);
-  const set = (m) => onChange((p) => ({ ...p, markupMode: m }));
+function VisibilityToggle({ checked, onChange, label }) {
   return (
-    <div className="kb-markupmode" role="group" aria-label="Режим маркапа">
-      <button type="button" className={"kb-markupmode-btn" + (mode === "embedded" ? " is-active" : "")} onClick={() => set("embedded")}
-        title="Маркап зашит в цену позиций — клиент не видит прибыль">Классический</button>
-      <button type="button" className={"kb-markupmode-btn" + (mode === "transparent" ? " is-active" : "")} onClick={() => set("transparent")}
-        title="Себестоимость в строках + отдельная строка «Агентская комиссия / Маркап» внизу (Cost-Plus, тендеры)">Прозрачный</button>
-    </div>
+    <button type="button" role="switch" aria-checked={checked} aria-label={label}
+      className={"kb-mini-switch" + (checked ? " is-on" : "")}
+      title={checked ? "Отображать отдельной строкой" : "Распределять по позициям"}
+      onClick={() => onChange(!checked)}>
+      <span />
+    </button>
   );
 }
 
@@ -222,23 +219,33 @@ export function RightPanel({ project, view, setView, dispatch, activeStageId, ac
 
       {view === "external" && (
         <section className="kb-rp-sec">
-          <div className="kb-rp-title">Маркап</div>
-          <MarkupModeToggle project={project} onChange={dispatch} />
-          <label className="kb-markup-field kb-rp-markup">
+          <div className="kb-tax-row kb-rp-markup">
             <span className="kb-markup-label">Маркап, %</span>
-            <input className="kb-input kb-input-num kb-markup-input" value={globalMarkup}
+            <span className="kb-tax-spacer" aria-hidden="true" />
+            <input className="kb-input kb-input-num kb-markup-input kb-tax-input" value={globalMarkup}
               onChange={(e) => dispatch((p) => ({ ...p, globalMarkup: e.target.value === "" ? 0 : numVal(e.target.value) }))} />
-          </label>
-          {/* п.6: налог — тип (ИП/НДС) + процент, прибавляется поверх итога */}
+            <VisibilityToggle checked={getMarkupMode(project) === "transparent"} label="Отображать маркап отдельной строкой"
+              onChange={(visible) => dispatch((p) => ({ ...p, markupMode: visible ? "transparent" : "embedded" }))} />
+          </div>
           <div className="kb-tax-row">
             <span className="kb-markup-label">Налог</span>
-            <select className="kb-tax-type" value={project.tax?.type || "ip"}
+            <select className="kb-tax-type" value={["osno", "usn", "ausn"].includes(project.tax?.type) ? project.tax.type : "osno"}
               onChange={(e) => dispatch((p) => ({ ...p, tax: { ...(p.tax || {}), type: e.target.value } }))}>
-              <option value="ip">ИП</option>
-              <option value="nds">НДС</option>
+              <option value="osno">ОСНО</option>
+              <option value="usn">УСН</option>
+              <option value="ausn">АУСН</option>
             </select>
             <input className="kb-input kb-input-num kb-tax-input" value={project.tax?.percent ?? ""} placeholder="%"
               onChange={(e) => dispatch((p) => ({ ...p, tax: { ...(p.tax || {}), percent: e.target.value } }))} />
+            <VisibilityToggle checked={project.tax?.visible !== false} label="Отображать налог отдельной строкой"
+              onChange={(visible) => dispatch((p) => ({ ...p, tax: { ...(p.tax || {}), visible } }))} />
+          </div>
+          <div className="kb-tax-row">
+            <span className="kb-markup-label">НДС</span>
+            <span className="kb-tax-spacer" aria-hidden="true" />
+            <input className="kb-input kb-input-num kb-tax-input" value={project.vat?.percent ?? ""} placeholder="%"
+              onChange={(e) => dispatch((p) => ({ ...p, vat: { ...(p.vat || {}), percent: e.target.value } }))} />
+            <span className="kb-switch-spacer" aria-hidden="true" />
           </div>
         </section>
       )}

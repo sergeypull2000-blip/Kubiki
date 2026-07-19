@@ -71,8 +71,25 @@ export const projectEffectiveMarkupPct = (p) => {
    Работает и в прозрачном, и в классическом режиме. Тип (ИП/НДС) —
    информативная метка, ставка задаётся процентом. Все «Итого» учитывают налог. */
 export const projectTaxPct = (p) => numVal(p.tax?.percent);
+export const projectTaxSystemLabel = (p) => ({ osno: "ОСНО", usn: "УСН", ausn: "АУСН" }[p.tax?.type] || "ОСНО");
 export const projectTaxAmount = (p) => projectPrice(p) * projectTaxPct(p) / 100;
-export const projectTotalWithTax = (p) => projectPrice(p) + projectTaxAmount(p);
+export const projectVatPct = (p) => numVal(p.vat?.percent);
+export const projectVatBase = (p) => projectPrice(p) + projectTaxAmount(p);
+export const projectVatAmount = (p) => projectVatBase(p) * projectVatPct(p) / 100;
+export const projectTotalWithTax = (p) => projectPrice(p) + projectTaxAmount(p) + projectVatAmount(p);
+
+export const chargeIsVisible = (charge) => charge?.visible !== false;
+export const projectTaskCount = (p) => (p.stages || []).reduce((count, stage) => count + (stage.tasks || []).length, 0);
+export const hiddenChargesPerTask = (p) => {
+  const count = projectTaskCount(p);
+  if (!count) return 0;
+  const hiddenTax = chargeIsVisible(p.tax) ? 0 : projectTaxAmount(p);
+  return hiddenTax / count;
+};
+export const externalTaskPriceWithCharges = (p, t) =>
+  externalTaskPrice(t, p.globalMarkup ?? 0, getMarkupMode(p)) + hiddenChargesPerTask(p);
+export const externalStagePriceWithCharges = (p, s) =>
+  (s.tasks || []).reduce((sum, task) => sum + externalTaskPriceWithCharges(p, task), 0);
 
 /* ---------- маржинальность (п.9) ----------
    Маржа ₽ = цена клиенту с маркапом (до налога) − себестоимость.

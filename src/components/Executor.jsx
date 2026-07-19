@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Plus, X, Trash2 } from "lucide-react";
+import { Plus, X, Trash2, Bookmark } from "lucide-react";
 import { fmt, numVal } from "../utils.js";
 import { executorSum } from "../calculations.js";
 import { TAG_DEF, TAG_DEFS, PAYMENT_LABEL } from "../constants.js";
@@ -243,7 +243,7 @@ function AddCubeButton({ onAddCube, usedKeys = [] }) {
 /* ============================================================
    Строка исполнителя
    ============================================================ */
-export function ExecutorRow({ executor, active, flash, stageId, taskId, onActivate, onPatch, onRemove }) {
+export function ExecutorRow({ executor, active, flash, stageId, taskId, onActivate, onPatch, onRemove, onSavePerformerTemplate }) {
   const sum = executorSum(executor);
   const payTag = executor.tags.find((t) => t.key === "payment");
   const payType = payTag?.payment?.type;
@@ -380,6 +380,11 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
           )}
         </div>
 
+        {onSavePerformerTemplate && (
+          <button type="button" className="kb-icon-btn kb-erow-save" onClick={(e) => { e.stopPropagation(); onSavePerformerTemplate(executor); }} title="Сохранить в базу">
+            <Bookmark size={13} strokeWidth={1.5} />
+          </button>
+        )}
         <button type="button" className="kb-icon-btn kb-erow-del" onClick={(e) => { e.stopPropagation(); onRemove(); }} title="Удалить исполнителя">
           <Trash2 size={13} strokeWidth={1.5} />
         </button>

@@ -17,7 +17,7 @@ export const makeTask = () => ({ id: uid(), name: "", executors: [], markupOverr
 export const makeStage = (preset) => ({
   id: uid(), presetKey: preset.key, name: preset.name, tasks: [], collapsed: false,
 });
-export const makeProject = () => ({ id: uid(), name: "Новый проект", stages: [], globalMarkup: 25, markupMode: "embedded", tax: { type: "ip", percent: "" }, branding: { logo: "", studioName: "", contacts: "" } });
+export const makeProject = () => ({ id: uid(), name: "Новый проект", stages: [], globalMarkup: 25, markupMode: "embedded", tax: { type: "osno", percent: "", visible: true }, vat: { percent: "" }, branding: { logo: "", studioName: "", contacts: "" } });
 
 /* ---------- immutable project mutators ---------- */
 export const mapStage = (project, stageId, fn) => ({
@@ -99,6 +99,33 @@ export function moveExecutor(project, executorId, toStageId, toTaskId) {
         return executors === t.executors ? t : { ...t, executors };
       }),
     })),
+  };
+}
+
+// Переставить задачу перед задачей-целью либо в конец этапа. Работает как
+// внутри одного этапа, так и между этапами, сохраняя всю вложенную структуру.
+export function moveTask(project, taskId, toStageId, beforeTaskId = null) {
+  let moving = null;
+  let fromStageId = null;
+  for (const stage of project.stages) {
+    const task = stage.tasks.find((item) => item.id === taskId);
+    if (task) { moving = task; fromStageId = stage.id; break; }
+  }
+  if (!moving || taskId === beforeTaskId) return project;
+  if (!project.stages.some((stage) => stage.id === toStageId)) return project;
+
+  return {
+    ...project,
+    stages: project.stages.map((stage) => {
+      let tasks = stage.tasks;
+      if (stage.id === fromStageId) tasks = tasks.filter((task) => task.id !== taskId);
+      if (stage.id === toStageId) {
+        tasks = stage.id === fromStageId ? tasks : [...tasks];
+        const targetIndex = beforeTaskId ? tasks.findIndex((task) => task.id === beforeTaskId) : -1;
+        tasks.splice(targetIndex < 0 ? tasks.length : targetIndex, 0, moving);
+      }
+      return tasks === stage.tasks ? stage : { ...stage, tasks };
+    }),
   };
 }
 

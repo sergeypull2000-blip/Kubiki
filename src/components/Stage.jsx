@@ -1,10 +1,10 @@
 import { useState, useRef } from "react";
-import { Plus, Trash2, ChevronDown, ChevronUp, GripVertical } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Bookmark } from "lucide-react";
 import { fmt } from "../utils.js";
 import { stageSum } from "../calculations.js";
 import { useOutsideClose } from "../hooks.js";
 import { STAGE_PRESETS, CUSTOM_STAGE, stageTaskDictionary, stageFeaturedTasks } from "../constants.js";
-import { DND_TYPES, useDragSource, useDropTarget, insertStage, mapStage, makeTask, withTask } from "../store.js";
+import { DND_TYPES, useDragSource, useDropTarget, insertStage, mapStage, makeTask, moveTask, withTask } from "../store.js";
 import { TaskBlock } from "./Task.jsx";
 
 /* ============================================================
@@ -68,16 +68,36 @@ export function CanvasDropZone({ isEmpty, onDropStage, onAddStage }) {
 /* ============================================================
    Этап
    ============================================================ */
-export function StageCard({ stage, dispatch, activeStageId, activeTaskId, activeExecutorId, onActivateStage, onActivateTask, onActivateExecutor, onRemove }) {
+export function StageCard({ stage, dispatch, activeStageId, activeTaskId, activeExecutorId,
+  onActivateStage, onActivateTask, onActivateExecutor, onRemove,
+  onSaveStageTemplate, onSaveTaskTemplate, onSavePerformerTemplate,
+  stageTemplates, onApplyStageTemplate, taskTemplates, onApplyTaskTemplate,
+  performerTemplates, onApplyPerformerTemplate }) {
   const StageIcon = (STAGE_PRESETS.find((p) => p.key === stage.presetKey) || CUSTOM_STAGE).icon;
   const total = stageSum(stage);
   const isActive = activeStageId === stage.id && !activeTaskId && !activeExecutorId;
 
   const { isDragging, dragHandlers } = useDragSource(DND_TYPES.STAGE, { moveStageId: stage.id });
   const { isOver: isOverReorder, dropHandlers: reorderHandlers } = useDropTarget(
-    DND_TYPES.STAGE, (payload) => dispatch((p) => insertStage(p, payload, stage.id)));
+    DND_TYPES.STAGE, (payload) => {
+      if (payload.templateStageId) {
+        const tpl = stageTemplates?.find((t) => t.id === payload.templateStageId);
+        if (tpl && onApplyStageTemplate) onApplyStageTemplate(tpl);
+      } else {
+        dispatch((p) => insertStage(p, payload, stage.id));
+      }
+    });
   const { isOver: isOverTask, dropHandlers: taskDropHandlers } = useDropTarget(
-    DND_TYPES.TASK, () => dispatch((p) => mapStage(p, stage.id, (s) => ({ ...s, tasks: [...s.tasks, makeTask()] }))));
+    DND_TYPES.TASK, (payload) => {
+      if (payload.templateTaskId) {
+        const tpl = taskTemplates?.find((t) => t.id === payload.templateTaskId);
+        if (tpl && onApplyTaskTemplate) onApplyTaskTemplate(tpl, stage.id);
+      } else if (payload.moveTaskId) {
+        dispatch((p) => moveTask(p, payload.moveTaskId, stage.id));
+      } else {
+        dispatch((p) => mapStage(p, stage.id, (s) => ({ ...s, tasks: [...s.tasks, makeTask()] })));
+      }
+    });
 
   const patchStage = (patch) => dispatch((p) => mapStage(p, stage.id, (s) => ({ ...s, ...patch })));
   const patchTask = (taskId, patch) => dispatch((p) => withTask(p, stage.id, taskId, (t) => ({ ...t, ...patch })));
@@ -96,10 +116,14 @@ export function StageCard({ stage, dispatch, activeStageId, activeTaskId, active
   return (
     <div className={"kb-stage" + (isActive ? " kb-stage-active" : "") + (isOverReorder ? " kb-stage-over" : "") + (isDragging ? " kb-stage-dragging" : "")}
       {...reorderHandlers} onMouseDown={onStageMouseDown}>
-      <div className="kb-stage-head">
-        <span className="kb-grip" title="Перетащите, чтобы переставить" {...dragHandlers}>
-          <GripVertical size={14} strokeWidth={1.5} />
-        </span>
+      <div className="kb-stage-head" {...dragHandlers} title="Перетащите строку, чтобы переставить этап"
+        onMouseDownCapture={(event) => { event.currentTarget.draggable = !event.target.closest("input, textarea, button, select"); }}
+        onMouseUp={(event) => { event.currentTarget.draggable = true; }}>
+        <button type="button" className="kb-icon-btn kb-tree-collapse" draggable={false}
+          onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); patchStage({ collapsed: !stage.collapsed }); }}
+          title={stage.collapsed ? "Развернуть" : "Свернуть"}>
+          {stage.collapsed ? <ChevronRight size={15} strokeWidth={1.5} /> : <ChevronDown size={15} strokeWidth={1.5} />}
+        </button>
         <StageIcon size={15} strokeWidth={1.5} className="kb-stage-icon" />
         <StageNameInput
           value={stage.name}
@@ -109,11 +133,12 @@ export function StageCard({ stage, dispatch, activeStageId, activeTaskId, active
             patchStage({ name: val, presetKey: match ? match.key : "custom" });
           }}
         />
-        <button type="button" className="kb-icon-btn" onClick={() => patchStage({ collapsed: !stage.collapsed })}
-          title={stage.collapsed ? "Развернуть" : "Свернуть"}>
-          {stage.collapsed ? <ChevronDown size={15} strokeWidth={1.5} /> : <ChevronUp size={15} strokeWidth={1.5} />}
-        </button>
         <span className="kb-sum kb-sum-stage">{fmt(total)} ₽</span>
+        {onSaveStageTemplate && (
+          <button type="button" className="kb-icon-btn" onClick={() => onSaveStageTemplate(stage)} title="Сохранить этап как шаблон">
+            <Bookmark size={14} strokeWidth={1.5} />
+          </button>
+        )}
         <button type="button" className="kb-icon-btn" onClick={onRemove} title="Удалить этап">
           <Trash2 size={14} strokeWidth={1.5} />
         </button>
@@ -127,7 +152,13 @@ export function StageCard({ stage, dispatch, activeStageId, activeTaskId, active
               taskFeatured={stageFeaturedTasks(stage.presetKey)}
               activeTaskId={activeTaskId} activeExecutorId={activeExecutorId}
               onActivateTask={onActivateTask} onActivateExecutor={onActivateExecutor}
-              onPatch={(patch) => patchTask(t.id, patch)} onRemove={() => removeTask(t.id)} />
+              onPatch={(patch) => patchTask(t.id, patch)} onRemove={() => removeTask(t.id)}
+              onSaveTaskTemplate={onSaveTaskTemplate}
+              onSavePerformerTemplate={onSavePerformerTemplate}
+              taskTemplates={taskTemplates}
+              onApplyTaskTemplate={onApplyTaskTemplate}
+              performerTemplates={performerTemplates}
+              onApplyPerformerTemplate={onApplyPerformerTemplate} />
           ))}
           <button type="button" className="kb-add-btn" onClick={addTask} onMouseDown={(e) => e.stopPropagation()}>
             <Plus size={13} strokeWidth={1.75} /> Новая задача
