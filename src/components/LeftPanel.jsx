@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, ListTodo, User, Folder, FileText, Pencil, Trash2, Check, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ListTodo, User, FileText, Pencil, Trash2, Check, X } from "lucide-react";
 import { CUSTOM_STAGE } from "../constants.js";
 import { DND_TYPES, useDragSource } from "../store.js";
 import { uid } from "../utils.js";
@@ -189,7 +189,7 @@ export default function LeftPanel({ activeNav, onNavChange, categories, onCatego
 
   return (
     <aside className="kb-dash-sidebar">
-      <div className="kb-dash-nav-section-label">ПРОЕКТЫ</div>
+      <div className="kb-dash-nav-section-label">Проекты</div>
       {[{ id: "all", name: "Все проекты" }, { id: "recent", name: "Последние" }, { id: "favorites", name: "Избранное" }].map((item) => (
         <button type="button" key={item.id}
           className={`kb-dash-nav-item${activeNav === item.id ? " kb-dash-nav-item-active" : ""}`}
@@ -198,7 +198,7 @@ export default function LeftPanel({ activeNav, onNavChange, categories, onCatego
         </button>
       ))}
       <div className="kb-dash-nav-divider" />
-      <div className="kb-dash-nav-section-label">ШАБЛОНЫ</div>
+      <div className="kb-dash-nav-section-label">Шаблоны</div>
       {categories.map((category) => {
         const folderTemplates = templates.filter((template) => template.folderId === category.id);
         const open = openFolders.has(category.id);
@@ -206,11 +206,13 @@ export default function LeftPanel({ activeNav, onNavChange, categories, onCatego
           onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }}
           onDrop={(event) => { event.preventDefault(); const id = event.dataTransfer.getData("application/x-kubiki-template"); if (id) { onMoveTemplate(id, category.id); setOpenFolders((old) => new Set(old).add(category.id)); } }}>
           <div className={`kb-dash-nav-folder-row${activeNav === `category:${category.id}` ? " kb-dash-nav-item-active" : ""}`}>
-            <button type="button" className="kb-tree-toggle" onClick={() => toggleFolder(category.id)} title={open ? "Свернуть" : "Раскрыть"}>{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button>
+            <button type="button" className="kb-tree-toggle" onClick={() => toggleFolder(category.id)}
+              title={open ? "Свернуть" : "Раскрыть"} aria-label={`${open ? "Свернуть" : "Раскрыть"} категорию ${category.name}`}
+              aria-expanded={open}>{open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</button>
             {editingId === category.id ? <input className="kb-dash-nav-input" value={editingName} autoFocus onChange={(event) => setEditingName(event.target.value)}
               onKeyDown={(event) => { if (event.key === "Enter") renameFolder(category.id); if (event.key === "Escape") setEditingId(null); }} /> :
               <button type="button" className="kb-dash-nav-item kb-tree-folder-btn" onClick={() => { onNavChange(`category:${category.id}`); setOpenFolders((old) => new Set(old).add(category.id)); }}>
-                <Folder size={15} /><span>{category.name}</span>
+                <span>{category.name}</span>
               </button>}
             {!category.system && <div className="kb-dash-nav-folder-actions">
               {editingId === category.id ? <><button className="kb-icon-btn-small" onClick={() => renameFolder(category.id)}><Check size={13} /></button><button className="kb-icon-btn-small" onClick={() => setEditingId(null)}><X size={13} /></button></> : <>

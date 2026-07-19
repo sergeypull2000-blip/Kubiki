@@ -703,43 +703,44 @@ export const CSS = `
 /* ============================================================
    Dashboard: layout с навигационной боковой панелью
    ============================================================ */
-.kb-dashboard-layout{display:flex; align-items:stretch; min-height:calc(100vh - 77px)}
+.kb-dashboard-layout{display:flex; align-items:stretch; min-height:calc(100vh - 77px);
+  width:100%; max-width:var(--layout-max); margin:0 auto}
 .kb-dash-sidebar{width:var(--dash-sidebar-w); flex-shrink:0; background:var(--surface);
-  border-right:1px solid var(--line-strong); padding:14px 12px 22px;
-  display:flex; flex-direction:column; gap:2px; overflow-y:auto; overflow-x:hidden}
+  border-right:1px solid var(--line); padding:18px 14px 24px;
+  display:flex; flex-direction:column; gap:0; overflow-y:auto; overflow-x:hidden}
 
 /* метка секции навигации */
-.kb-dash-nav-section-label{font-size:var(--fs-xs); font-weight:var(--fw-regular);
-  letter-spacing:.03em; color:var(--text-muted);
-  padding:8px 6px 6px; user-select:none}
+.kb-dash-nav-section-label{font-size:var(--fs-xs); font-weight:var(--fw-medium);
+  letter-spacing:0; color:var(--text-faint);
+  padding:2px 6px 7px; user-select:none}
 
 /* пункт навигации */
 .kb-dash-nav-item{display:flex; align-items:center; gap:8px; width:100%;
-  border:none; border-radius:6px; padding:7px 8px; background:transparent;
-  font:inherit; font-size:var(--fs-sm); font-weight:var(--fw-medium);
+  border:none; border-radius:4px; padding:6px 7px; background:transparent;
+  font:inherit; font-size:var(--fs-sm); font-weight:var(--fw-regular);
   color:var(--text); cursor:pointer; transition:background .12s ease; text-align:left}
-.kb-dash-nav-item:hover{background:var(--accent-soft)}
+.kb-dash-nav-item:hover{background:var(--surface-sunken)}
 .kb-dash-nav-item > span{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.kb-dash-nav-item-active{background:var(--surface-sunken); color:var(--text); box-shadow:inset 2px 0 0 var(--line-strong)}
+.kb-dash-nav-item-active{background:var(--surface-sunken); color:var(--text); box-shadow:inset 1px 0 0 var(--line-strong)}
 
 /* разделитель секций */
-.kb-dash-nav-divider{height:1px; background:var(--line); margin:6px 4px 8px}
+.kb-dash-nav-divider{height:1px; background:var(--line); margin:12px 4px 16px}
 
 /* строка папки категории с действиями */
 .kb-dash-nav-folder-row{display:flex; align-items:center; gap:2px;
-  border-radius:6px; transition:background .12s ease}
+  min-height:30px; border-radius:4px; transition:background .12s ease}
 .kb-dash-nav-folder-row:hover{background:var(--surface-sunken)}
 .kb-dash-nav-folder-row:hover .kb-dash-nav-folder-actions{opacity:1}
 .kb-dash-nav-folder-row > .kb-dash-nav-item{flex:1; min-width:0}
 .kb-dash-nav-folder-actions{display:flex; align-items:center; gap:1px;
   opacity:0; padding-right:2px; transition:opacity .12s ease}
-.kb-dash-nav-folder-row.kb-dash-nav-item-active{background:var(--surface-sunken); box-shadow:inset 2px 0 0 var(--line-strong)}
-.kb-tree-toggle{display:flex; align-items:center; justify-content:center; flex:none; padding:4px 0 4px 4px; border:0; background:transparent; color:var(--text-faint); cursor:pointer}
-.kb-tree-folder-btn{padding-left:3px}
-.kb-tree-folder-btn svg{color:var(--text-faint); flex:none}
-.kb-template-tree-files{display:flex; flex-direction:column; margin-left:25px; padding:2px 0 4px; gap:1px}
+.kb-dash-nav-folder-row.kb-dash-nav-item-active{background:var(--surface-sunken); box-shadow:inset 1px 0 0 var(--line-strong)}
+.kb-tree-toggle{display:flex; align-items:center; justify-content:center; flex:none; width:22px; align-self:stretch; padding:0 0 0 4px; border:0; background:transparent; color:var(--text-faint); cursor:pointer}
+.kb-tree-toggle:hover{color:var(--text-muted)}
+.kb-tree-folder-btn{padding-left:2px}
+.kb-template-tree-files{display:flex; flex-direction:column; margin-left:23px; padding:1px 0 5px 7px; gap:0; border-left:1px solid var(--line)}
 .kb-template-tree-file{display:flex; align-items:center; gap:6px; width:100%; min-width:0; padding:5px 6px; border:0; border-radius:5px; background:transparent; color:var(--text-muted); font:inherit; font-size:12px; text-align:left; cursor:grab}
-.kb-template-tree-file:hover{background:var(--accent-soft); color:var(--text)}
+.kb-template-tree-file:hover{background:var(--surface-sunken); color:var(--text)}
 .kb-template-tree-file span{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .kb-template-tree-file svg{flex:none}
 .kb-template-tree-actions{display:flex; flex:none; gap:1px; opacity:0; transition:opacity .12s ease}
@@ -756,12 +757,12 @@ export const CSS = `
 .kb-dash-nav-input:focus{outline:none; border-color:var(--accent)}
 
 /* кнопка «Новая категория» */
-.kb-dash-nav-new-row{padding:0 4px}
+.kb-dash-nav-new-row{padding:5px 4px 0 22px}
 .kb-dash-nav-new-btn{display:flex; align-items:center; gap:6px; width:100%;
-  border:1px dashed var(--line-strong); border-radius:6px; padding:7px 8px;
-  margin-top:4px; background:none; color:var(--text-muted);
+  border:0; border-radius:4px; padding:6px 7px;
+  margin-top:0; background:none; color:var(--text-faint);
   font:inherit; font-size:var(--fs-sm); cursor:pointer; transition:all .12s ease}
-.kb-dash-nav-new-btn:hover{color:var(--text); border-color:var(--text-faint)}
+.kb-dash-nav-new-btn:hover{color:var(--text-muted); background:var(--surface-sunken)}
 
 .kb-dash-empty{grid-column:1 / -1; padding:40px; text-align:center; color:var(--text-muted)}
 .kb-create-wrapper{width:100%}
