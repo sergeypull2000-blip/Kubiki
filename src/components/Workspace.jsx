@@ -189,6 +189,15 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
     }
   };
 
+  // Общая точка вставки этапов, подтверждённых в превью импорта/генерации.
+  const insertParsedStages = (stages, meta) => {
+    dispatch((p) => ({
+      ...p,
+      stages: [...(p.stages || []), ...stages],
+      ...(meta && Number.isFinite(meta.globalMarkup) ? { globalMarkup: meta.globalMarkup } : {}),
+    }));
+  };
+
   const isEmpty = project.stages.length === 0;
   // п.4: смена вида снимает любое выделение (и в панели «Свойства»).
   const changeView = (v) => { clearSelection(); setView(v); };
