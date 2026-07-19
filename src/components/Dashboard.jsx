@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Plus, X, Box, FileText, Bookmark, Star, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Plus, X, Box, FileText, Bookmark, Star, MoreHorizontal, Pencil, Trash2, UploadCloud } from "lucide-react";
 import { fmt } from "../utils.js";
 import { projectSum } from "../calculations.js";
 import { Logo } from "../Logo.jsx";
@@ -65,10 +65,68 @@ function EntityCard({ item, template = false, onOpen, onDelete, onMakeTemplate, 
   );
 }
 
-export function Dashboard({ projects, onOpen, onCreate, onDelete, projectTemplates, onTemplatesChange, onEditTemplate, onToggleFavorite, onRenameProject }) {
+function ProjectSourceModal({ mode, onClose, onSubmit }) {
+  const [description, setDescription] = useState("");
+  const [file, setFile] = useState(null);
+  const [over, setOver] = useState(false);
+  const inputRef = useRef(null);
+  const isImport = mode === "import";
+  const pickFile = (nextFile) => {
+    if (nextFile && /\.(xlsx|csv|pdf)$/i.test(nextFile.name)) setFile(nextFile);
+    if (inputRef.current) inputRef.current.value = "";
+  };
+  const canSubmit = isImport ? Boolean(file) : Boolean(description.trim() || file);
+
+  return <div className="kb-modal-overlay" onMouseDown={onClose}>
+    <div className={`kb-modal kb-project-source-modal is-${mode}`} onMouseDown={(event) => event.stopPropagation()}>
+      <div className="kb-modal-head">
+        <span className="kb-modal-title">{isImport ? "Импортировать смету" : "Создать по описанию"}</span>
+        <button type="button" className="kb-icon-btn" onClick={onClose}><X size={16} strokeWidth={1.5} /></button>
+      </div>
+      <div className="kb-modal-body">
+        {!isImport && <textarea className="kb-generate-textarea kb-project-source-description is-primary" rows={7}
+          value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Описание проекта" />}
+        <input ref={inputRef} type="file" accept=".xlsx,.csv,.pdf" hidden onChange={(event) => pickFile(event.target.files?.[0])} />
+        <div className={`kb-import-zone kb-project-source-file ${isImport ? "is-primary" : "is-secondary"}${over ? " is-over" : ""}`}
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(event) => { event.preventDefault(); setOver(true); }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(event) => { event.preventDefault(); setOver(false); pickFile(event.dataTransfer.files?.[0]); }}>
+          <UploadCloud size={isImport ? 20 : 16} strokeWidth={1.5} />
+          <div className="kb-import-text">
+            <strong>{file ? file.name : isImport ? "Выберите или перетащите файл" : "Прикрепить файл (необязательно)"}</strong>
+            {isImport && <span>.xlsx, .csv, .pdf</span>}
+          </div>
+          {file && <button type="button" className="kb-icon-btn" title="Удалить файл"
+            onClick={(event) => { event.stopPropagation(); setFile(null); }}><X size={14} /></button>}
+        </div>
+        {isImport && <textarea className="kb-generate-textarea kb-project-source-description is-secondary" rows={3}
+          value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Дополнительные инструкции (необязательно)" />}
+        <div className="kb-modal-actions">
+          <button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button>
+          <button type="button" className="kb-btn kb-btn-primary" disabled={!canSubmit}
+            onClick={() => onSubmit({ file, description: description.trim() })}>
+            {isImport ? "Импортировать" : "Создать проект"}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+function NewProjectCard({ onCreate }) {
+  return <div className="kb-new-project-wrap">
+    <button type="button" className="kb-card kb-card-new" onClick={onCreate}>
+      <Plus size={20} strokeWidth={1.25} /><span>Новый проект</span>
+    </button>
+  </div>;
+}
+
+export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, onDelete, projectTemplates, onTemplatesChange, onEditTemplate, onToggleFavorite, onRenameProject }) {
   const [activeNav, setActiveNav] = useState("all");
   const [categories, setCategories] = useState(loadDashboardCategories);
   const [toast, setToast] = useState("");
+  const [sourceModal, setSourceModal] = useState(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -102,8 +160,14 @@ export function Dashboard({ projects, onOpen, onCreate, onDelete, projectTemplat
   const allProjects = projects || [];
   const templates = projectTemplates || [];
   const activeCategory = categories.find((category) => `category:${category.id}` === activeNav);
-  const visibleProjects = activeNav === "recent" ? allProjects.filter((project) => isToday(project.createdAt))
-    : activeNav === "favorites" ? allProjects.filter((project) => project.favorite) : allProjects;
+  const visibleProjects = (activeNav === "recent" ? allProjects.filter((project) => isToday(project.createdAt))
+    : activeNav === "favorites" ? allProjects.filter((project) => project.favorite) : allProjects)
+    .map((project, index) => ({ project, index }))
+    .sort((a, b) => {
+      const timeA = Date.parse(a.project.createdAt || "") || a.index;
+      const timeB = Date.parse(b.project.createdAt || "") || b.index;
+      return timeB - timeA;
+    }).map(({ project }) => project);
   const visibleTemplates = activeCategory ? templates.filter((template) => template.folderId === activeCategory.id) : [];
 
   return <div className="kb-root">
@@ -116,13 +180,19 @@ export function Dashboard({ projects, onOpen, onCreate, onDelete, projectTemplat
         {activeCategory ? (visibleTemplates.length ? visibleTemplates.map((template) =>
           <EntityCard key={template.id} item={template} template onOpen={onCreate} onDelete={deleteTemplate} onEdit={onEditTemplate} onRename={renameTemplate} />
         ) : <div className="kb-dash-empty">В этой категории пока нет шаблонов</div>) : <>
+          {activeNav === "all" && <NewProjectCard onCreate={() => onCreate(null)} />}
           {visibleProjects.map((project) => <EntityCard key={project.id} item={project} onOpen={(item) => onOpen(item.id)} onDelete={onDelete}
             onMakeTemplate={handleMakeTemplate} onToggleFavorite={onToggleFavorite} onRename={onRenameProject} />)}
           {!visibleProjects.length && <div className="kb-dash-empty">{activeNav === "recent" ? "Нет недавних проектов" : activeNav === "favorites" ? "Нет избранных проектов" : "Нет проектов"}</div>}
-          {activeNav === "all" && <button type="button" className="kb-card kb-card-new" onClick={() => onCreate(null)}><Plus size={20} strokeWidth={1.25} /><span>Новый проект</span></button>}
         </>}
       </div></main>
     </div>
+    {sourceModal && <ProjectSourceModal mode={sourceModal} onClose={() => setSourceModal(null)}
+      onSubmit={({ file, description }) => {
+        setSourceModal(null);
+        if (sourceModal === "import") onImport(file, description);
+        else onGenerate(description, file);
+      }} />}
     {toast && <div className="kb-toast" role="status">{toast}</div>}
   </div>;
 }

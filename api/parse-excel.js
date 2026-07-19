@@ -36,10 +36,11 @@ export default async function handler(req, res) {
   const key = process.env.DEEPSEEK_API_KEY;
   if (!key) return res.status(500).json({ error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" });
 
-  const { sheet, filename } = req.body || {};
+  const { sheet, filename, instruction } = req.body || {};
   if (!sheet) return res.status(400).json({ error: "Нет sheet в теле запроса" });
 
-  const userContent = `Файл: ${filename || "file"}\nСодержимое (геометрия таблицы):\n\n${sheet}`;
+  const userInstruction = String(instruction || "").trim();
+  const userContent = `Файл: ${filename || "file"}\n${userInstruction ? `ОБЯЗАТЕЛЬНАЯ ИНСТРУКЦИЯ ПОЛЬЗОВАТЕЛЯ: ${userInstruction}\nПримени эту инструкцию к импортированной смете и отрази требуемые исправления непосредственно в итоговом JSON. Если инструкция меняет названия, состав этапов, задачи или цены, итоговый JSON должен содержать уже исправленный результат.\n` : ""}Если содержимое файла не является сметой с работами и ценами, не придумывай позиции: верни JSON {"projectName":null,"stages":[],"warnings":["Файл не является сметой"]}.\nСодержимое (геометрия таблицы):\n\n${sheet}`;
 
   try {
     const r = await fetch(DEEPSEEK_URL, {

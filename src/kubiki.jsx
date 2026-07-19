@@ -5,6 +5,7 @@ import { Dashboard } from "./components/Dashboard.jsx";
 import { Workspace } from "./components/Workspace.jsx";
 import { CSS } from "./styles.js";
 import { TEMPLATE_KEYS, saveTemplates, cloneProjectTemplate, migrateProjectTemplates } from "./templates.js";
+import { ImportModal, GenerateEstimateModal } from "./importExcel.jsx";
 
 /* ============================================================
    п.7.1: автосохранение в localStorage браузера — заменяет бэкенд
@@ -50,6 +51,7 @@ export default function KubikiApp() {
   const [projects, setProjects] = useState(() => loadStoredState()?.projects || []);
   const [currentId, setCurrentId] = useState(() => loadStoredState()?.currentId || null);
   const [editingTemplateId, setEditingTemplateId] = useState(null);
+  const [projectSource, setProjectSource] = useState(null);
   const currentProject = projects.find((p) => p.id === currentId) || null;
 
   // шаблоны проектов — управляемое состояние (нужно для DnD папок)
@@ -75,6 +77,16 @@ export default function KubikiApp() {
     setProjects((prev) => [...prev, p]);
     setCurrentId(p.id);
   };
+  const createProjectFromEstimate = (stages, meta) => {
+    const project = makeProject();
+    project.createdAt = new Date().toISOString();
+    project.stages = stages;
+    if (meta && Number.isFinite(meta.globalMarkup)) project.globalMarkup = meta.globalMarkup;
+    if (meta?.projectName) project.name = meta.projectName;
+    setProjects((previous) => [...previous, project]);
+    setProjectSource(null);
+    setCurrentId(project.id);
+  };
   const deleteProject = (id) => setProjects((prev) => prev.filter((p) => p.id !== id));
   const toggleFavorite = (id) => setProjects((prev) => prev.map((p) => p.id === id ? { ...p, favorite: !p.favorite } : p));
   const renameProject = (id, name) => setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
@@ -84,6 +96,10 @@ export default function KubikiApp() {
   return (
     <>
       <style>{CSS}</style>
+      {projectSource?.file && <ImportModal file={projectSource.file} instruction={projectSource.description || ""}
+        onClose={() => setProjectSource(null)} onConfirm={createProjectFromEstimate} />}
+      {projectSource && !projectSource.file && <GenerateEstimateModal description={projectSource.description}
+        onClose={() => setProjectSource(null)} onConfirm={createProjectFromEstimate} />}
       {editingTemplateId ? (
         <Workspace
           project={projectTemplates.find((template) => template.id === editingTemplateId)}
@@ -95,6 +111,8 @@ export default function KubikiApp() {
         <Workspace project={currentProject} onChange={updateCurrent} onBack={() => setCurrentId(null)} />
       ) : (
         <Dashboard projects={projects} onOpen={setCurrentId} onCreate={createProject} onDelete={deleteProject}
+          onImport={(file, description) => setProjectSource({ file, description })}
+          onGenerate={(description, file) => setProjectSource({ file, description })}
           projectTemplates={projectTemplates}
           onTemplatesChange={handleTemplatesChange} onEditTemplate={setEditingTemplateId}
           onToggleFavorite={toggleFavorite} onRenameProject={renameProject} />

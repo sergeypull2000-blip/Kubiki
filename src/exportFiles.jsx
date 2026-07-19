@@ -158,9 +158,8 @@ async function buildAndDownloadExcelJS(M, C, filename) {
   const paramsRow0 = r; // верхняя строка блока «Параметры» (маркап/налог %) — колонки правее таблицы
   const stageCellAddrs = [];
   for (const s of M.stages) {
-    ws.mergeCells(r, 1, r, ncols - 1);
+    ws.mergeCells(r, 1, r, ncols);
     const sc = ws.getCell(r, 1); sc.value = s.name.toUpperCase(); sc.font = { bold: true, color: { argb: ink } }; sc.fill = fill(sunken); sc.alignment = { indent: 1 };
-    const sv = ws.getCell(r, ncols); sv.numFmt = money; sv.font = { bold: true, color: { argb: ink } }; sv.fill = fill(sunken); sv.alignment = { horizontal: "right" };
     for (let c = 1; c <= ncols; c++) ws.getCell(r, c).border = border;
     r++;
     const taskCellAddrs = [];
@@ -181,8 +180,13 @@ async function buildAndDownloadExcelJS(M, C, filename) {
         r++;
       }
     }
+    ws.mergeCells(r, 1, r, ncols - 1);
+    const sl = ws.getCell(r, 1); sl.value = "Итого по этапу:"; sl.font = { bold: true, color: { argb: ink } }; sl.alignment = { horizontal: "right", indent: 1 };
+    const sv = ws.getCell(r, ncols); sv.numFmt = money; sv.font = { bold: true, color: { argb: ink } }; sv.alignment = { horizontal: "right" };
     sv.value = taskCellAddrs.length ? { formula: `SUM(${taskCellAddrs.join(",")})` } : 0;
+    for (let c = 1; c <= ncols; c++) ws.getCell(r, c).border = border;
     stageCellAddrs.push(sv.address);
+    r++;
   }
   const totalBase = stageCellAddrs.length ? `SUM(${stageCellAddrs.join(",")})` : "0";
 
@@ -413,7 +417,7 @@ function exportInternalXlsx(project) {
   aoa.push(["Позиция / исполнитель", "Оплата", "Кол-во", "Сумма, ₽"]);
   for (const s of project.stages || []) {
     if (!(s.tasks || []).length) continue;
-    aoa.push([(s.name || "Этап").toUpperCase(), "", "", Math.round(stageSum(s))]);
+    aoa.push([(s.name || "Этап").toUpperCase(), "", "", ""]);
     for (const t of s.tasks || []) {
       aoa.push(["  " + (t.name || "Без названия"), "", "", Math.round(taskSum(t))]);
       for (const e of t.executors || []) {
@@ -423,7 +427,7 @@ function exportInternalXlsx(project) {
         aoa.push(["      " + R.name + (bits ? " · " + bits : ""), R.payLabel, qty, Math.round(R.sum)]);
       }
     }
-    aoa.push([`Итого по этапу «${s.name || ""}»`, "", "", Math.round(stageSum(s))]);
+    aoa.push(["Итого по этапу:", "", "", Math.round(stageSum(s))]);
     aoa.push([]);
   }
   aoa.push(["ИТОГО СЕБЕСТОИМОСТЬ", "", "", Math.round(A.cost)]);
@@ -450,8 +454,9 @@ function exportClientXlsx(project) {
   aoa.push(["Позиция", "Цена, ₽"]);
   for (const s of project.stages || []) {
     if (!(s.tasks || []).length) continue;
-    aoa.push([(s.name || "Этап").toUpperCase(), Math.round((s.tasks || []).reduce((sum, task) => sum + externalTaskPriceWithCharges(project, task), 0))]);
+    aoa.push([(s.name || "Этап").toUpperCase(), ""]);
     for (const t of s.tasks || []) aoa.push(["  " + (t.name || "Без названия"), Math.round(externalTaskPriceWithCharges(project, t))]);
+    aoa.push(["Итого по этапу:", Math.round((s.tasks || []).reduce((sum, task) => sum + externalTaskPriceWithCharges(project, task), 0))]);
   }
   const markupAmount = projectMarkupAmount(project);
   if (mode === "transparent" && markupAmount > 0)

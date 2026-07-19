@@ -14,7 +14,7 @@ import {
   mapStage, withTask, withExecutorList, patchExecutorIn,
   findExecutor, cloneExecutor, insertStage, applyTagToExecutor,
 } from "../store.js";
-import { ImportModal, GenerateEstimateModal, ImportEmptyState, LogoMenu } from "../importExcel.jsx";
+import { ImportModal, GenerateEstimateModal, UnifiedImportEmptyState, LogoMenu } from "../importExcel.jsx";
 import { useOutsideClose } from "../hooks.js";
 import { PalettePanel } from "./LeftPanel.jsx";
 import { StageCard, CanvasDropZone } from "./Stage.jsx";
@@ -37,6 +37,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
   const [activeExecutorId, setActiveExecutorId] = useState(null);
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [activeStageId, setActiveStageId] = useState(null);
+  const [collapseButtonCompact, setCollapseButtonCompact] = useState(false);
   const clipboardRef = useRef(null); // скопированный исполнитель (Ctrl+C/Ctrl+V)
   const dispatch = (fn) => onChange(fn);
   const total = projectSum(project);
@@ -188,16 +189,6 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
     }
   };
 
-  // вставка этапов, подтверждённых в превью импорта/генерации — общая точка
-  // для обоих входов в пайплайн (файл и текстовое описание)
-  const insertParsedStages = (stages, meta) => {
-    dispatch((p) => ({
-      ...p,
-      stages: [...(p.stages || []), ...stages],
-      ...(meta && Number.isFinite(meta.globalMarkup) ? { globalMarkup: meta.globalMarkup } : {}),
-    }));
-  };
-
   const isEmpty = project.stages.length === 0;
   // п.4: смена вида снимает любое выделение (и в панели «Свойства»).
   const changeView = (v) => { clearSelection(); setView(v); };
@@ -287,7 +278,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
   return (
     <div className="kb-root kb-root-workspace">
       {importFile && (
-        <ImportModal file={importFile} onClose={() => setImportFile(null)}
+        <ImportModal file={importFile.file} instruction={importFile.instruction} onClose={() => setImportFile(null)}
           onConfirm={(stages, meta) => { insertParsedStages(stages, meta); setImportFile(null); }} />
       )}
       {generateDescription && (
@@ -296,7 +287,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
       )}
       <header className="kb-header kb-header-min">
         <div className="kb-header-inner">
-          <LogoMenu onPickFile={setImportFile} onSaveProject={saveProjectFile} onLoadProject={loadProjectFile} />
+          <LogoMenu onSaveProject={saveProjectFile} onLoadProject={loadProjectFile} />
           <nav className="kb-crumbs">
             <button type="button" className="kb-crumb-link" onClick={onBack}>{editingTemplate ? "Шаблоны" : "Проекты"}</button>
             <span className="kb-crumb-sep">/</span>
@@ -334,9 +325,11 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
             onRemoveStageTemplate={handleRemoveStageTemplate}
           />
           {/* клик по нейтральной зоне листа снимает все выделения. */}
-          <main className="kb-canvas" onMouseDown={clearSelection}>
+          <main className="kb-canvas"
+            onMouseDown={clearSelection}
+            onScroll={(event) => setCollapseButtonCompact(event.currentTarget.scrollTop > 12)}>
             <div className="kb-canvas-inner">
-              {!isEmpty && <button type="button" className="kb-collapse-all-btn"
+              {!isEmpty && <button type="button" className={`kb-collapse-all-btn${collapseButtonCompact ? " is-compact" : ""}`}
                 onMouseDown={(event) => event.stopPropagation()}
                 onClick={toggleAllCollapsed}
                 title={allCollapsed ? "Развернуть все этапы и задачи" : "Свернуть все этапы и задачи"}>
@@ -355,7 +348,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
                       }
                     }}
                     onAddStage={() => addStageByClick(CUSTOM_STAGE)} />
-                  <ImportEmptyState onPickFile={setImportFile} onGenerate={setGenerateDescription} />
+                  <UnifiedImportEmptyState onPickFile={(file, instruction) => setImportFile({ file, instruction })} onGenerate={setGenerateDescription} />
                 </>
               ) : (
                 <>

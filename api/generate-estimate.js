@@ -76,7 +76,7 @@ export default async function handler(req, res) {
   const { description } = req.body || {};
   if (!description || !String(description).trim()) return res.status(400).json({ error: "Нет описания проекта в теле запроса" });
 
-  try {
+  const requestModel = async (messages) => {
     const r = await fetch(DEEPSEEK_URL, {
       method: "POST",
       headers: {
@@ -85,10 +85,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: String(description).trim() },
-        ],
+        messages,
+        response_format: { type: "json_object" },
         temperature: 0,
         max_tokens: 4000,
       }),
@@ -97,20 +95,64 @@ export default async function handler(req, res) {
     if (!r.ok) {
       const errText = await r.text().catch(() => "");
       console.error("DeepSeek API error:", r.status, errText);
-      return res.status(502).json({ error: `DeepSeek API ответил ${r.status}. Попробуйте позже.` });
+      throw new Error(`DeepSeek API ответил ${r.status}. Попробуйте позже.`);
     }
 
     const data = await r.json();
-    const raw = data.choices?.[0]?.message?.content;
-    if (!raw) return res.status(502).json({ error: "DeepSeek вернул пустой ответ" });
+    return data.choices?.[0]?.message?.content || "";
+  };
 
-    // Очистка от markdown-обёрток
-    const clean = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
-    const parsed = JSON.parse(clean);
+  const parseAndValidate = (raw) => {
+    if (!raw) return null;
+    let parsed;
+    try {
+      parsed = JSON.parse(raw.trim());
+    } catch {
+      return null;
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    if (typeof parsed.projectName !== "string" || !parsed.projectName.trim()) return null;
+    if (!Array.isArray(parsed.stages) || parsed.stages.length === 0) return null;
+    if (!Array.isArray(parsed.warnings) || !parsed.warnings.every((item) => typeof item === "string")) return null;
+    const validStages = parsed.stages.every((stage) =>
+      stage && typeof stage.name === "string" && stage.name.trim() &&
+      Array.isArray(stage.tasks) && stage.tasks.length > 0 &&
+      stage.tasks.every((task) => task && typeof task.name === "string" && task.name.trim() &&
+        Number.isInteger(task.cost) && task.cost >= 0)
+    );
+    return validStages ? parsed : null;
+  };
+
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "user", content: String(description).trim() },
+  ];
+
+  try {
+    const raw = await requestModel(messages);
+    let parsed = parseAndValidate(raw);
+
+    if (!parsed) {
+      const repairPrompt = `Исправь предыдущий ответ. Верни только один валидный JSON-объект строго по заданной схеме. Не добавляй markdown, пояснения или текст вне JSON. Проверь, что строки завершены, stages и tasks — непустые массивы, cost — целое неотрицательное число.`;
+      const repairedRaw = await requestModel([
+        ...messages,
+        { role: "assistant", content: raw || "{}" },
+        { role: "user", content: repairPrompt },
+      ]);
+      parsed = parseAndValidate(repairedRaw);
+    }
+
+    if (!parsed) {
+      console.error("generate-estimate: модель дважды вернула ответ, не соответствующий JSON-схеме");
+      return res.status(502).json({ error: "Не удалось обработать ответ. Попробуйте снова" });
+    }
 
     return res.status(200).json(parsed);
   } catch (e) {
     console.error("generate-estimate error:", e);
-    return res.status(500).json({ error: e.message || "Внутренняя ошибка сервера" });
+    const isApiError = typeof e?.message === "string" && e.message.startsWith("DeepSeek API ответил");
+    return res.status(isApiError ? 502 : 500).json({
+      error: isApiError ? e.message : "Не удалось обработать ответ. Попробуйте снова",
+    });
   }
 }

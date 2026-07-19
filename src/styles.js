@@ -284,9 +284,9 @@ export const CSS = `
 .kb-dropzone{display:flex; flex-direction:row; align-items:center; justify-content:center; gap:7px; text-align:center;
   color:var(--text-muted); border:1px dashed var(--line-strong); border-radius:8px; padding:12px; font-size:var(--fs-sm);
   transition:.15s; width:100%; font-family:inherit}
-.kb-dropzone-btn{cursor:pointer; font-weight:var(--fw-medium)}
+.kb-dropzone-btn{cursor:pointer; font-weight:var(--fw-medium); background:#fff}
 .kb-dropzone-btn:hover{border-color:var(--line-strong); color:var(--text); background:var(--surface-sunken)}
-.kb-dropzone-empty{padding:40px 20px; font-size:var(--fs-base); flex-direction:row}
+.kb-dropzone-empty{padding:40px 20px; font-size:var(--fs-base); flex-direction:row; background:#fff}
 .kb-dropzone.kb-dropzone-over{background:var(--accent-soft); border-color:var(--accent); color:var(--accent)}
 
 /* dashboard */
@@ -327,6 +327,19 @@ export const CSS = `
 .kb-card-context button.is-danger{color:#C0392B}
 .kb-card-new{align-items:center; justify-content:center; border-style:dashed; color:var(--text-muted); font-weight:var(--fw-medium); font-size:var(--fs-sm); gap:7px}
 .kb-card-new:hover{border-color:var(--accent); color:var(--accent)}
+.kb-new-project-wrap{position:relative; aspect-ratio:1/1}
+.kb-new-project-wrap>.kb-card{width:100%; height:100%}
+.kb-project-source-modal{max-width:520px; border-radius:6px; box-shadow:none}
+.kb-project-source-modal .kb-modal-head{padding:13px 16px}
+.kb-project-source-modal .kb-modal-body{padding:14px 16px}
+.kb-project-source-description{width:100%; margin-bottom:10px; resize:vertical; border-radius:4px; background:var(--surface)}
+.kb-project-source-description.is-primary{min-height:144px}
+.kb-project-source-description.is-secondary{min-height:64px}
+.kb-project-source-file{margin-bottom:10px; border-radius:4px; background:var(--surface)}
+.kb-project-source-file.is-primary{min-height:72px; padding:12px 14px}
+.kb-project-source-file.is-secondary{min-height:44px; padding:8px 10px; border-style:solid}
+.kb-project-source-file.is-secondary .kb-import-text strong{font-weight:var(--fw-regular); color:var(--text-muted)}
+.kb-project-source-modal .kb-modal-actions{margin-top:10px}
 
 /* ---- новые фичи: импорт / экспорт / брендинг / режим маркапа ---- */
 .kb-btn{display:inline-flex; align-items:center; gap:7px; font:inherit; font-size:var(--fs-sm); font-weight:var(--fw-medium); padding:7px 12px; border-radius:6px; border:1px solid transparent; cursor:pointer; white-space:nowrap; transition:background .15s ease, border-color .15s ease}
@@ -528,26 +541,50 @@ export const CSS = `
 .kb-import-panel-generate .kb-import-panel-title{justify-content:flex-start}
 .kb-import-panel-sub{font-size:11px; line-height:1.4; max-width:220px}
 .kb-import-panel-btn{align-self:flex-end}
+.kb-import-panel-unified{position:relative; width:100%; height:100px; min-height:100px; overflow:hidden; cursor:default; border-style:solid; border-color:var(--line); background:#fff; align-items:stretch; justify-content:stretch; text-align:left; gap:0; padding:12px 16px}
+.kb-import-panel-unified.is-over,.kb-import-panel-unified.is-over:hover{border-color:var(--accent); background:var(--accent-soft)}
+.kb-import-panel-unified .kb-import-panel-title{justify-content:flex-start}
+.kb-unified-input{position:static; display:flex; flex:1; min-height:0}
+.kb-unified-input .kb-generate-textarea{height:100%; min-height:0; resize:none; overflow-y:auto; padding:4px 70px 36px 4px; border:none; border-radius:0; background:transparent; box-shadow:none}
+.kb-unified-input .kb-generate-textarea:focus{border:none; outline:none; box-shadow:none}
+.kb-attach-btn{position:absolute; right:46px; bottom:12px; color:var(--text-muted)}
+.kb-send-btn{position:absolute; right:12px; bottom:12px; width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; padding:0; border:1px solid var(--accent); border-radius:7px; background:var(--accent); color:#fff; cursor:pointer}
+.kb-send-btn:hover:not(:disabled){border-color:var(--accent); background:var(--accent); color:#fff}
+.kb-send-btn:disabled{border-color:var(--line-strong); background:#fff; color:var(--text-muted); opacity:1; cursor:default}
+.kb-import-panel-unified .kb-attached-file{position:absolute; left:12px; bottom:12px; width:28px; height:28px; padding:0; justify-content:center; border-radius:6px; overflow:visible}
+.kb-import-panel-unified .kb-attached-file > span{display:none}
+.kb-import-panel-unified .kb-attached-file .kb-icon-btn{position:absolute; top:-7px; right:-7px; width:16px; height:16px; min-width:16px; padding:0; border:1px solid var(--line); border-radius:50%; background:#fff}
+.kb-import-entry{display:flex; flex-direction:column; gap:8px; width:100%; max-width:720px}
+.kb-import-panel-actions{display:flex; align-items:center; justify-content:flex-end; gap:8px}
+.kb-import-panel-actions .kb-btn{background:#fff}
+.kb-import-panel-minimal{min-height:100px; padding:12px; border-style:solid; border-color:var(--line); background:#fff; color:var(--text-muted)}
+.kb-import-file-field{cursor:pointer}
+.kb-import-description-field{cursor:default; align-items:stretch; text-align:left}
+.kb-import-description-field .kb-generate-textarea{flex:1; min-height:74px; resize:none; border:none; border-radius:0; background:#fff; padding:4px}
+.kb-import-description-field .kb-generate-textarea:focus{border-color:transparent}
+.kb-attached-file{display:flex; align-items:center; gap:7px; align-self:flex-start; max-width:100%; padding:5px 7px; border:1px solid var(--line); border-radius:6px; background:var(--surface-sunken); color:var(--text-muted); font-size:12px}
+.kb-attached-file span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 
 /* ---- модалка импорта: превью и выбор листа ---- */
 .kb-modal-overlay{position:fixed; inset:0; z-index:100; background:rgba(20,30,50,.28); display:flex; align-items:center; justify-content:center; padding:24px}
 .kb-modal{background:var(--surface); border:1px solid var(--line); border-radius:12px; box-shadow:0 24px 60px rgba(20,30,50,.22); width:100%; max-width:560px; max-height:86vh; display:flex; flex-direction:column; overflow:hidden}
-.kb-modal-head{display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid var(--line)}
+.kb-modal-head{display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid var(--line); flex-shrink:0}
 .kb-modal-title{font-size:var(--fs-md); font-weight:var(--fw-semibold); color:var(--text)}
 .kb-modal-body{padding:16px 18px; overflow-y:auto; min-height:0; flex:1 1 auto}
 .kb-modal-note{font-size:12px; color:var(--text-muted); margin-bottom:12px; line-height:1.5}
 .kb-modal-status{display:flex; align-items:center; gap:10px; padding:32px 18px; justify-content:center; color:var(--text-muted); font-size:var(--fs-sm)}
 .kb-modal-status.is-error{color:#C0392B}
 .kb-modal-actions{display:flex; justify-content:flex-end; gap:8px; margin-top:14px}
-.kb-modal-foot{border-top:1px solid var(--line); padding:12px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px}
+.kb-modal-foot{border-top:1px solid var(--line); padding:12px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-shrink:0}
 .kb-prev-summary{font-size:12px; color:var(--text-muted); font-variant-numeric:tabular-nums}
 
 .kb-sheet-list{display:flex; flex-direction:column; gap:6px}
 .kb-sheet-btn{display:flex; align-items:center; gap:9px; padding:11px 12px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); font:inherit; font-size:var(--fs-sm); cursor:pointer; text-align:left}
 .kb-sheet-btn:hover{border-color:var(--accent); background:var(--accent-soft)}
 
-.kb-import-preview{display:flex; flex-direction:column; gap:14px}
-.kb-prev-stage{border:1px solid var(--line); border-radius:8px; overflow:hidden}
+.kb-import-preview{display:flex; flex-direction:column; gap:14px; overflow-y:auto}
+.kb-import-preview > *{flex-shrink:0}
+.kb-prev-stage{border:1px solid var(--line); border-radius:8px; overflow:hidden; flex:0 0 auto}
 .kb-prev-stage-head{display:flex; align-items:center; gap:6px; padding:6px 8px 6px 10px; background:var(--surface-sunken); border-bottom:1px solid var(--line)}
 .kb-prev-stage-name{flex:1; font-weight:var(--fw-semibold); border:none; background:none; padding:4px 2px}
 .kb-prev-task{display:flex; align-items:center; gap:6px; padding:5px 8px 5px 10px; border-bottom:1px solid var(--line)}
@@ -560,7 +597,7 @@ export const CSS = `
 .kb-prev-warn-title{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted); margin-bottom:6px}
 .kb-prev-warn-item{font-size:12px; color:var(--text-faint); padding:2px 0; line-height:1.4}
 
-.kb-import-kind{border:1px solid var(--line); border-radius:8px; padding:12px; background:var(--surface-sunken); display:flex; flex-direction:column; gap:8px; margin-bottom:14px}
+.kb-import-kind{border:1px solid var(--line); border-radius:8px; padding:12px; background:var(--surface-sunken); display:flex; flex-direction:column; gap:8px; margin-bottom:14px; flex-shrink:0}
 .kb-import-kind-q{font-size:var(--fs-sm); font-weight:var(--fw-medium); color:var(--text)}
 .kb-import-kind-opts{display:flex; gap:6px}
 .kb-import-kind-opt{padding:6px 14px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--text); font:inherit; font-size:var(--fs-sm); cursor:pointer}
@@ -604,9 +641,15 @@ export const CSS = `
   color:var(--accent); font:inherit; font-size:var(--fs-sm); font-weight:var(--fw-medium);
   padding:6px 13px; cursor:pointer; transition:all .15s ease}
 .kb-save-project-btn:hover{background:var(--accent); color:#fff; border-color:var(--accent)}
-.kb-collapse-all-btn{display:flex; align-items:center; gap:4px; width:max-content; margin:0 0 7px;
-  padding:3px 6px; border:1px solid var(--line); border-radius:5px; background:transparent;
-  color:var(--text-muted); font:inherit; font-size:11px; line-height:1.2; cursor:pointer}
+.kb-collapse-all-btn{position:sticky; top:8px; z-index:12; display:flex; align-items:center; gap:4px; width:max-content; margin:0 0 14px;
+  padding:3px 6px; border:1px solid var(--line); border-radius:5px; background:var(--bg);
+  color:var(--text-muted); font:inherit; font-size:11px; line-height:1.2; cursor:pointer;
+  transition:transform .18s ease, padding .18s ease, gap .18s ease, background .18s ease, box-shadow .18s ease}
+.kb-collapse-all-btn span{max-width:90px; overflow:hidden; white-space:nowrap; opacity:1;
+  transition:max-width .18s ease, opacity .12s ease}
+.kb-collapse-all-btn.is-compact{transform:translateX(-20px); gap:0; padding:5px; background:var(--surface);
+  box-shadow:0 2px 8px rgba(20,30,50,.12)}
+.kb-collapse-all-btn.is-compact span{max-width:0; opacity:0}
 .kb-collapse-all-btn:hover{background:var(--surface-sunken); color:var(--text)}
 
 /* ---- шаблоны в левой панели ---- */

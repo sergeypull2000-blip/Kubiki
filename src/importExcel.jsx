@@ -4,7 +4,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import {
   X, Trash2, ChevronDown, AlertTriangle,
-  UploadCloud, Loader2, FileSpreadsheet, Download, FolderOpen, Sparkles, CircleHelp,
+  Loader2, FileSpreadsheet, Download, FolderOpen, Paperclip, ArrowUp,
 } from "lucide-react";
 import { uid, fmt, numVal } from "./utils.js";
 import { Logo } from "./Logo.jsx";
@@ -95,17 +95,18 @@ const serializePdfRows = (rows) => rows.map((line, i) => `R${i + 1} | ${line}`).
 /* Разбор текста моделью → сырой JSON (ещё не валидированный). Источник
    (лист Excel или страницы PDF) на этот момент уже сведён к одному и тому же
    строково-табличному виду — дальше пайплайн общий. */
-async function llmParseText(sheetText, filename) {
+async function llmParseText(sheetText, filename, instruction = "") {
   const r = await fetch("/api/parse-excel", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sheet: sheetText, filename }),
+    body: JSON.stringify({ sheet: sheetText, filename, instruction }),
   });
   if (!r.ok) {
     const err = await r.json().catch(() => ({}));
     throw new Error(err.error || `Ошибка DeepSeek API (${r.status}). Попробуйте ещё раз.`);
   }
   const j = await r.json();
-  if (!j || !Array.isArray(j.stages)) throw new Error("Модель вернула некорректный ответ.");
+  const hasEstimateTasks = j && Array.isArray(j.stages) && j.stages.some((stage) => Array.isArray(stage?.tasks) && stage.tasks.length > 0);
+  if (!hasEstimateTasks) throw new Error("Файл не является сметой.");
   return j;
 }
 
@@ -229,7 +230,10 @@ function useEstimateEditor(initialMarkupPct = "") {
     const clean = { ...parsed, stages: parsed.stages.map((s) => ({ ...s, tasks: s.tasks.filter((t) => t.name.trim()) })).filter((s) => s.tasks.length > 0) };
     if (clean.stages.length === 0) return { ok: false, message: "Нечего импортировать." };
     const { stages: costedStages } = computeInsertCosts(clean, importKind, markupPct);
-    const meta = importKind === "external" ? { globalMarkup: numVal(markupPct) } : null;
+    const meta = {
+      ...(importKind === "external" ? { globalMarkup: numVal(markupPct) } : {}),
+      ...(clean.projectName ? { projectName: clean.projectName } : {}),
+    };
     return { ok: true, stages: stagesFromParsed({ ...clean, stages: costedStages }), meta };
   };
 
@@ -340,7 +344,7 @@ function EstimatePreviewStep({ editor, noteText, draftNotice, warnTitle, warnPro
 
 /* Модалка импорта: извлечение текста (Excel-лист / PDF-страницы) → разбор →
    редактируемое превью (вид сметы + обратный пересчёт) → вставка. */
-export function ImportModal({ file, onClose, onConfirm }) {
+export function ImportModal({ file, instruction = "", onClose, onConfirm }) {
   const isPdf = /\.pdf$/i.test(file.name);
   const [step, setStep] = useState("reading"); // reading|sheet|parsing|preview|error
   const [wb, setWb] = useState(null);
@@ -392,7 +396,7 @@ export function ImportModal({ file, onClose, onConfirm }) {
   const runParseText = async (text, sourceLabel) => {
     setStep("parsing");
     try {
-      const raw = await llmParseText(text, sourceLabel);
+      const raw = await llmParseText(text, sourceLabel, instruction);
       editor.load(validateParsed(raw));
       setStep("preview");
     } catch (e) {
@@ -510,55 +514,95 @@ export function GenerateEstimateModal({ description, onClose, onConfirm }) {
    зоне: импорт файла и генерация черновой сметы по текстовому описанию —
    два равноправных альтернативных входа в один и тот же пайплайн
    (разбор LLM → превью → вставка). */
-export function ImportEmptyState({ onPickFile, onGenerate }) {
+export function UnifiedImportEmptyState({ onPickFile, onGenerate }) {
   const [over, setOver] = useState(false);
   const inputRef = useRef(null);
   const [desc, setDesc] = useState("");
-  const pick = (file) => {
-    if (!file) return;
-    if (!/\.(xlsx|xls|csv|pdf)$/i.test(file.name)) return;
-    onPickFile(file);
+  const [file, setFile] = useState(null);
+  const pick = (nextFile) => {
+    if (!nextFile || !/\.(xlsx|xls|pdf)$/i.test(nextFile.name)) return;
+    setFile(nextFile);
+    if (inputRef.current) inputRef.current.value = "";
   };
   const submit = () => {
     const text = desc.trim();
-    if (!text) return;
-    onGenerate(text);
+    if (!text && !file) return;
+    if (file) onPickFile(file, text);
+    else onGenerate(text);
   };
   return (
     <div className="kb-import-empty">
       <div className="kb-import-empty-or">или</div>
-      <div className="kb-import-panels">
-        <div className={"kb-import-panel" + (over ? " is-over" : "")}
-          onDragOver={(e) => { e.preventDefault(); setOver(true); }}
-          onDragLeave={() => setOver(false)}
-          onDrop={(e) => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files?.[0]); }}
-          onClick={() => inputRef.current?.click()}>
-          <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv,.pdf" hidden onChange={(e) => pick(e.target.files?.[0])} />
-          <UploadCloud size={18} strokeWidth={1.5} />
-          <div className="kb-import-panel-title">ИИ-импорт сметы</div>
-          <div className="kb-import-panel-sub">Перетащите .xlsx / .csv / .pdf или нажмите</div>
+      <div className={"kb-import-panel kb-import-panel-unified" + (over ? " is-over" : "")}
+        onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(false); }}
+        onDrop={(e) => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files?.[0]); }}>
+        <input ref={inputRef} type="file" accept=".xlsx,.xls,.pdf" hidden onChange={(e) => pick(e.target.files?.[0])} />
+        <div className="kb-unified-input">
+          <textarea className="kb-generate-textarea" rows={4} value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") submit(); }}
+            placeholder="Опишите проект, импортируйте файл сметы или сделайте и то, и другое." />
+          <button type="button" className="kb-icon-btn kb-attach-btn" onClick={() => inputRef.current?.click()} title="Прикрепить файл"><Paperclip size={16} strokeWidth={1.5} /></button>
+          <button type="button" className="kb-send-btn" onClick={submit} disabled={!desc.trim() && !file} title="Создать смету" aria-label="Создать смету"><ArrowUp size={15} strokeWidth={1.8} /></button>
         </div>
+        {file && <div className="kb-attached-file" title={file.name}>
+          <FileSpreadsheet size={15} strokeWidth={1.5} /><span>{file.name}</span>
+          <button type="button" className="kb-icon-btn" onClick={() => setFile(null)} title="Удалить файл"><X size={14} strokeWidth={1.5} /></button>
+        </div>}
+      </div>
+    </div>
+  );
+}
 
-        {onGenerate && (
-          <div className="kb-import-panel kb-import-panel-generate">
-            <div className="kb-generate-head">
-              <div className="kb-import-panel-title"><Sparkles size={14} strokeWidth={1.5} /> Опишите проект</div>
-              <div className="kb-generate-tooltip-wrap">
-                <span className="kb-generate-help-icon"><CircleHelp size={16} strokeWidth={1.5} /></span>
-                <div className="kb-generate-tooltip">
-                  Чем подробнее — тем точнее смета. Можно указать хронометраж, технику, сроки, правки, разрешение. Пример: 30-секундный зацикленный CG-ролик с партиклами для вертикального экрана 2000×5000, срок 3 недели, заказчик сложный — будут правки
-                </div>
+export function ImportEmptyState({ onPickFile, onGenerate }) {
+  const [over, setOver] = useState(false);
+  const inputRef = useRef(null);
+  const [desc, setDesc] = useState("");
+  const [file, setFile] = useState(null);
+  const pick = (file) => {
+    if (!file) return;
+    if (!/\.(xlsx|csv|pdf)$/i.test(file.name)) return;
+    setFile(file);
+    if (inputRef.current) inputRef.current.value = "";
+  };
+  const submit = () => {
+    const text = desc.trim();
+    if (!text && !file) return;
+    if (file) onPickFile(file, text);
+    else onGenerate(text);
+  };
+  return (
+    <div className="kb-import-empty">
+      <div className="kb-import-empty-or">или</div>
+      <div className="kb-import-entry">
+        <input ref={inputRef} type="file" accept=".xlsx,.csv,.pdf" hidden onChange={(e) => pick(e.target.files?.[0])} />
+        <div className="kb-import-panels">
+          <div className={"kb-import-panel kb-import-panel-minimal kb-import-file-field" + (over ? " is-over" : "")}
+            onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(false); }}
+            onDrop={(e) => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files?.[0]); }}
+            onClick={() => { if (!file) inputRef.current?.click(); }}>
+            {!file ? <span>Импорт</span> : (
+              <div className="kb-attached-file" onClick={(e) => e.stopPropagation()}>
+                <FileSpreadsheet size={15} strokeWidth={1.5} />
+                <span>{file.name}</span>
+                <button type="button" className="kb-icon-btn" onClick={() => setFile(null)} title="Удалить файл"><X size={14} strokeWidth={1.5} /></button>
               </div>
-            </div>
-            <textarea className="kb-generate-textarea" rows={4} value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") submit(); }}
-              placeholder="Ролик 30 сек, луп, фулл CG с партиклами" />
-            <button type="button" className="kb-btn kb-btn-ghost kb-import-panel-btn" onClick={submit} disabled={!desc.trim()}>
-              Сгенерировать смету
-            </button>
+            )}
           </div>
-        )}
+          <div className="kb-import-panel kb-import-panel-minimal kb-import-description-field">
+          <textarea className="kb-generate-textarea" rows={4} value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") submit(); }}
+            placeholder="Опишите проект" />
+          </div>
+        </div>
+        <div className="kb-import-panel-actions">
+          <button type="button" className="kb-btn kb-btn-ghost" onClick={submit} disabled={!desc.trim() && !file}>
+            {file && !desc.trim() ? "Импортировать смету" : "Сгенерировать смету"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -566,16 +610,11 @@ export function ImportEmptyState({ onPickFile, onGenerate }) {
 
 /* Кликабельное лого слева вверху с меню уровня документа
    (импорт из Excel/PDF, сохранение/загрузка файла проекта — п.7.2). */
-export function LogoMenu({ onPickFile, onSaveProject, onLoadProject }) {
+export function LogoMenu({ onSaveProject, onLoadProject }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  const inputRef = useRef(null);
   const projectInputRef = useRef(null);
   useOutsideClose(ref, () => setOpen(false));
-  const pick = (file) => {
-    if (file && /\.(xlsx|xls|csv|pdf)$/i.test(file.name)) onPickFile(file);
-    setOpen(false);
-  };
   const pickProject = (file) => {
     if (file && onLoadProject) onLoadProject(file);
     setOpen(false);
@@ -586,14 +625,10 @@ export function LogoMenu({ onPickFile, onSaveProject, onLoadProject }) {
         <Logo size={20} />
         <ChevronDown size={13} strokeWidth={1.5} />
       </button>
-      <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv,.pdf" hidden onChange={(e) => pick(e.target.files?.[0])} />
       <input ref={projectInputRef} type="file" accept=".json,application/json" hidden
         onChange={(e) => { pickProject(e.target.files?.[0]); e.target.value = ""; }} />
       {open && (
         <div className="kb-logomenu-pop">
-          <button type="button" className="kb-logomenu-item" onClick={() => inputRef.current?.click()}>
-            <UploadCloud size={15} strokeWidth={1.5} /> ИИ-импорт сметы
-          </button>
           {onSaveProject && (
             <button type="button" className="kb-logomenu-item" onClick={() => { onSaveProject(); setOpen(false); }}>
               <Download size={15} strokeWidth={1.5} /> Сохранить проект
