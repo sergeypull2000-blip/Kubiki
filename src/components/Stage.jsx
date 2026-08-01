@@ -133,6 +133,7 @@ export function StageCard({ stage, dispatch, activeStageId, activeTaskId, active
             patchStage({ name: val, presetKey: match ? match.key : "custom" });
           }}
         />
+        <span className="kb-stage-task-count">{stage.tasks.length} {stage.tasks.length === 1 ? "задача" : "задач"}</span>
         <span className="kb-sum kb-sum-stage">{fmt(total)} ₽</span>
         {onSaveStageTemplate && (
           <button type="button" className="kb-icon-btn" onClick={() => onSaveStageTemplate(stage)} title="Сохранить этап как шаблон">

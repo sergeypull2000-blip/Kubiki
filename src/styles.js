@@ -140,47 +140,48 @@ export const CSS = `
 .kb-palette-note{font-size:var(--fs-xs); color:var(--text-faint); line-height:1.45; margin-top:8px; padding:0 6px}
 
 /* stage */
-.kb-stage{border:1px solid var(--line); border-radius:8px; background:var(--surface); margin-bottom:14px; transition:.15s}
+.kb-stage{border:1px solid var(--line); border-radius:8px; background:var(--surface); margin-bottom:9px; transition:.15s}
 .kb-stage-active{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent)}
 .kb-stage-over{outline:1.5px dashed var(--accent); outline-offset:-1px; background:var(--accent-soft)}
 .kb-stage-dragging{opacity:.45}
-.kb-stage-head{display:flex; align-items:center; gap:9px; padding:9px 13px; border-bottom:1px solid var(--line)}
+.kb-stage-head{display:flex; align-items:center; gap:7px; min-height:36px; padding:5px 10px; border-bottom:1px solid var(--line)}
 .kb-grip{display:flex; color:var(--text-faint); cursor:grab; padding:2px; border-radius:3px}
 .kb-grip:hover{color:var(--text-muted); background:var(--accent-soft)}
 .kb-grip:active{cursor:grabbing}
 .kb-stage-icon{color:var(--text-faint); flex-shrink:0}
 .kb-stage-name{font-size:var(--fs-md); font-weight:var(--fw-semibold); letter-spacing:-.01em}
-.kb-stage-body{padding:2px 13px 8px}
+.kb-stage-body{padding:1px 10px 5px}
+.kb-stage-task-count{flex-shrink:0; color:var(--text-faint); font-size:var(--fs-xs); white-space:nowrap}
 .kb-dropzone-over{background:var(--accent-soft); outline:1.5px dashed var(--accent); outline-offset:-4px; border-radius:5px}
 
 /* иерархия сумм: все выровнены по правому краю, вес/размер = уровень */
 .kb-sum{font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right; margin-left:auto}
-.kb-sum-stage{font-size:var(--fs-md); font-weight:var(--fw-semibold); color:var(--text); letter-spacing:-.01em; min-width:120px}
-.kb-sum-task{font-size:var(--fs-sm); font-weight:var(--fw-medium); color:var(--text-muted); min-width:120px}
+.kb-sum-stage{font-size:var(--fs-md); font-weight:var(--fw-semibold); color:var(--text); letter-spacing:-.01em; min-width:104px}
+.kb-sum-task{font-size:var(--fs-sm); font-weight:var(--fw-medium); color:var(--text-muted); min-width:104px}
 /* быстрый ввод стоимости задачи напрямую, пока нет исполнителей */
 .kb-task-directcost{display:inline-flex; align-items:center; justify-content:flex-end; gap:4px}
 .kb-task-directcost-input{max-width:88px; font-size:var(--fs-sm); font-weight:var(--fw-medium)}
 .kb-task-directcost-cur{color:var(--text-faint)}
 
 /* task */
-.kb-task{padding:9px 0; border-radius:6px; transition:background .12s}
+.kb-task{padding:3px 0; border-radius:6px; transition:background .12s}
 .kb-task-active{background:var(--surface-sunken)}
 .kb-task-active > .kb-task-body{border-left-color:var(--accent)}
 /* вся задача — зона приёма исполнителя: подсвечивается целиком (п.1) */
 .kb-task-over{background:var(--accent-soft); outline:1.5px dashed var(--accent); outline-offset:2px; border-radius:6px}
 .kb-task-over > .kb-task-body{border-left-color:var(--accent)}
-.kb-task-head{display:flex; align-items:center; gap:10px; margin-bottom:1px}
+.kb-task-head{display:flex; align-items:center; gap:7px; min-height:32px}
 .kb-task-name{flex:1}
-.kb-task-body{padding-left:20px; border-left:1px solid var(--line-strong); margin-top:3px; min-height:4px}
+.kb-task-body{padding-left:16px; border-left:1px solid var(--line-strong); margin:1px 0 2px 6px; min-height:3px}
 /* кнопки «+ Новый …» — единый вид для добавления вложенных элементов */
 .kb-add-btn{display:inline-flex; align-items:center; gap:6px; background:none; border:none;
   color:var(--text-muted); font-size:var(--fs-sm); font-weight:var(--fw-medium); cursor:pointer;
-  padding:6px 6px; border-radius:5px; transition:.12s}
+  padding:4px 5px; border-radius:5px; transition:.12s}
 .kb-add-btn:hover{color:var(--text); background:var(--surface-sunken)}
 
 
 /* executor row — заметность через структуру (отступ, размер), не через цвет */
-.kb-erow-group{padding:3px 6px 3px 10px; border-radius:6px; transition:background .12s; cursor:default; border:1px solid transparent}
+.kb-erow-group{padding:2px 4px 2px 7px; border-radius:6px; transition:background .12s; cursor:default; border:1px solid transparent}
 .kb-erow-group:hover{background:var(--surface-sunken)}
 /* активная строка — только чуть тёмный фон, без цветной черты и рамки */
 .kb-erow-group-active{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); cursor:grab}
@@ -194,16 +195,16 @@ export const CSS = `
   0%{background:var(--accent-soft)}
   100%{background:transparent}
 }
-.kb-erow{display:flex; align-items:flex-start; gap:10px}
-.kb-erow-tags{flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:5px; align-items:center; padding:2px 0}
-.kb-erow-amount{flex-shrink:0; min-width:120px; display:flex; justify-content:flex-end; align-items:center; gap:7px; padding-top:2px}
+.kb-erow{display:flex; align-items:center; gap:7px}
+.kb-erow-tags{flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding:1px 0}
+.kb-erow-amount{flex-shrink:0; min-width:104px; display:flex; justify-content:flex-end; align-items:center; gap:6px}
 .kb-erow-taxed{white-space:nowrap}
 .kb-erow-sum{font-size:var(--fs-xs); font-weight:var(--fw-regular); color:var(--text-muted); font-variant-numeric:tabular-nums; white-space:nowrap}
 .kb-erow-sum-muted{color:var(--text-faint)}
 .kb-erow-sum-strong{font-size:var(--fs-sm); font-weight:var(--fw-medium); color:var(--text)}
 .kb-amount-input{text-align:right; font-size:var(--fs-sm); font-weight:var(--fw-medium)}
 .kb-input-num.kb-amount-input{max-width:92px}
-.kb-erow-del{flex-shrink:0; margin-top:2px}
+.kb-erow-del{flex-shrink:0}
 
 /* tag chip on executor */
 .kb-tag{position:relative; display:inline-flex; align-items:center; gap:5px; border:1px solid var(--line-strong);
