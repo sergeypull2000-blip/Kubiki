@@ -2,6 +2,7 @@
    CSS — Raw Minimal / B2B SaaS, Geist
    ============================================================ */
 export const CSS = `
+.kb-server-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f7f7f7;padding:24px}.kb-server-card{width:min(440px,calc(100vw - 32px));padding:24px;background:#fff;border:1px solid #ddd;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.08)}.kb-server-title{font-size:18px;font-weight:600;margin-bottom:10px}.kb-server-text{font-size:14px;line-height:1.55;color:#666}.kb-server-error{margin-top:10px;color:#b42318;font-size:13px}.kb-server-overlay{z-index:1000}.kb-save-status{display:flex;align-items:center;gap:7px;font-size:11px;color:#888;white-space:nowrap}.kb-save-status.is-error{color:#b42318}.kb-save-status button,.kb-toast-retry{border:0;background:none;padding:0;color:inherit;text-decoration:underline;cursor:pointer}.kb-toast-retry{margin-left:8px}
 :root{
   --bg:#FCFDFE;
   --bg-elevated:#FEFEFF;

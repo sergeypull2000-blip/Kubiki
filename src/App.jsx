@@ -73,7 +73,7 @@ function App() {
       </form>
     </div>
   } else {
-    content = <KubikiApp onSignOut={handleSignOut} />
+    content = <KubikiApp key={session.user.id} userId={session.user.id} onSignOut={handleSignOut} />
   }
 
   return <><style>{CSS}</style>{content}</>

@@ -24,7 +24,7 @@ import {
 /* ============================================================
    Рабочая зона
    ============================================================ */
-export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onPerformersChange, quickAccess, onQuickAccessChange, onSignOut }) {
+export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onPerformersChange, quickAccess, onQuickAccessChange, onSignOut, saveState = "saved", saveError = "", onRetrySave }) {
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
   // в Клайне можно persist'ить в localStorage.
   const [importFile, setImportFile] = useState(null);
@@ -336,6 +336,11 @@ const toggleAllCollapsed = () =>
           </nav>
 
           <div className="kb-spacer" />
+
+          {!editingTemplate && <div className={`kb-save-status is-${saveState}`} title={saveError || undefined}>
+            {saveState === "saving" ? "Сохранение…" : saveState === "error" ? "Не удалось сохранить" : "Сохранено"}
+            {saveState === "error" && onRetrySave && <button type="button" onClick={onRetrySave}>Повторить</button>}
+          </div>}
 
           <button type="button" className="kb-sign-out" onClick={onSignOut}>Выйти</button>
 
