@@ -92,8 +92,8 @@ export const PAY_SHORT = { fix_total: "Фикс за всё", fix_task: "Фик�
      "payment"   — кубик оплаты, несёт расчёт
    value  — строcovое состояние (для payment хранится в payment.*)         */
 export const TAG_DEFS = [
-  { key: "name",    label: "Имя / название", short: "Имя",           icon: Type,       kind: "text" },
   { key: "role",    label: "Роль",           short: "Роль",          icon: Briefcase,  kind: "select", options: ROLE_OPTIONS },
+  { key: "name",    label: "Имя / название", short: "Имя",           icon: Type,       kind: "text" },
   { key: "spec",    label: "Специализация",  short: "Специализация", icon: Palette,    kind: "select", options: SPECIALIZATION_OPTIONS },
   { key: "grade",   label: "Грейд",          short: "Грейд",         icon: BadgeCheck, kind: "select", options: GRADE_OPTIONS },
   { key: "soft",    label: "Софт",           short: "Софт",          icon: Monitor,    kind: "select", options: SOFTWARE_OPTIONS },

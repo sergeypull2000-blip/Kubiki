@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { uid } from "./utils.js";
-import { STAGE_PRESETS, CUSTOM_STAGE, TAG_DEFS } from "./constants.js";
+import { STAGE_PRESETS, CUSTOM_STAGE } from "./constants.js";
+import { DEFAULT_EXPORT_SETTINGS } from "./exportEstimate.js";
 
 /* ---------- factories ----------
    Тег на исполнителе: { id, key, value, payment? }
@@ -12,12 +13,12 @@ export const makeTag = (key, value = "") => {
   if (key === "payment") tag.payment = { type: value || "", rate: "", hours: "", shifts: "" };
   return tag;
 };
-export const makeExecutor = () => ({ id: uid(), tags: [], amount: "" });
+export const makeExecutor = () => ({ id: uid(), tags: [makeTag("role")], amount: "", performerId: null, performerSnapshot: null });
 export const makeTask = () => ({ id: uid(), name: "", executors: [], markupOverride: null, collapsed: false, directCost: null });
 export const makeStage = (preset) => ({
   id: uid(), presetKey: preset.key, name: preset.name, tasks: [], collapsed: false,
 });
-export const makeProject = () => ({ id: uid(), name: "Новый проект", stages: [], globalMarkup: 25, markupMode: "embedded", tax: { type: "osno", percent: "", visible: true }, vat: { percent: "" }, branding: { logo: "", studioName: "", contacts: "" } });
+export const makeProject = () => ({ id: uid(), name: "Новый проект", stages: [], globalMarkup: 25, markupMode: "embedded", tax: { type: "osno", percent: "", visible: true }, vat: { percent: "" }, branding: { logo: "", studioName: "", contacts: "" }, exportSettings: { ...DEFAULT_EXPORT_SETTINGS } });
 
 /* ---------- immutable project mutators ---------- */
 export const mapStage = (project, stageId, fn) => ({
@@ -60,6 +61,7 @@ export const DND_TYPES = {
   STAGE: "application/x-kubiki-stage",
   TASK: "application/x-kubiki-task",
   EXECUTOR: "application/x-kubiki-executor",
+  PERFORMER: "application/x-kubiki-performer",
   TAG: "application/x-kubiki-tag",
 };
 
@@ -172,7 +174,8 @@ export function applyTagToExecutor(tags, incoming) {
   const rest = tags.filter((t) => t.key !== incoming.key);
   // порядок тегов — по TAG_DEFS, чтобы строка не «прыгала»
   const next = [...rest, fresh];
-  next.sort((a, b) => TAG_DEFS.findIndex((d) => d.key === a.key) - TAG_DEFS.findIndex((d) => d.key === b.key));
+  const order = ["role", "name", "payment", "tax", "spec", "grade", "soft"];
+  next.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
   return next;
 }
 

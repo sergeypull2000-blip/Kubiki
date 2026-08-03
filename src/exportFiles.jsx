@@ -1,589 +1,197 @@
-import { useState, useRef, useEffect } from "react";
-import * as XLSX from "xlsx";
+/* eslint-disable react/only-export-components */
+import { useMemo, useRef, useState } from "react";
 import ExcelJS from "exceljs";
 import pdfMake from "pdfmake/build/pdfmake.js";
 import pdfFonts from "pdfmake/build/vfs_fonts.js";
-import { ChevronDown, UploadCloud, Loader2, MoreHorizontal } from "lucide-react";
+import { ChevronDown, Loader2, MoreHorizontal, UploadCloud, X } from "lucide-react";
 import { fmt } from "./utils.js";
-import {
-  getMarkupMode, externalTaskPrice, externalStagePrice,
-  projectMarkupAmount, projectEffectiveMarkupPct,
-  projectTaxPct, projectTaxAmount, projectTaxSystemLabel, projectVatPct, projectVatAmount, projectTotalWithTax,
-  chargeIsVisible, externalTaskPriceWithCharges,
-  stageSum, taskSum, projectSum, projectPrice,
-  projectAnalytics, readExecutor,
-} from "./calculations.js";
+import { buildExportEstimateModel, normalizeExportSettings } from "./exportEstimate.js";
 import { useOutsideClose } from "./hooks.js";
 
-// pdfmake 0.3.x регистрирует шрифты как виртуальную ФС, а не через
-// прямое присваивание .vfs (так было в 0.2.x) — addVirtualFileSystem
-// кладёт сюда Roboto (обычный/жирный/курсив), уже настроенный как
-// шрифт по умолчанию в pdfMake.fonts, и поддерживающий кириллицу.
 pdfMake.addVirtualFileSystem(pdfFonts);
 
-/* ============================================================
-   ЗАДАЧА 2 — экспорт в фирменном стиле: Excel (ExcelJS) + PDF.
-   Цвета/шрифты берём из CSS-переменных приложения (brandColors),
-   а не подбираем на глаз. Брендинг — в сторе project.branding.
-   Контент зависит от текущего вида (внутренняя/внешняя).
+const money = (amount) => `${fmt(amount)} ₽`;
+const safeFile = (value) => (String(value || "smeta").replace(/[^\wа-яА-ЯёЁ\- ]+/g, "").trim().replace(/\s+/g, "_") || "smeta");
+const defaultFilename = (project, format) => `${safeFile(project.name)}_СМЕТА.${format === "pdf" ? "pdf" : "xlsx"}`;
 
-   exceljs и pdfmake — обычные npm-зависимости проекта, импортируются
-   напрямую (без CDN в рантайме). PDF собирается программно через
-   pdfmake (buildPdfDoc) и скачивается как файл; печать браузера
-   (exportPdfPrintFallback) — запасной путь на случай ошибки pdfmake.
-   ============================================================ */
 function brandColors() {
-  const cs = getComputedStyle(document.documentElement);
-  const g = (v, f) => (cs.getPropertyValue(v).trim() || f);
-  return {
-    accent: g("--accent", "#5B8DEF"), text: g("--text", "#1A2230"), muted: g("--text-muted", "#64748B"),
-    line: g("--line", "#E3E9F0"), surface: g("--surface", "#FFFFFF"), sunken: g("--surface-sunken", "#F7FAFC"),
-  };
+  const styles = getComputedStyle(document.documentElement);
+  const read = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
+  return { text: read("--text", "#1A2230"), muted: read("--text-muted", "#64748B"), line: read("--line", "#E3E9F0"), sunken: read("--surface-sunken", "#F7FAFC") };
 }
-const hexArgb = (hex) => "FF" + String(hex || "#000000").replace("#", "").padStart(6, "0").slice(0, 6).toUpperCase();
-// логотип студии (dataURL из FileReader) → картинка ExcelJS. Поддерживаем
-// только форматы, которые принимает ExcelJS; остальное — просто не встраиваем.
-function addLogoImage(wb, dataUrl) {
-  const m = /^data:image\/(png|jpe?g|gif);base64,/i.exec(dataUrl || "");
-  if (!m) return null;
-  const ext = m[1].toLowerCase() === "jpg" ? "jpeg" : m[1].toLowerCase();
-  return wb.addImage({ base64: dataUrl, extension: ext });
-}
-// п.4: плашка-бейдж вида сметы показывается только для внутренней (клиент не должен
-// видеть пометку «внешняя» на своей смете — это единственное, что он и получает)
-const viewLabelText = (view) => (view === "external" ? null : "ВНУТРЕННЯЯ СМЕТА");
-const viewTag = (view) => (view === "external" ? "ВНЕШНЯЯ" : "ВНУТРЕННЯЯ");
-const safeFile = (s) => (String(s || "smeta").replace(/[^\wа-яА-ЯёЁ\- ]+/g, "").trim().replace(/\s+/g, "_") || "smeta");
-const defaultFilename = (project, view, format) => `${safeFile(project.name)}_${viewTag(view)}.${format === "pdf" ? "pdf" : "xlsx"}`;
-const ensureExt = (name, ext) => (new RegExp(`\\.${ext}$`, "i").test(name) ? name : `${name.replace(/\.(pdf|xlsx)$/i, "")}.${ext}`);
+
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a"); a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  const anchor = document.createElement("a");
+  anchor.href = url; anchor.download = filename; document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
 }
 
-/* Брендинг вводится одной строкой: экспорт распознаёт первую часть как
-   название студии, остальное — как контакты. Совместимо со старой схемой. */
-function parseBranding(b) {
-  b = b || {};
-  let studioName = (b.studioName || "").trim();
-  let contacts = (b.contacts || "").trim();
-  if (!studioName && !contacts) {
-    const raw = String(b.info || "").trim();
-    if (raw) {
-      const parts = raw.split(/[,\n;·|]/).map((s) => s.trim()).filter(Boolean);
-      studioName = parts[0] || "";
-      contacts = parts.slice(1).join("   ·   ");
-    } else if (b.phone || b.email || b.contactName || b.contactRole) {
-      contacts = [b.phone, b.email, [b.contactName, b.contactRole].filter(Boolean).join(", ")].filter(Boolean).join("   ·   ");
-    }
-  }
-  return { logo: b.logo || "", studioName, contacts };
+function addExcelLogo(workbook, sheet, dataUrl) {
+  const match = /^data:image\/(png|jpe?g|gif);base64,/i.exec(dataUrl || "");
+  if (!match) return false;
+  const extension = match[1].toLowerCase() === "jpg" ? "jpeg" : match[1].toLowerCase();
+  const imageId = workbook.addImage({ base64: dataUrl, extension });
+  sheet.addImage(imageId, { tl: { col: 1, row: 0 }, ext: { width: 96, height: 42 } });
+  sheet.getRow(1).height = 34;
+  return true;
 }
 
-/* Единая модель для обоих форматов — читает существующий каскад. */
-function buildExportModel(project, view) {
-  const gm = project.globalMarkup ?? 0;
-  const mode = getMarkupMode(project);
-  const external = view === "external";
-  const stages = (project.stages || []).filter((s) => (s.tasks || []).length).map((s) => ({
-    name: s.name || "Этап",
-    subtotal: external ? (s.tasks || []).reduce((sum, task) => sum + externalTaskPriceWithCharges(project, task), 0) : stageSum(s),
-    tasks: (s.tasks || []).map((t) => ({
-      name: t.name || "Без названия",
-      price: external ? externalTaskPriceWithCharges(project, t) : taskSum(t),
-      execs: external ? [] : (t.executors || []).map((e) => {
-        const R = readExecutor(e);
-        const meta = [R.role, R.grade].filter(Boolean).join(", ");
-        const qty = R.payType === "hourly" ? `${fmt(R.rate)}×${R.qty} ч` : R.payType === "shift" ? `${fmt(R.rate)}×${R.qty} см` : "";
-        return { name: R.name + (meta ? ` · ${meta}` : ""), pay: R.payLabel, qty, sum: R.sum };
-      }),
-    })),
-  }));
-  const commission = (external && mode === "transparent" && projectMarkupAmount(project) > 0)
-    ? { label: `Агентская комиссия / Маркап (${fmt(projectEffectiveMarkupPct(project))}%)`, amount: projectMarkupAmount(project), pct: gm } : null;
-  const tax = (external && projectTaxPct(project) > 0 && chargeIsVisible(project.tax))
-    ? {
-      label: `Налог ${projectTaxSystemLabel(project)} (${fmt(projectTaxPct(project))}%)`, amount: projectTaxAmount(project),
-      pct: projectTaxPct(project), typeText: projectTaxSystemLabel(project),
-    } : null;
-  const vat = (external && projectVatPct(project) > 0)
-    ? { label: `НДС (${fmt(projectVatPct(project))}%)`, amount: projectVatAmount(project), pct: projectVatPct(project) } : null;
-  return {
-    external, stages, commission, tax, vat,
-    total: external ? projectTotalWithTax(project) : projectSum(project),
-    label: viewLabelText(view), projectName: project.name || "Проект", brand: project.branding || {},
+function BrandingSettings({ branding, onSave, onClose }) {
+  const [draft, setDraft] = useState({ logo: "", studioName: "", contacts: "", ...branding });
+  const onLogo = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setDraft((current) => ({ ...current, logo: reader.result }));
+    reader.readAsDataURL(file);
   };
+  return <div className="kb-export-branding" aria-label="Брендинг студии">
+    <div className="kb-brand-title">Брендинг студии</div>
+    <div className="kb-brand-row">
+      <div className="kb-brand-logo-col">
+        <label className="kb-brand-logo-sq" title="Загрузить логотип">
+          {draft.logo ? <img src={draft.logo} alt="Логотип студии" className="kb-brand-logo-img" /> : <><UploadCloud size={16} /><span className="kb-brand-logo-lbl">Логотип</span></>}
+          <input type="file" accept="image/*" hidden onChange={(event) => onLogo(event.target.files?.[0])} />
+        </label>
+        {draft.logo && <button type="button" className="kb-brand-clear" onClick={() => setDraft((current) => ({ ...current, logo: "" }))}>Убрать</button>}
+      </div>
+      <input className="kb-input kb-brand-input" value={draft.studioName} onChange={(event) => setDraft((current) => ({ ...current, studioName: event.target.value }))} placeholder="Название студии" />
+    </div>
+    <input className="kb-input kb-brand-input" value={draft.contacts} onChange={(event) => setDraft((current) => ({ ...current, contacts: event.target.value }))} placeholder="Контакты: телефон, email, имя, должность" />
+    <div className="kb-brand-actions">
+      <button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button>
+      <button type="button" className="kb-btn kb-btn-ghost kb-brand-save" onClick={() => onSave(draft)}>Сохранить</button>
+    </div>
+  </div>;
 }
 
-/* ---------- Excel через ExcelJS (полное форматирование) ---------- */
-async function exportExcelJS(project, view, filename) {
-  const M = buildExportModel(project, view);
-  const C = brandColors();
-  try {
-    return await buildAndDownloadExcelJS(M, C, filename);
-  } catch (e) {
-    // защитный фоллбэк на случай непредвиденной ошибки ExcelJS —
-    // чтобы пользователь не остался совсем без файла
-    return view === "external" ? exportClientXlsx(project) : exportInternalXlsx(project);
+export function buildExcelRows(model) {
+  const rows = [];
+  for (const stage of model.stages) {
+    rows.push({ type: "stage", label: stage.name, amount: stage.exportedSubtotal });
+    for (const task of stage.rows) rows.push({ type: "task", label: task.name, amount: task.exportedAmount, sourceTaskId: task.sourceTaskId });
   }
+  for (const row of model.separateRows) rows.push({ type: row.type, label: row.label, amount: row.amount });
+  return { rows, total: model.summary.total };
 }
 
-async function buildAndDownloadExcelJS(M, C, filename) {
-  const ink = hexArgb(C.text), muted = hexArgb(C.muted), lineC = hexArgb(C.line), sunken = hexArgb(C.sunken);
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("Смета", { views: [{ showGridLines: false }] });
-  const ncols = M.external ? 2 : 4;
-  ws.columns = M.external ? [{ width: 60 }, { width: 20 }] : [{ width: 52 }, { width: 16 }, { width: 14 }, { width: 18 }];
-  const bd = { style: "thin", color: { argb: lineC } };
-  const border = { top: bd, left: bd, bottom: bd, right: bd };
-  const money = '#,##0" ₽"';
-  const fill = (argb) => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
-  let r = 1;
-  const b = parseBranding(M.brand);
-  if (b.logo) {
-    const imgId = addLogoImage(wb, b.logo);
-    if (imgId != null) ws.addImage(imgId, { tl: { col: ncols - 1, row: 0 }, ext: { width: 100, height: 36 } });
-  }
-  if (b.studioName) { ws.mergeCells(r, 1, r, ncols); const c = ws.getCell(r, 1); c.value = b.studioName; c.font = { bold: true, size: 15, color: { argb: ink } }; r++; }
-  const contacts = b.contacts;
-  if (contacts) { ws.mergeCells(r, 1, r, ncols); const c = ws.getCell(r, 1); c.value = contacts; c.font = { size: 10, color: { argb: muted } }; r++; }
-  r++;
-  if (M.label) { ws.mergeCells(r, 1, r, ncols); { const c = ws.getCell(r, 1); c.value = M.label; c.font = { bold: true, size: 13, color: { argb: "FFFFFFFF" } }; c.fill = fill(ink); c.alignment = { vertical: "middle", indent: 1 }; ws.getRow(r).height = 22; } r++; }
-  ws.mergeCells(r, 1, r, ncols); { const c = ws.getCell(r, 1); c.value = M.projectName; c.font = { bold: true, size: 14, color: { argb: ink } }; } r++;
-  r++;
-  const headers = M.external ? ["Позиция", "Цена"] : ["Позиция / исполнитель", "Оплата", "Кол-во", "Сумма"];
-  headers.forEach((h, i) => { const c = ws.getCell(r, i + 1); c.value = h; c.font = { bold: true, color: { argb: "FFFFFFFF" } }; c.fill = fill(ink); c.alignment = { horizontal: i === ncols - 1 ? "right" : "left" }; c.border = border; });
-  ws.getRow(r).height = 18; r++;
-  const paramsRow0 = r; // верхняя строка блока «Параметры» (маркап/налог %) — колонки правее таблицы
-  const stageCellAddrs = [];
-  for (const s of M.stages) {
-    ws.mergeCells(r, 1, r, ncols);
-    const sc = ws.getCell(r, 1); sc.value = s.name.toUpperCase(); sc.font = { bold: true, color: { argb: ink } }; sc.fill = fill(sunken); sc.alignment = { indent: 1 };
-    for (let c = 1; c <= ncols; c++) ws.getCell(r, c).border = border;
-    r++;
-    const taskCellAddrs = [];
-    for (const t of s.tasks) {
-      if (M.external) ws.mergeCells(r, 1, r, ncols - 1);
-      const tc = ws.getCell(r, 1); tc.value = "  " + t.name; tc.font = { bold: !M.external, color: { argb: ink } };
-      // база сметы: стоимость задачи — живое значение, которое меняет продюсер;
-      // всё остальное (этап/проект/маркап/налог/итог) — формулы поверх этих ячеек
-      const pv = ws.getCell(r, ncols); pv.value = Math.round(t.price); pv.numFmt = money; pv.font = { color: { argb: ink } }; pv.alignment = { horizontal: "right" };
-      taskCellAddrs.push(pv.address);
-      for (let c = 1; c <= ncols; c++) ws.getCell(r, c).border = border;
-      r++;
-      for (const e of t.execs) {
-        const c1 = ws.getCell(r, 1); c1.value = "      " + e.name;
-        ws.getCell(r, 2).value = e.pay; ws.getCell(r, 3).value = e.qty;
-        const ev = ws.getCell(r, 4); ev.value = Math.round(e.sum); ev.numFmt = money; ev.alignment = { horizontal: "right" };
-        for (let c = 1; c <= ncols; c++) { const cell = ws.getCell(r, c); cell.font = { size: 10, color: { argb: muted } }; cell.border = border; }
-        r++;
-      }
-    }
-    ws.mergeCells(r, 1, r, ncols - 1);
-    const sl = ws.getCell(r, 1); sl.value = "Итого по этапу:"; sl.font = { bold: true, color: { argb: ink } }; sl.alignment = { horizontal: "right", indent: 1 };
-    const sv = ws.getCell(r, ncols); sv.numFmt = money; sv.font = { bold: true, color: { argb: ink } }; sv.alignment = { horizontal: "right" };
-    sv.value = taskCellAddrs.length ? { formula: `SUM(${taskCellAddrs.join(",")})` } : 0;
-    for (let c = 1; c <= ncols; c++) ws.getCell(r, c).border = border;
-    stageCellAddrs.push(sv.address);
-    r++;
-  }
-  const totalBase = stageCellAddrs.length ? `SUM(${stageCellAddrs.join(",")})` : "0";
-
-  // маркап % и ставка налога — в отдельных помеченных ячейках справа от таблицы,
-  // чтобы формулы комиссии/налога/итога ссылались на них (продюсер меняет процент — всё пересчитывается)
-  let markupPctAddr = null, taxPctAddr = null, vatPctAddr = null;
-  if (M.commission || M.tax || M.vat) {
-    const pcol = ncols + 2;
-    let pr = paramsRow0;
-    const pt = ws.getCell(pr, pcol); pt.value = "Параметры"; pt.font = { bold: true, size: 10, color: { argb: ink } }; pr++;
-    if (M.commission) {
-      ws.getCell(pr, pcol).value = "Маркап, %"; ws.getCell(pr, pcol).font = { size: 10, color: { argb: muted } };
-      const pv = ws.getCell(pr, pcol + 1); pv.value = M.commission.pct; pv.numFmt = '0.##"%"'; pv.font = { size: 10, bold: true, color: { argb: ink } }; pv.alignment = { horizontal: "right" };
-      markupPctAddr = pv.address; pr++;
-    }
-    if (M.tax) {
-      ws.getCell(pr, pcol).value = "Налог, %"; ws.getCell(pr, pcol).font = { size: 10, color: { argb: muted } };
-      const pv = ws.getCell(pr, pcol + 1); pv.value = M.tax.pct; pv.numFmt = '0.##"%"'; pv.font = { size: 10, bold: true, color: { argb: ink } }; pv.alignment = { horizontal: "right" };
-      taxPctAddr = pv.address; pr++;
-    }
-    if (M.vat) {
-      ws.getCell(pr, pcol).value = "НДС, %"; ws.getCell(pr, pcol).font = { size: 10, color: { argb: muted } };
-      const pv = ws.getCell(pr, pcol + 1); pv.value = M.vat.pct; pv.numFmt = '0.##"%"'; pv.font = { size: 10, bold: true, color: { argb: ink } }; pv.alignment = { horizontal: "right" };
-      vatPctAddr = pv.address; pr++;
-    }
-    ws.getColumn(pcol).width = 14; ws.getColumn(pcol + 1).width = 10;
-  }
-
-  let commissionAddr = null, taxAddr = null;
-  if (M.commission) {
-    ws.mergeCells(r, 1, r, ncols - 1);
-    const cc = ws.getCell(r, 1);
-    cc.value = { formula: `"Агентская комиссия / Маркап ("&${markupPctAddr}&"%)"` };
-    cc.font = { italic: true, color: { argb: muted } };
-    const cv = ws.getCell(r, ncols); cv.value = Math.round(M.commission.amount); cv.numFmt = money; cv.font = { italic: true, color: { argb: ink } }; cv.alignment = { horizontal: "right" };
-    for (let c = 1; c <= ncols; c++) ws.getCell(r, c).border = border;
-    commissionAddr = cv.address;
-    r++;
-  }
-  if (M.tax) {
-    ws.mergeCells(r, 1, r, ncols - 1);
-    const cc = ws.getCell(r, 1);
-    cc.value = { formula: `"Налог ${M.tax.typeText} ("&${taxPctAddr}&"%)"` };
-    cc.font = { italic: true, color: { argb: muted } };
-    const cv = ws.getCell(r, ncols); cv.value = Math.round(M.tax.amount); cv.numFmt = money; cv.font = { italic: true, color: { argb: ink } }; cv.alignment = { horizontal: "right" };
-    for (let c = 1; c <= ncols; c++) ws.getCell(r, c).border = border;
-    taxAddr = cv.address;
-    r++;
-  }
-  let totalFormula = totalBase;
-  if (commissionAddr) totalFormula += `+${commissionAddr}`;
-  if (taxAddr) totalFormula += `+${taxAddr}`;
-  ws.mergeCells(r, 1, r, ncols - 1);
-  const gc = ws.getCell(r, 1); gc.value = M.external ? "ИТОГО" : "ИТОГО СЕБЕСТОИМОСТЬ"; gc.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } }; gc.fill = fill(ink); gc.alignment = { horizontal: "right", indent: 1 };
-  const gv = ws.getCell(r, ncols); gv.value = stageCellAddrs.length ? { formula: totalFormula } : Math.round(M.total - (M.vat?.amount || 0)); gv.numFmt = money; gv.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } }; gv.fill = fill(ink); gv.alignment = { horizontal: "right" };
-  ws.getRow(r).height = 22;
-  const totalAddr = gv.address;
-  r++;
-  if (M.vat) {
-    ws.mergeCells(r, 1, r, ncols - 1);
-    const cc = ws.getCell(r, 1); cc.value = { formula: `"НДС "&${vatPctAddr}&"%"` }; cc.font = { bold: true, color: { argb: ink } };
-    const cv = ws.getCell(r, ncols); cv.value = { formula: `${totalAddr}*(1+${vatPctAddr}/100)` }; cv.numFmt = money; cv.font = { bold: true, color: { argb: ink } }; cv.alignment = { horizontal: "right" };
-    for (let c = 1; c <= ncols; c++) ws.getCell(r, c).border = border;
-  }
-
-  // шрифт как в приложении (Inter) на все ячейки
-  ws.eachRow((row) => row.eachCell((cell) => { cell.font = { name: "Inter", ...(cell.font || {}) }; }));
-
-  const buf = await wb.xlsx.writeBuffer();
-  downloadBlob(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), filename);
+export function buildPdfContent(model) {
+  return { rows: buildExcelRows(model).rows, total: model.summary.total, warnings: model.warnings };
 }
 
-/* ---------- PDF ----------
-   Программный PDF через pdfmake (вектор, кириллица через шрифт Roboto
-   из vfs, см. pdfMake.addVirtualFileSystem выше). Печать браузера
-   (exportPdfPrintFallback) — запасной путь на случай ошибки pdfmake. */
-async function exportPdf(project, view, filename) {
-  const M = buildExportModel(project, view);
-  const C = brandColors();
-  const b = parseBranding(M.brand);
-
-  try {
-    pdfMake.createPdf(buildPdfDoc(M, C, b)).download(ensureExt(filename, "pdf"));
-  } catch (_) {
-    exportPdfPrintFallback(project, view, filename, M, C, b);
+async function exportExcel(model, filename) {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Смета", { views: [{ showGridLines: false }] });
+  sheet.columns = [{ width: 60 }, { width: 20 }];
+  const brand = model.brand || {};
+  if (brand.logo) addExcelLogo(workbook, sheet, brand.logo);
+  if (brand.studioName) { sheet.addRow([brand.studioName, ""]); sheet.mergeCells(`A1:B1`); }
+  if (brand.contacts) { sheet.addRow([brand.contacts, ""]); sheet.mergeCells(`A${sheet.rowCount}:B${sheet.rowCount}`); }
+  sheet.addRow([model.projectName, ""]); sheet.mergeCells(`A${sheet.rowCount}:B${sheet.rowCount}`);
+  sheet.getCell(`A${sheet.rowCount}`).font = { bold: true, size: 15, name: "Inter" };
+  sheet.addRow([new Date().toLocaleDateString("ru-RU"), ""]); sheet.addRow([]);
+  const rows = buildExcelRows(model).rows;
+  for (const row of rows) {
+    const excelRow = sheet.addRow([row.type === "task" ? `  ${row.label}` : row.label, row.amount]);
+    excelRow.getCell(2).numFmt = '#,##0.00" ₽"';
+    if (row.type === "stage") excelRow.font = { bold: true, name: "Inter" };
+    if (row.type === "markup" || row.type === "tax") excelRow.font = { italic: true, name: "Inter" };
   }
+  sheet.addRow([]);
+  const totalRow = sheet.addRow(["ИТОГО", model.summary.total]);
+  totalRow.font = { bold: true, size: 13, name: "Inter" }; totalRow.getCell(2).numFmt = '#,##0.00" ₽"';
+  sheet.eachRow((row) => row.eachCell((cell) => { cell.font = { name: "Inter", ...(cell.font || {}) }; }));
+  const buffer = await workbook.xlsx.writeBuffer();
+  downloadBlob(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), filename);
+  return model.summary.total;
 }
 
-/* Документ pdfmake (для боевого пути; в превью не вызывается). */
-function buildPdfDoc(M, C, b) {
-  const money = (n) => fmt(n) + " ₽";
-  const INK = C.text || "#1A2230", GREY = C.muted || "#64748B", LINE = C.line || "#E3E9F0", SUNKEN = C.sunken || "#F7FAFC";
-  const body = [];
-  for (const s of M.stages) {
-    body.push([
-      { text: s.name.toUpperCase(), bold: true, color: INK, fillColor: SUNKEN, margin: [2, 4, 2, 4] },
-      { text: money(s.subtotal), bold: true, color: INK, fillColor: SUNKEN, alignment: "right", margin: [2, 4, 2, 4] },
-    ]);
-    for (const t of s.tasks) {
-      body.push([
-        { text: t.name, bold: !M.external, color: INK, margin: [8, 3, 2, 3] },
-        { text: money(t.price), color: INK, alignment: "right", margin: [2, 3, 2, 3] },
-      ]);
-      for (const e of t.execs) {
-        const q = [e.pay, e.qty].filter(Boolean).join(" · ");
-        body.push([
-          { text: `${e.name}${q ? "   " + q : ""}`, color: GREY, fontSize: 9, margin: [20, 2, 2, 2] },
-          { text: money(e.sum), color: GREY, fontSize: 9, alignment: "right", margin: [2, 2, 2, 2] },
-        ]);
-      }
-    }
-  }
-  if (M.commission) body.push([
-    { text: M.commission.label, italics: true, color: GREY, margin: [2, 4, 2, 4] },
-    { text: money(M.commission.amount), italics: true, color: GREY, alignment: "right", margin: [2, 4, 2, 4] },
+function pdfDefinition(model) {
+  const colors = brandColors();
+  const body = buildPdfContent(model).rows.map((row) => [
+    { text: row.type === "task" ? `  ${row.label}` : row.label, bold: row.type === "stage", italics: row.type === "markup" || row.type === "tax", color: row.type === "task" || row.type === "stage" ? colors.text : colors.muted, margin: [2, 4, 2, 4] },
+    { text: money(row.amount), bold: row.type === "stage", italics: row.type === "markup" || row.type === "tax", alignment: "right", margin: [2, 4, 2, 4] },
   ]);
-  if (M.tax) body.push([
-    { text: M.tax.label, italics: true, color: GREY, margin: [2, 4, 2, 4] },
-    { text: money(M.tax.amount), italics: true, color: GREY, alignment: "right", margin: [2, 4, 2, 4] },
-  ]);
-  const totalBeforeVat = M.total - (M.vat?.amount || 0);
   return {
-    pageSize: "A4", pageMargins: [40, 40, 40, 40],
-    defaultStyle: { font: "Roboto", fontSize: 10, color: INK },
+    pageSize: "A4", pageMargins: [40, 40, 40, 40], defaultStyle: { font: "Roboto", fontSize: 10, color: colors.text },
     content: [
-      { columns: [
-        { width: "*", stack: [
-          ...(b.logo ? [{ image: b.logo, fit: [130, 46] }] : []),
-          ...(b.studioName ? [{ text: b.studioName, bold: true, fontSize: 13, margin: [0, b.logo ? 6 : 0, 0, 0] }] : []),
-          ...(b.contacts ? [{ text: b.contacts, color: GREY, fontSize: 9, margin: [0, 2, 0, 0] }] : []),
-        ] },
-        { width: "auto", stack: [{ text: new Date().toLocaleDateString("ru-RU"), color: GREY, fontSize: 9, alignment: "right" }] },
-      ], columnGap: 16 },
-      ...(M.label ? [{ table: { widths: ["auto"], body: [[{ text: M.label, color: "#FFFFFF", bold: true, fontSize: 11, fillColor: INK, margin: [8, 5, 8, 5] }]] }, layout: "noBorders", margin: [0, 10, 0, 8] }] : []),
-      { text: M.projectName, bold: true, fontSize: 15, margin: [0, M.label ? 0 : 10, 0, 12] },
-      { table: { widths: ["*", "auto"], body }, layout: { hLineWidth: () => 0.5, vLineWidth: () => 0, hLineColor: () => LINE, paddingLeft: () => 0, paddingRight: () => 0 } },
-      { columns: [{ text: M.external ? "Итого" : "Итого себестоимость", bold: true, fontSize: 13 }, { text: money(totalBeforeVat), bold: true, fontSize: 13, alignment: "right" }], margin: [0, 14, 0, 0] },
-      ...(M.vat ? [{ columns: [{ text: `НДС ${fmt(M.vat.pct)}%`, bold: true }, { text: money(M.total), bold: true, alignment: "right" }], margin: [0, 8, 0, 0] }] : []),
+      ...(model.brand?.logo ? [{ image: model.brand.logo, fit: [110, 52], alignment: "right", margin: [0, 0, 0, 8] }] : []),
+      ...(model.brand?.studioName ? [{ text: model.brand.studioName, bold: true, fontSize: 12, margin: [0, 0, 0, 3] }] : []),
+      ...(model.brand?.contacts ? [{ text: model.brand.contacts, color: colors.muted, fontSize: 9, margin: [0, 0, 0, 10] }] : []),
+      { text: model.projectName, bold: true, fontSize: 16, margin: [0, 0, 0, 14] },
+      { table: { widths: ["*", "auto"], body }, layout: { hLineWidth: () => 0.5, vLineWidth: () => 0, hLineColor: () => colors.line } },
+      { columns: [{ text: "Итого", bold: true, fontSize: 13 }, { text: money(model.summary.total), bold: true, fontSize: 13, alignment: "right" }], margin: [0, 14, 0, 0] },
     ],
   };
 }
 
-/* Запасной путь: печать браузера (если pdfmake не поднялся). */
-function exportPdfPrintFallback(project, view, filename, M, C, b) {
-  const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-  const money = (n) => fmt(n) + " ₽";
-  const logo = b.logo ? `<img class="logo" src="${b.logo}"/>` : "";
-  const contacts = b.contacts ? esc(b.contacts) : "";
-  const body = M.stages.map((s) => {
-    const tasks = s.tasks.map((t) => {
-      const execs = (t.execs || []).map((e) =>
-        `<tr class="ex"><td>${esc(e.name)} <span class="dim">${esc([e.pay, e.qty].filter(Boolean).join(" · "))}</span></td><td class="r">${money(e.sum)}</td></tr>`).join("");
-      return `<tr class="tk"><td>${esc(t.name)}</td><td class="r">${money(t.price)}</td></tr>${execs}`;
-    }).join("");
-    return `<tr class="st"><td>${esc(s.name)}</td><td class="r">${money(s.subtotal)}</td></tr>${tasks}`;
-  }).join("");
-  const commission = M.commission ? `<tr class="comm"><td>${esc(M.commission.label)}</td><td class="r">${money(M.commission.amount)}</td></tr>` : "";
-  const taxRow = M.tax ? `<tr class="comm"><td>${esc(M.tax.label)}</td><td class="r">${money(M.tax.amount)}</td></tr>` : "";
-  const vatTotal = M.vat ? `<div class="vat-total"><span>НДС ${fmt(M.vat.pct)}%</span><span>${money(M.total)}</span></div>` : "";
-  const totalLabel = M.external ? "Итого" : "Итого себестоимость";
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(filename)}</title>
-<style>
-  *{box-sizing:border-box} body{font:14px/1.55 Inter,-apple-system,Segoe UI,Roboto,sans-serif;color:${C.text};margin:40px}
-  .head{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;border-bottom:1px solid ${C.line};padding-bottom:14px}
-  .logo{max-height:54px;max-width:180px;object-fit:contain;margin-bottom:8px;display:block}
-  .studio{font-size:17px;font-weight:700} .contact{color:${C.muted};font-size:12px;margin-top:2px}
-  .date{color:${C.muted};font-size:12px;text-align:right}
-  .label{margin:16px 0 4px;background:${C.text};color:#fff;font-weight:700;font-size:13px;letter-spacing:.04em;padding:8px 12px;border-radius:6px;display:inline-block}
-  h1{font-size:18px;margin:8px 0 16px}
-  table{width:100%;border-collapse:collapse} td{padding:7px 8px;border-bottom:1px solid ${C.line}}
-  .r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap} .dim{color:${C.muted};font-size:12px}
-  tr.st td{background:${C.sunken};font-weight:700} tr.tk td{font-weight:600}
-  tr.tk td:first-child{padding-left:20px} tr.ex td:first-child{padding-left:34px;color:${C.muted}}
-  tr.comm td{font-style:italic;color:${C.muted}}
-  .total{display:flex;justify-content:space-between;margin-top:18px;padding-top:14px;border-top:2px solid ${C.text};font-size:16px;font-weight:700}
-  .vat-total{display:flex;justify-content:space-between;margin-top:8px;font-weight:700}
-  @media print{body{margin:0;padding:22px}}
-</style></head><body>
-  <div class="head">
-    <div>${logo}<div class="studio">${esc(b.studioName || "")}</div>${contacts ? `<div class="contact">${contacts}</div>` : ""}</div>
-    <div class="date">${new Date().toLocaleDateString("ru-RU")}</div>
-  </div>
-  ${M.label ? `<div class="label">${esc(M.label)}</div>` : ""}
-  <h1>${esc(M.projectName)}</h1>
-  <table>${body}${commission}${taxRow}</table>
-  <div class="total"><span>${totalLabel}</span><span>${money(M.total - (M.vat?.amount || 0))}</span></div>
-  ${vatTotal}
-</body></html>`;
-  printHtml(html, filename);
+function exportPdf(model, filename) {
+  pdfMake.createPdf(pdfDefinition(model)).download(filename);
+  return model.summary.total;
 }
 
-function printHtml(html, filename) {
-  // Печать через скрытый iframe — без popup-вкладки (её песочница блокирует).
-  try {
-    const ifr = document.createElement("iframe");
-    // Размер 0×0 + visibility:hidden ненадёжен: часть браузеров (в т.ч. свежий
-    // Chrome) считает такой фрейм «нечего печатать» и тихо не открывает диалог
-    // печати. Держим реальный размер листа A4, но уводим за пределы экрана —
-    // это устойчивый паттерн для «невидимой» печати.
-    ifr.style.cssText = "position:fixed;top:-10000px;left:-10000px;width:794px;height:1123px;border:0";
-    document.body.appendChild(ifr);
-    const d = ifr.contentWindow.document; d.open(); d.write(html); d.close();
-    const done = () => setTimeout(() => ifr.remove(), 2000);
-    setTimeout(() => {
-      try { ifr.contentWindow.focus(); ifr.contentWindow.print(); done(); }
-      catch (_) { ifr.remove(); downloadBlob(new Blob([html], { type: "text/html" }), filename.replace(/\.pdf$/i, "") + ".html"); }
-    }, 400);
-    return;
-  } catch (_) {
-    downloadBlob(new Blob([html], { type: "text/html" }), filename.replace(/\.pdf$/i, "") + ".html");
-  }
-}
-
-function exportInternalXlsx(project) {
-  const A = projectAnalytics(project);
-  const aoa = [];
-  aoa.push([`${project.name || "Проект"} — внутренний аудит`, "", "", ""]);
-  aoa.push([new Date().toLocaleDateString("ru-RU"), "", "", ""]);
-  aoa.push([]);
-  aoa.push(["КОТЁЛ · сводная аналитика", "", "", ""]);
-  aoa.push(["Себестоимость", "", "", Math.round(A.cost)]);
-  aoa.push(["Часы (почасовые)", "", "", A.hours]);
-  aoa.push(["Смены (посменные)", "", "", A.shifts]);
-  aoa.push(["Маркап (наценка), ₽", "", "", Math.round(A.margin)]);
-  aoa.push(["Цена для клиента", "", "", Math.round(A.clientTotal)]);
-  aoa.push([`Чистая маржа (${A.marginPct.toFixed(1)}%)`, "", "", Math.round(A.margin)]);
-  aoa.push([]);
-  aoa.push(["Позиция / исполнитель", "Оплата", "Кол-во", "Сумма, ₽"]);
-  for (const s of project.stages || []) {
-    if (!(s.tasks || []).length) continue;
-    aoa.push([(s.name || "Этап").toUpperCase(), "", "", ""]);
-    for (const t of s.tasks || []) {
-      aoa.push(["  " + (t.name || "Без названия"), "", "", Math.round(taskSum(t))]);
-      for (const e of t.executors || []) {
-        const R = readExecutor(e);
-        const bits = [R.role, R.grade].filter(Boolean).join(", ");
-        const qty = R.payType === "hourly" ? `${R.rate}×${R.qty} ч` : R.payType === "shift" ? `${R.rate}×${R.qty} см` : "";
-        aoa.push(["      " + R.name + (bits ? " · " + bits : ""), R.payLabel, qty, Math.round(R.sum)]);
-      }
-    }
-    aoa.push(["Итого по этапу:", "", "", Math.round(stageSum(s))]);
-    aoa.push([]);
-  }
-  aoa.push(["ИТОГО СЕБЕСТОИМОСТЬ", "", "", Math.round(A.cost)]);
-
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 46 }, { wch: 16 }, { wch: 14 }, { wch: 16 }];
-  ws["!merges"] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
-    { s: { r: 3, c: 0 }, e: { r: 3, c: 3 } },
-  ];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Внутренний аудит");
-  const safe = (project.name || "smeta").replace(/[^\wа-яА-ЯёЁ\- ]+/g, "").trim() || "smeta";
-  XLSX.writeFile(wb, `${safe} — внутренний аудит.xlsx`);
-}
-
-function exportClientXlsx(project) {
-  const mode = getMarkupMode(project);
-  const gm = project.globalMarkup ?? 0;
-  const aoa = [];
-  aoa.push([`${project.name || "Проект"} — смета для клиента`, ""]);
-  aoa.push([new Date().toLocaleDateString("ru-RU"), ""]);
-  aoa.push([]);
-  aoa.push(["Позиция", "Цена, ₽"]);
-  for (const s of project.stages || []) {
-    if (!(s.tasks || []).length) continue;
-    aoa.push([(s.name || "Этап").toUpperCase(), ""]);
-    for (const t of s.tasks || []) aoa.push(["  " + (t.name || "Без названия"), Math.round(externalTaskPriceWithCharges(project, t))]);
-    aoa.push(["Итого по этапу:", Math.round((s.tasks || []).reduce((sum, task) => sum + externalTaskPriceWithCharges(project, task), 0))]);
-  }
-  const markupAmount = projectMarkupAmount(project);
-  if (mode === "transparent" && markupAmount > 0)
-    aoa.push([`Агентская комиссия / Маркап (${fmt(projectEffectiveMarkupPct(project))}%)`, Math.round(markupAmount)]);
-  if (projectTaxPct(project) > 0 && chargeIsVisible(project.tax))
-    aoa.push([`Налог ${projectTaxSystemLabel(project)} (${fmt(projectTaxPct(project))}%)`, Math.round(projectTaxAmount(project))]);
-  aoa.push([]);
-  const totalBeforeVat = projectTotalWithTax(project) - projectVatAmount(project);
-  aoa.push(["ИТОГО", Math.round(totalBeforeVat)]);
-  if (projectVatPct(project) > 0)
-    aoa.push([`НДС ${fmt(projectVatPct(project))}%`, Math.round(totalBeforeVat * (1 + projectVatPct(project) / 100))]);
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 52 }, { wch: 16 }];
-  ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Смета для клиента");
-  const safe = (project.name || "smeta").replace(/[^\wа-яА-ЯёЁ\- ]+/g, "").trim() || "smeta";
-  XLSX.writeFile(wb, `${safe} — смета для клиента.xlsx`);
-}
-
-/* Редактор брендинга (в «…»): компактная панель слева от правой панели.
-   Логотип квадратом + одна строка со всеми данными (студия, телефон, email,
-   имя, должность) — экспорт распознаёт их сам (см. parseBranding). */
-function BrandingSettings({ branding, onSave, onClose, style }) {
-  const [d, setD] = useState({ logo: "", studioName: "", contacts: "", ...branding });
-  const ref = useRef(null);
-  useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [onClose]);
-  // миграция старой одностроч./полевой схемы
-  useEffect(() => {
-    if (!d.studioName && !d.contacts && (branding.info || branding.phone || branding.email || branding.contactName || branding.contactRole)) {
-      const p = parseBranding(branding);
-      setD((x) => ({ ...x, studioName: p.studioName, contacts: p.contacts }));
-    }
-    // eslint-disable-next-line
-  }, []);
-  const onLogo = (file) => { if (!file) return; const r = new FileReader(); r.onload = () => setD((x) => ({ ...x, logo: r.result })); r.readAsDataURL(file); };
+function RadioBlock({ title, value, onChange }) {
   return (
-    <div className="kb-brand-pop" ref={ref} style={style || undefined}>
-      <div className="kb-brand-title">Брендинг студии</div>
-      {/* п.5: логотип + название студии — в одну строку, контакты — во вторую */}
-      <div className="kb-brand-row">
-        <div className="kb-brand-logo-col">
-          <label className="kb-brand-logo-sq" title="Загрузить логотип">
-            {d.logo ? <img src={d.logo} alt="logo" className="kb-brand-logo-img" /> : (<><UploadCloud size={16} strokeWidth={1.5} /><span className="kb-brand-logo-lbl">Логотип</span></>)}
-            <input type="file" accept="image/*" hidden onChange={(e) => onLogo(e.target.files?.[0])} />
-          </label>
-          {d.logo && <button type="button" className="kb-brand-clear" onClick={() => setD((x) => ({ ...x, logo: "" }))}>Убрать</button>}
-        </div>
-        <div className="kb-brand-info">
-          <input className="kb-input kb-brand-input" value={d.studioName}
-            onChange={(e) => setD((x) => ({ ...x, studioName: e.target.value }))} placeholder="Название студии" />
-        </div>
-      </div>
-      <input className="kb-input kb-brand-input" value={d.contacts}
-        onChange={(e) => setD((x) => ({ ...x, contacts: e.target.value }))} placeholder="Контакты: телефон, email, имя, должность" />
-      <div className="kb-brand-actions">
-        <button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button>
-        <button type="button" className="kb-btn kb-btn-ghost kb-brand-save" onClick={() => onSave(d)}>Сохранить</button>
-      </div>
+    <fieldset className="kb-export-settings-block">
+      <legend>{title}</legend>
+      <label><input type="radio" checked={value === "distributed"} onChange={() => onChange("distributed")} />Включить в стоимость задач</label>
+      <label><input type="radio" checked={value === "separate_line"} onChange={() => onChange("separate_line")} />Показать отдельной строкой</label>
+    </fieldset>
+  );
+}
+
+function ExportPreview({ model }) {
+  return (
+    <div className="kb-export-preview">
+      {model.warnings.map((warning) => <div className="kb-export-warning" key={warning}>{warning}</div>)}
+      {model.stages.map((stage) => <div className="kb-export-preview-stage" key={stage.id}>
+        <div><b>{stage.name}</b><b>{money(stage.exportedSubtotal)}</b></div>
+        {stage.rows.map((row) => <div key={row.sourceTaskId}><span>{row.name}</span><span>{money(row.exportedAmount)}</span></div>)}
+      </div>)}
+      {model.separateRows.map((row, index) => <div className="kb-export-preview-separate" key={`${row.type}-${index}`}><span>{row.label}</span><span>{money(row.amount)}</span></div>)}
+      <div className="kb-export-preview-total"><b>Итого</b><b>{money(model.summary.total)}</b></div>
     </div>
   );
 }
 
-/* Панель экспорта в стиле Фигмы: [формат ▾] [⋯] в строке, кнопка Экспорт ниже. */
-export function ExportPanel({ project, view, dispatch }) {
-  const [format, setFormat] = useState("pdf");
-  const [fmtOpen, setFmtOpen] = useState(false);
-  const [brandOpen, setBrandOpen] = useState(false);
+function ExportModal({ project, format, dispatch, onClose, onExport }) {
+  const [draft, setDraft] = useState(() => normalizeExportSettings(project.exportSettings));
+  const model = useMemo(() => buildExportEstimateModel(project, draft), [project, draft]);
   const [busy, setBusy] = useState(false);
-  const fmtRef = useRef(null);
-  const dotsRef = useRef(null);
-  const [popStyle, setPopStyle] = useState(null);
-  useOutsideClose(fmtRef, () => setFmtOpen(false));
-
-  const branding = project.branding || {};
-  const saveBranding = (b) => dispatch((p) => ({ ...p, branding: b }));
-  const label = format === "pdf" ? "PDF" : "Excel";
-
-  const toggleBrand = () => {
-    if (!brandOpen) {
-      const r = dotsRef.current?.getBoundingClientRect();
-      if (r) setPopStyle({ position: "fixed", top: Math.max(12, r.bottom - 200), right: Math.round(window.innerWidth - r.left + 10), left: "auto" });
-    }
-    setBrandOpen((v) => !v);
-  };
-
+  const [brandingOpen, setBrandingOpen] = useState(false);
+  const save = (next) => { setDraft(next); dispatch((current) => ({ ...current, exportSettings: normalizeExportSettings(next) })); };
   const run = async () => {
     setBusy(true);
-    try {
-      const name = defaultFilename(project, view, format);
-      if (format === "pdf") await exportPdf(project, view, name);
-      else await exportExcelJS(project, view, name);
-    } finally { setBusy(false); }
+    try { await onExport(model); } finally { setBusy(false); }
   };
-
-  return (
-    <div className="kb-export">
-      <div className="kb-export-top">
-        <div className="kb-fmt" ref={fmtRef}>
-          <button type="button" className="kb-fmt-btn" onClick={() => setFmtOpen((v) => !v)}>
-            <span>{label}</span><ChevronDown size={13} strokeWidth={1.5} />
-          </button>
-          {fmtOpen && (
-            <div className="kb-fmt-menu">
-              {[["pdf", "PDF"], ["excel", "Excel"]].map(([k, l]) => (
-                <button key={k} type="button" className={"kb-fmt-item" + (format === k ? " is-active" : "")}
-                  onClick={() => { setFormat(k); setFmtOpen(false); }}>{l}</button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="kb-export-dots-wrap">
-          <button type="button" className="kb-export-dots" title="Брендинг студии" ref={dotsRef} onClick={toggleBrand}>
-            <MoreHorizontal size={16} strokeWidth={1.5} />
-          </button>
-          {brandOpen && <BrandingSettings branding={branding} style={popStyle}
-            onSave={(b) => { saveBranding(b); setBrandOpen(false); }} onClose={() => setBrandOpen(false)} />}
-        </div>
+  return <div className="kb-modal-backdrop" onMouseDown={onClose}>
+    <div className="kb-export-modal" role="dialog" aria-modal="true" aria-label="Настройки экспорта" onMouseDown={(event) => event.stopPropagation()}>
+      <div className="kb-export-modal-head"><div><b>Экспорт сметы</b><span>{format === "pdf" ? "PDF" : "Excel"}</span></div><div className="kb-export-modal-head-actions"><button type="button" title="Брендинг сметы" aria-label="Настроить брендинг сметы" aria-expanded={brandingOpen} onClick={() => setBrandingOpen((value) => !value)}><MoreHorizontal size={18} /></button><button type="button" aria-label="Закрыть" onClick={onClose}><X size={16} /></button></div></div>
+      {brandingOpen && <BrandingSettings branding={project.branding} onClose={() => setBrandingOpen(false)} onSave={(branding) => { dispatch((current) => ({ ...current, branding })); setBrandingOpen(false); }} />}
+      <div className="kb-export-settings-grid">
+        <RadioBlock title="Маркап" value={draft.markupPresentation} onChange={(value) => save({ ...draft, markupPresentation: value })} />
+        <RadioBlock title="Налог" value={draft.taxPresentation} onChange={(value) => save({ ...draft, taxPresentation: value })} />
       </div>
-      <button type="button" className="kb-export-go2" onClick={run} disabled={busy}>
-        {busy ? <><Loader2 className="kb-spin" size={13} strokeWidth={1.5} /> Экспорт…</> : "Экспорт"}
-      </button>
-      <div className="kb-export-hint">Текущий вид — {view === "external" ? "внешняя смета" : "внутренняя смета"}</div>
+      <ExportPreview model={model} />
+      {!model.validation.valid && <div className="kb-export-error">Итог экспортной модели не совпадает с итогом проекта.</div>}
+      <div className="kb-export-modal-actions"><button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button><button type="button" className="kb-export-go2" disabled={busy || !model.validation.valid} onClick={run}>{busy ? <><Loader2 className="kb-spin" size={13} /> Экспорт…</> : "Экспорт"}</button></div>
     </div>
-  );
+  </div>;
+}
+
+export function ExportPanel({ project, dispatch }) {
+  const [format, setFormat] = useState("pdf");
+  const [formatOpen, setFormatOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const formatRef = useRef(null);
+  useOutsideClose(formatRef, () => setFormatOpen(false));
+  const run = (model) => format === "pdf" ? exportPdf(model, defaultFilename(project, format)) : exportExcel(model, defaultFilename(project, format));
+  return <div className="kb-export">
+    <div className="kb-fmt" ref={formatRef}>
+      <button type="button" className="kb-fmt-btn" onClick={() => setFormatOpen((value) => !value)}><span>{format === "pdf" ? "PDF" : "Excel"}</span><ChevronDown size={13} /></button>
+      {formatOpen && <div className="kb-fmt-menu">{[["pdf", "PDF"], ["excel", "Excel"]].map(([value, label]) => <button key={value} type="button" className={"kb-fmt-item" + (format === value ? " is-active" : "")} onClick={() => { setFormat(value); setFormatOpen(false); }}>{label}</button>)}</div>}
+    </div>
+    <button type="button" className="kb-export-go2" onClick={() => setModalOpen(true)}>Настроить и экспортировать</button>
+    <div className="kb-export-hint">Экспорт строится из текущей рабочей сметы</div>
+    {modalOpen && <ExportModal project={project} format={format} dispatch={dispatch} onClose={() => setModalOpen(false)} onExport={run} />}
+  </div>;
 }

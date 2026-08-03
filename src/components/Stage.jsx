@@ -70,9 +70,9 @@ export function CanvasDropZone({ isEmpty, onDropStage, onAddStage }) {
    ============================================================ */
 export function StageCard({ stage, dispatch, activeStageId, activeTaskId, activeExecutorId,
   onActivateStage, onActivateTask, onActivateExecutor, onRemove,
-  onSaveStageTemplate, onSaveTaskTemplate, onSavePerformerTemplate,
+  onSaveStageTemplate, onSaveTaskTemplate, onSaveExecutorToPerformer,
   stageTemplates, onApplyStageTemplate, taskTemplates, onApplyTaskTemplate,
-  performerTemplates, onApplyPerformerTemplate }) {
+  quickAccessItems, onApplyQuickAccess }) {
   const StageIcon = (STAGE_PRESETS.find((p) => p.key === stage.presetKey) || CUSTOM_STAGE).icon;
   const total = stageSum(stage);
   const isActive = activeStageId === stage.id && !activeTaskId && !activeExecutorId;
@@ -155,11 +155,10 @@ export function StageCard({ stage, dispatch, activeStageId, activeTaskId, active
               onActivateTask={onActivateTask} onActivateExecutor={onActivateExecutor}
               onPatch={(patch) => patchTask(t.id, patch)} onRemove={() => removeTask(t.id)}
               onSaveTaskTemplate={onSaveTaskTemplate}
-              onSavePerformerTemplate={onSavePerformerTemplate}
+              onSaveExecutorToPerformer={onSaveExecutorToPerformer}
               taskTemplates={taskTemplates}
               onApplyTaskTemplate={onApplyTaskTemplate}
-              performerTemplates={performerTemplates}
-              onApplyPerformerTemplate={onApplyPerformerTemplate} />
+              quickAccessItems={quickAccessItems} onApplyQuickAccess={onApplyQuickAccess} />
           ))}
           <button type="button" className="kb-add-btn" onClick={addTask} onMouseDown={(e) => e.stopPropagation()}>
             <Plus size={13} strokeWidth={1.75} /> Новая задача

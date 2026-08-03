@@ -1,4 +1,4 @@
-import { numVal } from "./utils.js";
+import { fmt, numVal, roundMoney } from "./utils.js";
 
 /* ---------- calculations ----------
    Сумма исполнителя определяется тегом оплаты:
@@ -6,7 +6,7 @@ import { numVal } from "./utils.js";
    - почасовая: rate × hours
    - посменная: rate × shifts
    Нет тега оплаты → 0. */
-export const executorSum = (e) => {
+export const executorPaymentBase = (e) => {
   const payTag = (e.tags || []).find((t) => t.key === "payment");
   let base = 0;
   if (payTag) {
@@ -18,12 +18,22 @@ export const executorSum = (e) => {
       case "shift": base = numVal(p.rate) * numVal(p.shifts); break;
     }
   }
+  return base;
+};
+
+export const executorSum = (e) => {
+  const base = executorPaymentBase(e);
   // п.7: кубик «Налог» у исполнителя — процент прибавляется к сумме оплаты
   // (фрилансер часто работает «сумма + налог»). Входит в себестоимость.
   const taxTag = (e.tags || []).find((t) => t.key === "tax");
   const taxPct = taxTag ? numVal(taxTag.value) : 0;
-  return base * (1 + taxPct / 100);
+  const taxDivisor = 1 - taxPct / 100;
+  return roundMoney(taxPct > 0 && taxDivisor > 0 ? base / taxDivisor : base);
 };
+export const executorFinancialCommission = (e) => roundMoney(executorSum(e) - executorPaymentBase(e));
+export const projectFinancialCommission = (p) => roundMoney((p.stages || []).reduce((projectTotal, stage) =>
+  projectTotal + (stage.tasks || []).reduce((stageTotal, task) =>
+    stageTotal + (task.executors || []).reduce((taskTotal, executor) => taskTotal + executorFinancialCommission(executor), 0), 0), 0));
 /* Быстрый ввод стоимости: если у задачи есть хотя бы один исполнитель — сумма
    считается по исполнителям (как обычно), directCost игнорируется. Нет
    исполнителей — берётся напрямую вписанная в задачу стоимость. */
@@ -41,7 +51,7 @@ export const taskMarkup = (t, globalMarkup) => (t.markupOverride ?? globalMarkup
 // override игнорируются в РАСЧЁТЕ (данные в сторе не трогаем) — комиссия
 // считается строго от глобального %. В «Классическом» override работает.
 export const effTaskMarkup = (t, gm, mode) => (mode === "transparent" ? gm : (t.markupOverride ?? gm));
-export const taskPrice = (t, globalMarkup, mode = "embedded") => taskSum(t) * (1 + effTaskMarkup(t, globalMarkup, mode) / 100);
+export const taskPrice = (t, globalMarkup, mode = "embedded") => roundMoney(taskSum(t) * (1 + numVal(effTaskMarkup(t, globalMarkup, mode)) / 100));
 export const stagePrice = (s, globalMarkup, mode = "embedded") => (s.tasks || []).reduce((a, t) => a + taskPrice(t, globalMarkup, mode), 0);
 export const projectPrice = (p) => {
   const mode = getMarkupMode(p);
@@ -72,11 +82,38 @@ export const projectEffectiveMarkupPct = (p) => {
    информативная метка, ставка задаётся процентом. Все «Итого» учитывают налог. */
 export const projectTaxPct = (p) => numVal(p.tax?.percent);
 export const projectTaxSystemLabel = (p) => ({ osno: "ОСНО", usn: "УСН", ausn: "АУСН" }[p.tax?.type] || "ОСНО");
-export const projectTaxAmount = (p) => projectPrice(p) * projectTaxPct(p) / 100;
+export const projectTaxAmount = (p) => roundMoney(projectPrice(p) * projectTaxPct(p) / 100);
 export const projectVatPct = (p) => numVal(p.vat?.percent);
 export const projectVatBase = (p) => projectPrice(p) + projectTaxAmount(p);
-export const projectVatAmount = (p) => projectVatBase(p) * projectVatPct(p) / 100;
-export const projectTotalWithTax = (p) => projectPrice(p) + projectTaxAmount(p) + projectVatAmount(p);
+export const projectVatAmount = (p) => roundMoney(projectVatBase(p) * projectVatPct(p) / 100);
+export const projectTotalWithTax = (p) => roundMoney(projectPrice(p) + projectTaxAmount(p) + projectVatAmount(p));
+
+// Каноническая разбивка проектных налогов для производных представлений.
+// Суммы и базы по-прежнему вычисляются только функциями финансовой модели выше.
+export const projectTaxBreakdown = (p) => {
+  const components = [];
+  const taxAmount = projectTaxAmount(p);
+  if (taxAmount !== 0) components.push({
+    id: "project-tax",
+    type: p.tax?.type || "osno",
+    label: `Налог ${projectTaxSystemLabel(p)} (${fmt(projectTaxPct(p))}%)`,
+    systemLabel: projectTaxSystemLabel(p),
+    rate: projectTaxPct(p),
+    baseAmount: projectPrice(p),
+    amount: taxAmount,
+  });
+  const vatAmount = projectVatAmount(p);
+  if (vatAmount !== 0) components.push({
+    id: "vat",
+    type: "vat",
+    label: `НДС (${fmt(projectVatPct(p))}%)`,
+    systemLabel: "НДС",
+    rate: projectVatPct(p),
+    baseAmount: projectVatBase(p),
+    amount: vatAmount,
+  });
+  return components;
+};
 
 export const chargeIsVisible = (charge) => charge?.visible !== false;
 export const projectTaskCount = (p) => (p.stages || []).reduce((count, stage) => count + (stage.tasks || []).length, 0);

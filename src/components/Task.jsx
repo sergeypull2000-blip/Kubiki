@@ -12,8 +12,8 @@ import { ExecutorRow } from "./Executor.jsx";
 export function TaskBlock({ task, stageId, dispatch, taskDict, taskFeatured,
   activeTaskId, activeExecutorId, onActivateTask, onActivateExecutor,
   onPatch, onRemove,
-  onSaveTaskTemplate, onSavePerformerTemplate,
-  taskTemplates, onApplyTaskTemplate, performerTemplates, onApplyPerformerTemplate }) {
+  onSaveTaskTemplate, onSaveExecutorToPerformer,
+  taskTemplates, onApplyTaskTemplate, quickAccessItems = [], onApplyQuickAccess }) {
   const total = taskSum(task);
   const isActive = activeTaskId === task.id && !activeExecutorId;
   const [justAddedId, setJustAddedId] = useState(null);
@@ -40,12 +40,7 @@ export function TaskBlock({ task, stageId, dispatch, taskDict, taskFeatured,
   };
 
   const { isOver, dropHandlers } = useDropTarget(DND_TYPES.EXECUTOR, (payload) => {
-    if (payload && payload.templateExecutorId) {
-      const tpl = performerTemplates?.find((t) => t.id === payload.templateExecutorId);
-      if (tpl && onApplyPerformerTemplate) {
-        onApplyPerformerTemplate(tpl, stageId, task.id);
-      }
-    } else if (payload && payload.moveExecutorId) {
+    if (payload && payload.moveExecutorId) {
       // перенос существующего исполнителя в эту задачу (со всеми кубиками)
       dispatch((p) => moveExecutor(p, payload.moveExecutorId, stageId, task.id));
       onActivateExecutor(stageId, task.id, payload.moveExecutorId);
@@ -53,6 +48,10 @@ export function TaskBlock({ task, stageId, dispatch, taskDict, taskFeatured,
     } else {
       addExecutor(); // новый из палитры
     }
+  });
+  const { isOver: isPerformerOver, dropHandlers: performerDropHandlers } = useDropTarget(DND_TYPES.PERFORMER, (payload) => {
+    const item = quickAccessItems.find((entry) => entry.id === payload?.quickAccessItemId);
+    if (item) onApplyQuickAccess(item, stageId, task.id);
   });
 
   const patchExecutor = (executorId, patch) =>
@@ -99,6 +98,8 @@ export function TaskBlock({ task, stageId, dispatch, taskDict, taskFeatured,
       </div>
 
       {!task.collapsed && (
+      <div className={"kb-task-performer-target" + (isPerformerOver ? " kb-task-performer-over" : "")} {...performerDropHandlers}>
+        {isPerformerOver && <div className="kb-performer-drop-label">Добавить исполнителя в «{task.name || "задачу"}»</div>}
       <div className="kb-task-body" {...dropHandlers}>
         {task.executors.map((e) => (
           <ExecutorRow key={e.id} executor={e}
@@ -108,11 +109,12 @@ export function TaskBlock({ task, stageId, dispatch, taskDict, taskFeatured,
             onActivate={() => onActivateExecutor(stageId, task.id, e.id)}
             onPatch={(patch) => patchExecutor(e.id, patch)}
             onRemove={() => removeExecutor(e.id)}
-            onSavePerformerTemplate={onSavePerformerTemplate} />
+            onSaveToPerformer={() => onSaveExecutorToPerformer(e)} />
         ))}
         <button type="button" className="kb-add-btn" onClick={(e) => { e.stopPropagation(); addExecutor(); }} onMouseDown={(e) => e.stopPropagation()}>
           <Plus size={13} strokeWidth={1.75} /> Новый исполнитель
         </button>
+      </div>
       </div>
       )}
     </div>

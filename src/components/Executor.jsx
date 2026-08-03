@@ -9,7 +9,9 @@ import { SuggestInput } from "./SuggestInput.jsx";
 
 // «Ядро» строки исполнителя — всегда на виду, пока исполнитель выделен.
 // Остальные кубики (роль, специализация, грейд, софт) — по требованию, через «+».
-const CORE_TAG_KEYS = ["name", "payment", "tax"];
+const CORE_TAG_KEYS = ["role", "name", "payment", "tax"];
+const EXECUTOR_TAG_ORDER = ["role", "name", "payment", "tax", "spec", "grade", "soft"];
+const tagOrder = (key) => { const index = EXECUTOR_TAG_ORDER.indexOf(key); return index < 0 ? EXECUTOR_TAG_ORDER.length : index; };
 
 /* ============================================================
    Тег НА исполнителе (чип). Пустой → клик открывает состояния.
@@ -243,7 +245,7 @@ function AddCubeButton({ onAddCube, usedKeys = [] }) {
 /* ============================================================
    Строка исполнителя
    ============================================================ */
-export function ExecutorRow({ executor, active, flash, stageId, taskId, onActivate, onPatch, onRemove, onSavePerformerTemplate }) {
+export function ExecutorRow({ executor, active, flash, stageId, taskId, onActivate, onPatch, onRemove, onSaveToPerformer }) {
   const sum = executorSum(executor);
   const payTag = executor.tags.find((t) => t.key === "payment");
   const payType = payTag?.payment?.type;
@@ -271,7 +273,7 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
         const missingCore = CORE_TAG_KEYS.filter((k) => !executor.tags.some((t) => t.key === k)).map((k) => makeTag(k));
         if (missingCore.length > 0) {
           const merged = [...executor.tags, ...missingCore]
-            .sort((a, b) => TAG_DEFS.findIndex((d) => d.key === a.key) - TAG_DEFS.findIndex((d) => d.key === b.key));
+            .sort((a, b) => tagOrder(a.key) - tagOrder(b.key));
           onPatch({ tags: merged });
         }
       }
@@ -284,6 +286,9 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
 
   const setTags = (fn) => onPatch({ tags: fn(executor.tags) });
   const usedKeys = executor.tags.map((t) => t.key);
+  const orderedTags = [...executor.tags].sort((a, b) => {
+    return tagOrder(a.key) - tagOrder(b.key);
+  });
 
   const { isOver, dropHandlers } = useDropTarget(DND_TYPES.TAG, (payload) => {
     setTags((tags) => applyTagToExecutor(tags, payload));
@@ -322,7 +327,7 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
   // Ловим mousedown в фазе ПЕРЕХВАТА (до дочерних обработчиков со stopPropagation)
   // и, если жмут по интерактиву, выключаем draggable прямо в DOM. Между mousedown
   // и dragstart нет ре-рендера — так надёжнее, чем через React-стейт.
-  const INTERACTIVE_SEL = "input, textarea, select, button, .kb-tag, .kb-addcube, .kb-payinline";
+  const INTERACTIVE_SEL = "input, textarea, select, button, .kb-tag, .kb-addcube, .kb-payinline, .kb-erow-taxed";
   const onRowMouseDownCapture = (e) => {
     if (rowRef.current) rowRef.current.draggable = !e.target.closest(INTERACTIVE_SEL);
   };
@@ -346,7 +351,7 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
       {...dropHandlers}>
       <div className="kb-erow">
         <div className="kb-erow-tags">
-          {executor.tags.map((t) => (
+          {orderedTags.map((t) => (
             <ExecutorTag key={t.id} tag={t}
               isOpen={openTagId === t.id}
               onOpenChange={(v) => setOpenTagId(v ? t.id : null)}
@@ -373,15 +378,15 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
             <>
               <input className="kb-input kb-input-num kb-amount-input" value={executor.amount} placeholder="0"
                 onChange={(e) => onPatch({ amount: e.target.value })} onMouseDown={(e) => e.stopPropagation()} />
-              {taxPct > 0 && <span className="kb-erow-sum kb-erow-sum-strong kb-erow-taxed" title="Сумма с налогом">{fmt(sum)} ₽</span>}
+              {taxPct > 0 && <span className="kb-erow-sum kb-erow-sum-strong kb-erow-taxed" title="Сумма с налогом — можно выделить и скопировать" onMouseDown={(e) => e.stopPropagation()}>{fmt(sum)} ₽</span>}
             </>
           ) : (
             <span className={"kb-erow-sum" + (hasPay ? " kb-erow-sum-strong" : " kb-erow-sum-muted")}>{fmt(sum)} ₽</span>
           )}
         </div>
 
-        {onSavePerformerTemplate && (
-          <button type="button" className="kb-icon-btn kb-erow-save" onClick={(e) => { e.stopPropagation(); onSavePerformerTemplate(executor); }} title="Сохранить в базу">
+        {onSaveToPerformer && (
+          <button type="button" className="kb-icon-btn kb-erow-save" onClick={(e) => { e.stopPropagation(); onSaveToPerformer(); }} title="Сохранить исполнителя в базу">
             <Bookmark size={13} strokeWidth={1.5} />
           </button>
         )}

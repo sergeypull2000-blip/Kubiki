@@ -3,9 +3,13 @@ import { makeProject } from "./store.js";
 import { useGeistFont } from "./hooks.js";
 import { Dashboard } from "./components/Dashboard.jsx";
 import { Workspace } from "./components/Workspace.jsx";
+import { KnowledgeBasePage } from "./components/KnowledgeBasePage.jsx";
 import { CSS } from "./styles.js";
 import { TEMPLATE_KEYS, saveTemplates, cloneProjectTemplate, migrateProjectTemplates } from "./templates.js";
 import { ImportModal, GenerateEstimateModal } from "./importExcel.jsx";
+import { APP_SECTIONS } from "./appNavigation.js";
+import { createPerformer, loadPerformerLibrary, removePerformer, savePerformerLibrary, updatePerformer } from "./performerLibrary.js";
+import { applyQuickAccessPreference, loadQuickAccessState, migrateLegacyQuickAccess, removeQuickAccessByPerformerId, saveQuickAccessState } from "./quickAccess.js";
 
 /* ============================================================
    п.7.1: автосохранение в localStorage браузера — заменяет бэкенд
@@ -52,6 +56,9 @@ export default function KubikiApp() {
   const [currentId, setCurrentId] = useState(() => loadStoredState()?.currentId || null);
   const [editingTemplateId, setEditingTemplateId] = useState(null);
   const [projectSource, setProjectSource] = useState(null);
+  const [activeSection, setActiveSection] = useState(APP_SECTIONS.PROJECTS);
+  const [performers, setPerformers] = useState(loadPerformerLibrary);
+  const [quickAccess, setQuickAccess] = useState(() => migrateLegacyQuickAccess(loadQuickAccessState()));
   const currentProject = projects.find((p) => p.id === currentId) || null;
 
   // шаблоны проектов — управляемое состояние (нужно для DnD папок)
@@ -64,6 +71,9 @@ export default function KubikiApp() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ projects, currentId }));
     } catch (_) { /* переполнение хранилища / приватный режим — тихо пропускаем */ }
   }, [projects, currentId]);
+
+  useEffect(() => { savePerformerLibrary(performers); }, [performers]);
+  useEffect(() => { saveQuickAccessState(quickAccess); }, [quickAccess]);
 
   // синхронизация шаблонов в localStorage
   const handleTemplatesChange = useCallback((updated) => {
@@ -92,6 +102,21 @@ export default function KubikiApp() {
   const renameProject = (id, name) => setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
   const updateCurrent = (updater) =>
     setProjects((prev) => prev.map((p) => (p.id === currentId ? updater(p) : p)));
+  const savePerformer = (draft, addToQuickAccess, existingId = null) => {
+    const next = existingId ? updatePerformer(performers, existingId, draft) : createPerformer(performers, draft);
+    const saved = existingId ? next.find((item) => item.id === existingId) : next[next.length - 1];
+    setPerformers(next);
+    if (saved) setQuickAccess((current) => addToQuickAccess
+      ? applyQuickAccessPreference(current, saved.id, true)
+      : removeQuickAccessByPerformerId(current, saved.id));
+  };
+  const togglePerformerQuickAccess = (performerId) => setQuickAccess((current) => current.items.some((item) => item.performerId === performerId)
+    ? removeQuickAccessByPerformerId(current, performerId)
+    : applyQuickAccessPreference(current, performerId, true));
+  const deletePerformerCard = (performerId) => {
+    setPerformers((current) => removePerformer(current, performerId));
+    setQuickAccess((current) => removeQuickAccessByPerformerId(current, performerId));
+  };
 
   return (
     <>
@@ -106,16 +131,23 @@ export default function KubikiApp() {
           onChange={(updater) => handleTemplatesChange(projectTemplates.map((template) => template.id === editingTemplateId ? updater(template) : template))}
           onBack={() => setEditingTemplateId(null)}
           editingTemplate
+          performers={performers} onPerformersChange={setPerformers}
+          quickAccess={quickAccess} onQuickAccessChange={setQuickAccess}
         />
       ) : currentProject ? (
-        <Workspace project={currentProject} onChange={updateCurrent} onBack={() => setCurrentId(null)} />
+        <Workspace project={currentProject} onChange={updateCurrent} onBack={() => setCurrentId(null)}
+          performers={performers} onPerformersChange={setPerformers}
+          quickAccess={quickAccess} onQuickAccessChange={setQuickAccess} />
+      ) : activeSection === APP_SECTIONS.KNOWLEDGE_BASE ? (
+        <KnowledgeBasePage performers={performers} quickAccess={quickAccess} onSectionChange={setActiveSection}
+          onSavePerformer={savePerformer} onToggleQuickAccess={togglePerformerQuickAccess} onDeletePerformer={deletePerformerCard} />
       ) : (
         <Dashboard projects={projects} onOpen={setCurrentId} onCreate={createProject} onDelete={deleteProject}
           onImport={(file, description) => setProjectSource({ file, description })}
           onGenerate={(description, file) => setProjectSource({ file, description })}
           projectTemplates={projectTemplates}
           onTemplatesChange={handleTemplatesChange} onEditTemplate={setEditingTemplateId}
-          onToggleFavorite={toggleFavorite} onRenameProject={renameProject} />
+          onToggleFavorite={toggleFavorite} onRenameProject={renameProject} onSectionChange={setActiveSection} />
       )}
     </>
   );

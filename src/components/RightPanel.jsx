@@ -3,9 +3,8 @@ import { ChevronDown } from "lucide-react";
 import { fmt, numVal } from "../utils.js";
 import {
   executorSum, taskSum, stageSum, projectSum,
-  getMarkupMode, externalTaskPrice, externalStagePrice,
-  externalTaskPriceWithCharges, externalStagePriceWithCharges,
-  projectMarkupAmount, projectTaxPct, projectTaxAmount, projectVatPct, projectVatAmount, projectTotalWithTax,
+  projectFinancialCommission, projectHours, projectShifts,
+  projectMarkupAmount, projectTaxPct, projectTaxAmount, projectTaxSystemLabel, projectVatPct, projectVatAmount,
   readExecutor,
 } from "../calculations.js";
 import { PAY_SHORT } from "../constants.js";
@@ -46,12 +45,10 @@ function PersonRow({ label, total, items, cost }) {
   );
 }
 
-function PropertiesPanel({ project, view, activeStageId, activeTaskId, activeExecutorId }) {
+function PropertiesPanel({ project, activeStageId, activeTaskId, activeExecutorId }) {
   const execName = (e) => ((e.tags || []).find((t) => t.key === "name")?.value || "").trim();
   const [structOpen, setStructOpen] = useState(true);
-  const gm = project.globalMarkup ?? 0;
-  const mode = getMarkupMode(project);
-  const external = view === "external";
+  const [metricsOpen, setMetricsOpen] = useState(true);
 
   let stage = null, task = null, executor = null;
   for (const s of project.stages || []) {
@@ -86,8 +83,8 @@ function PropertiesPanel({ project, view, activeStageId, activeTaskId, activeExe
         <div className="kb-props-kind">Задача</div>
         <div className="kb-props-name">{task.name || "Без названия"}</div>
         <div className="kb-props-meta">Исполнителей: {execs.length}</div>
-        <div className="kb-props-figure">{fmt(external ? externalTaskPriceWithCharges(project, task) : taskSum(task))} ₽</div>
-        {!external && <>
+        <div className="kb-props-figure">{fmt(taskSum(task))} ₽</div>
+        <>
           <div className="kb-props-sub">Исполнители</div>
           {execs.length === 0 && <div className="kb-props-empty-sm">Нет исполнителей</div>}
           {execs.map((e) => {
@@ -102,7 +99,7 @@ function PropertiesPanel({ project, view, activeStageId, activeTaskId, activeExe
               </div>
             );
           })}
-        </>}
+        </>
       </div>
     );
   }
@@ -114,7 +111,7 @@ function PropertiesPanel({ project, view, activeStageId, activeTaskId, activeExe
         <div className="kb-props-kind">Этап</div>
         <div className="kb-props-name">{stage.name || "Без названия"}</div>
         <div className="kb-props-meta">Задач: {tasks.length}</div>
-        <div className="kb-props-figure">{fmt(external ? externalStagePriceWithCharges(project, stage) : stageSum(stage))} ₽</div>
+        <div className="kb-props-figure">{fmt(stageSum(stage))} ₽</div>
         {tasks.length === 0 && <div className="kb-props-empty-sm">Нет задач</div>}
         {tasks.map((t) => {
           const names = (t.executors || []).map(execName).filter(Boolean);
@@ -122,7 +119,7 @@ function PropertiesPanel({ project, view, activeStageId, activeTaskId, activeExe
             <div className="kb-props-taskblock" key={t.id}>
               <div className="kb-props-row kb-props-taskrow">
                 <span className="kb-person-task" title={t.name || "Без названия"}><span className="kb-person-taskname">{t.name || "Без названия"}</span></span>
-                <span className="kb-person-cellsum">{fmt(external ? externalTaskPriceWithCharges(project, t) : taskSum(t))} ₽</span>
+                <span className="kb-person-cellsum">{fmt(taskSum(t))} ₽</span>
               </div>
               {names.length > 0 && <div className="kb-props-names" title={names.join(", ")}>{names.join(", ")}</div>}
             </div>
@@ -158,74 +155,56 @@ function PropertiesPanel({ project, view, activeStageId, activeTaskId, activeExe
     }
   }
   const cost = projectSum(project);
+  const financialCommission = projectFinancialCommission(project);
+  const hours = projectHours(project);
+  const shifts = projectShifts(project);
   const persons = [...people.values()].sort((a, b) => b.total - a.total);
+  const commissionPct = cost > 0 ? financialCommission / cost * 100 : 0;
 
   return (
     <div className="kb-props">
-      <div className="kb-props-kind">Проект</div>
-      <div className="kb-props-name">{project.name || "Без названия"}</div>
-      <div className="kb-props-figure">{fmt(external ? projectTotalWithTax(project) : cost)} ₽</div>
-      <div className="kb-props-counts">
-        <div className="kb-props-count"><b>{stages.length}</b><span>этапов</span></div>
-        <div className="kb-props-count"><b>{taskCount}</b><span>задач</span></div>
-        <div className="kb-props-count"><b>{people.size}</b><span>исполн.</span></div>
-      </div>
-      {external && <>
-        <div className="kb-props-sub">Структура внешней сметы</div>
-        <div className="kb-props-row"><span>Себестоимость</span><span>{fmt(cost)} ₽</span></div>
-        <div className="kb-props-row"><span>Маркап</span><span>{fmt(projectMarkupAmount(project))} ₽</span></div>
-        {projectTaxPct(project) > 0 && <div className="kb-props-row"><span>Налог ({fmt(projectTaxPct(project))}%)</span><span>{fmt(projectTaxAmount(project))} ₽</span></div>}
-        {projectVatPct(project) > 0 && <div className="kb-props-row"><span>НДС ({fmt(projectVatPct(project))}%)</span><span>{fmt(projectVatAmount(project))} ₽</span></div>}
+      <div className="kb-props-section-title">Сводка</div>
+      <div className="kb-props-row"><span>Сумма по смете</span><span>{fmt(cost)} ₽</span></div>
+      <div className="kb-props-row kb-props-row-nested"><span>в т.ч. финкомиссия</span><span>{fmt(financialCommission)} ₽</span></div>
+      <div className="kb-props-row"><span>Маркап ({fmt(project.globalMarkup ?? 0)}%)</span><span>{fmt(projectMarkupAmount(project))} ₽</span></div>
+      {projectTaxPct(project) > 0 && <div className="kb-props-row"><span>Налог на прибыль · {projectTaxSystemLabel(project)} ({fmt(projectTaxPct(project))}%)</span><span>{fmt(projectTaxAmount(project))} ₽</span></div>}
+      {projectVatPct(project) > 0 && <div className="kb-props-row"><span>НДС ({fmt(projectVatPct(project))}%)</span><span>{fmt(projectVatAmount(project))} ₽</span></div>}
+
+      <button type="button" className="kb-props-section-title kb-props-section-toggle" onClick={() => setMetricsOpen((open) => !open)}>
+        <span>Метрики</span><ChevronDown size={12} strokeWidth={2} className={"kb-person-chev" + (metricsOpen ? " is-open" : "")} />
+      </button>
+      {metricsOpen && <>
+        <div className="kb-props-row"><span>Финкомиссия в себестоимости</span><span>{fmt(commissionPct)}%</span></div>
+        <div className="kb-props-row"><span>Количество исполнителей</span><span>{people.size}</span></div>
+        {hours > 0 && <div className="kb-props-row"><span>Количество часов</span><span>{fmt(hours)}</span></div>}
+        {shifts > 0 && <div className="kb-props-row"><span>Количество смен</span><span>{fmt(shifts)}</span></div>}
+        <div className="kb-props-row"><span>Количество этапов</span><span>{stages.length}</span></div>
+        <div className="kb-props-row"><span>Количество задач</span><span>{taskCount}</span></div>
       </>}
-      {!external && <>
+
         <button type="button" className="kb-props-sub kb-props-sub-toggle" onClick={() => setStructOpen((o) => !o)}>
-          <span>Структура внутренней сметы</span>
+          <span>По исполнителям</span>
           <ChevronDown size={12} strokeWidth={2} className={"kb-person-chev" + (structOpen ? " is-open" : "")} />
         </button>
         {structOpen && <>
           {persons.length === 0 && <div className="kb-props-empty-sm">Ещё нет исполнителей</div>}
           {persons.map((p, i) => <PersonRow key={i} label={p.label} total={p.total} items={p.items} cost={cost} />)}
         </>}
-      </>}
     </div>
   );
 }
 
-function VisibilityToggle({ checked, onChange, label }) {
-  return (
-    <button type="button" role="switch" aria-checked={checked} aria-label={label}
-      className={"kb-mini-switch" + (checked ? " is-on" : "")}
-      title={checked ? "Отображать отдельной строкой" : "Распределять по позициям"}
-      onClick={() => onChange(!checked)}>
-      <span />
-    </button>
-  );
-}
-
 /* Правая панель: Вид · Маркап · Свойства · Экспорт. */
-export function RightPanel({ project, view, setView, dispatch, activeStageId, activeTaskId, activeExecutorId }) {
+export function RightPanel({ project, dispatch, activeStageId, activeTaskId, activeExecutorId }) {
   const globalMarkup = project.globalMarkup ?? 0;
   return (
     <aside className="kb-rightpanel">
       <section className="kb-rp-sec">
-        <div className="kb-rp-title">Вид сметы</div>
-        <div className="kb-viewtoggle kb-viewtoggle-full" role="tablist" aria-label="Вид сметы">
-          <button type="button" className={"kb-viewtoggle-btn" + (view === "internal" ? " kb-viewtoggle-btn-active" : "")}
-            onClick={() => setView("internal")}>Внутренняя</button>
-          <button type="button" className={"kb-viewtoggle-btn" + (view === "external" ? " kb-viewtoggle-btn-active" : "")}
-            onClick={() => setView("external")}>Внешняя</button>
-        </div>
-      </section>
-
-      {view === "external" && (
-        <section className="kb-rp-sec">
           <div className="kb-tax-row kb-rp-markup">
             <span className="kb-markup-label">Маркап, %</span>
             <span className="kb-tax-spacer" aria-hidden="true" />
             <input className="kb-input kb-input-num kb-markup-input kb-tax-input" value={globalMarkup}
               onChange={(e) => dispatch((p) => ({ ...p, globalMarkup: e.target.value === "" ? 0 : numVal(e.target.value) }))} />
-            <VisibilityToggle checked={getMarkupMode(project) === "transparent"} label="Отображать маркап отдельной строкой"
-              onChange={(visible) => dispatch((p) => ({ ...p, markupMode: visible ? "transparent" : "embedded" }))} />
           </div>
           <div className="kb-tax-row">
             <span className="kb-markup-label">Налог</span>
@@ -237,27 +216,22 @@ export function RightPanel({ project, view, setView, dispatch, activeStageId, ac
             </select>
             <input className="kb-input kb-input-num kb-tax-input" value={project.tax?.percent ?? ""} placeholder="%"
               onChange={(e) => dispatch((p) => ({ ...p, tax: { ...(p.tax || {}), percent: e.target.value } }))} />
-            <VisibilityToggle checked={project.tax?.visible !== false} label="Отображать налог отдельной строкой"
-              onChange={(visible) => dispatch((p) => ({ ...p, tax: { ...(p.tax || {}), visible } }))} />
           </div>
           <div className="kb-tax-row">
             <span className="kb-markup-label">НДС</span>
             <span className="kb-tax-spacer" aria-hidden="true" />
             <input className="kb-input kb-input-num kb-tax-input" value={project.vat?.percent ?? ""} placeholder="%"
               onChange={(e) => dispatch((p) => ({ ...p, vat: { ...(p.vat || {}), percent: e.target.value } }))} />
-            <span className="kb-switch-spacer" aria-hidden="true" />
           </div>
-        </section>
-      )}
+      </section>
 
       <section className="kb-rp-sec kb-rp-grow">
-        <div className="kb-rp-title">Свойства</div>
-        <PropertiesPanel project={project} view={view} activeStageId={activeStageId} activeTaskId={activeTaskId} activeExecutorId={activeExecutorId} />
+        <PropertiesPanel project={project} activeStageId={activeStageId} activeTaskId={activeTaskId} activeExecutorId={activeExecutorId} />
       </section>
 
       <section className="kb-rp-sec">
         <div className="kb-rp-title">Экспорт</div>
-        <ExportPanel project={project} view={view} dispatch={dispatch} />
+        <ExportPanel project={project} dispatch={dispatch} />
       </section>
     </aside>
   );

@@ -2,9 +2,11 @@
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
 export const fmt = (n) => {
-  const v = Number.isFinite(n) ? Math.round(n) : 0;
-  return v.toLocaleString("ru-RU").replace(/,/g, " ");
+  const v = Number.isFinite(n) ? n : 0;
+  return v.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
 };
+
+export const roundMoney = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 export const numVal = (v) => {
   if (v === "" || v === null || v === undefined) return 0;

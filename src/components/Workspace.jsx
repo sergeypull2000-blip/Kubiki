@@ -1,35 +1,30 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Percent, Save, ChevronsUp, ChevronsDown } from "lucide-react";
-import { fmt, numVal, uid } from "../utils.js";
-import {
-  taskSum, projectSum,
-  taskMarkup, getMarkupMode, externalTaskPrice, externalStagePrice,
-  projectMarkupAmount, projectEffectiveMarkupPct,
-  projectTaxPct, projectTaxAmount, projectTaxSystemLabel, projectVatPct, projectVatAmount, projectTotalWithTax,
-  chargeIsVisible, externalTaskPriceWithCharges, externalStagePriceWithCharges,
-} from "../calculations.js";
+import { ChevronsUp, ChevronsDown } from "lucide-react";
+import { fmt } from "../utils.js";
+import { projectSum } from "../calculations.js";
 import { CUSTOM_STAGE } from "../constants.js";
 import {
   makeExecutor, makeTask, makeStage,
-  mapStage, withTask, withExecutorList, patchExecutorIn,
+  mapStage, withTask,
   findExecutor, cloneExecutor, insertStage, applyTagToExecutor,
 } from "../store.js";
 import { ImportModal, GenerateEstimateModal, UnifiedImportEmptyState, LogoMenu } from "../importExcel.jsx";
-import { useOutsideClose } from "../hooks.js";
 import { PalettePanel } from "./LeftPanel.jsx";
 import { StageCard, CanvasDropZone } from "./Stage.jsx";
 import { RightPanel } from "./RightPanel.jsx";
+import { PerformerModal } from "./PerformerLibrary.jsx";
+import { addPerformerToTask, buildPerformerFromExecutor, createPerformer, linkExecutorToPerformer, normalizePerformer, updatePerformer } from "../performerLibrary.js";
+import { applyQuickAccessPreference, pinQuickAccessItem, removeQuickAccessByPerformerId, removeQuickAccessItem, sortQuickAccessItems, unpinQuickAccessItem } from "../quickAccess.js";
 import {
-  TEMPLATE_KEYS, loadTemplates, saveTemplates, removeTemplate,
-  savePerformerTemplate, saveTaskTemplate, saveStageTemplate,
-  cloneExecutorTemplate, cloneTaskTemplate, cloneStageTemplate, cloneProjectTemplate,
+  TEMPLATE_KEYS, loadTemplates, removeTemplate,
+  saveTaskTemplate, saveStageTemplate,
+  cloneTaskTemplate, cloneStageTemplate,
 } from "../templates.js";
 
 /* ============================================================
    Рабочая зона
    ============================================================ */
-export function Workspace({ project, onChange, onBack, editingTemplate = false }) {
-  const [view, setView] = useState("internal"); // 'internal' | 'external'
+export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onPerformersChange, quickAccess, onQuickAccessChange }) {
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
   // в Клайне можно persist'ить в localStorage.
   const [importFile, setImportFile] = useState(null);
@@ -38,11 +33,12 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [activeStageId, setActiveStageId] = useState(null);
   const [collapseButtonCompact, setCollapseButtonCompact] = useState(false);
+  const [performerModal, setPerformerModal] = useState(null);
   const clipboardRef = useRef(null); // скопированный исполнитель (Ctrl+C/Ctrl+V)
   const dispatch = (fn) => onChange(fn);
+  const commitPerformers = (next) => { onPerformersChange(next); return next; };
+  const commitQuickAccess = (next) => { onQuickAccessChange(next); return next; };
   const total = projectSum(project);
-  const globalMarkup = project.globalMarkup ?? 0;
-  const totalPrice = projectTotalWithTax(project);
 
   // теги выделенного исполнителя — для контекстной подсказки под «Кубиками исполнителя»
   const activeExecutorTags = (() => {
@@ -157,10 +153,6 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
     }));
   };
 
-  // override маркапа конкретной задачи (null = глобальный)
-  const setTaskMarkupOverride = (stageId, taskId, value) =>
-    dispatch((p) => withTask(p, stageId, taskId, (t) => ({ ...t, markupOverride: value })));
-
   /* ---- п.7.2: файл проекта (.json) — замена серверного сохранения ----
      «Скачать» отдаёт текущий проект файлом, «Загрузить» подставляет
      содержимое файла на место текущего проекта (id сохраняется, чтобы
@@ -200,21 +192,31 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
 
   const isEmpty = project.stages.length === 0;
   // п.4: смена вида снимает любое выделение (и в панели «Свойства»).
-  const changeView = (v) => { clearSelection(); setView(v); };
   /* ---- шаблоны (localStorage) ---- */
-  const [performerTemplates, setPerformerTemplates] = useState(() => loadTemplates(TEMPLATE_KEYS.performers));
   const [taskTemplates, setTaskTemplates] = useState(() => loadTemplates(TEMPLATE_KEYS.tasks));
   const [stageTemplates, setStageTemplates] = useState(() => loadTemplates(TEMPLATE_KEYS.stages));
 
-  const refreshPerformerTemplates = () => setPerformerTemplates(loadTemplates(TEMPLATE_KEYS.performers));
   const refreshTaskTemplates = () => setTaskTemplates(loadTemplates(TEMPLATE_KEYS.tasks));
   const refreshStageTemplates = () => setStageTemplates(loadTemplates(TEMPLATE_KEYS.stages));
 
   // Уровень 1: сохранить исполнителя как шаблон
-  const handleSavePerformerTemplate = useCallback((executor) => {
-    savePerformerTemplate(executor);
-    refreshPerformerTemplates();
-  }, []);
+  const handleSaveExecutorToPerformer = useCallback((executor) => {
+    const linked = executor.performerId && performers.find((item) => item.id === executor.performerId);
+    setPerformerModal({ draft: linked || buildPerformerFromExecutor(executor), executorId: executor.id, existingId: linked?.id || null, addToQuickAccess: true });
+  }, [performers]);
+
+  const savePerformerCard = (draft, addToQuickAccess) => {
+    const existingId = performerModal?.existingId || (performers.some((item) => item.id === draft.id) ? draft.id : null);
+    let next = existingId ? updatePerformer(performers, existingId, draft) : createPerformer(performers, draft);
+    next = commitPerformers(next);
+    const saved = existingId ? next.find((item) => item.id === existingId) : next[next.length - 1];
+    if (performerModal?.executorId && saved) dispatch((current) => linkExecutorToPerformer(current, performerModal.executorId, saved));
+    if (saved) commitQuickAccess(addToQuickAccess
+      ? applyQuickAccessPreference(quickAccess, saved.id, true)
+      : removeQuickAccessByPerformerId(quickAccess, saved.id));
+    setPerformerModal(null);
+  };
+  const openNewPerformer = () => setPerformerModal({ draft: normalizePerformer({ id: "" }), existingId: null, addToQuickAccess: true });
 
   // Уровень 2: сохранить задачу как шаблон
   const handleSaveTaskTemplate = useCallback((task) => {
@@ -229,25 +231,17 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
   }, []);
 
   // удаление шаблонов
-  const handleRemovePerformerTemplate = (id) => { removeTemplate(TEMPLATE_KEYS.performers, id); refreshPerformerTemplates(); };
   const handleRemoveTaskTemplate = (id) => { removeTemplate(TEMPLATE_KEYS.tasks, id); refreshTaskTemplates(); };
   const handleRemoveStageTemplate = (id) => { removeTemplate(TEMPLATE_KEYS.stages, id); refreshStageTemplates(); };
 
   // применение шаблонов
-  const handleApplyPerformerTemplate = useCallback((template, overrideStageId, overrideTaskId) => {
-    let targetStageId = overrideStageId || activeStageId;
-    let targetTaskId = overrideTaskId || activeTaskId;
-    if (!targetTaskId) {
-      const stage = (activeStageId && project.stages.find((s) => s.id === activeStageId))
-        || project.stages[project.stages.length - 1];
-      if (!stage || stage.tasks.length === 0) return;
-      targetStageId = stage.id;
-      targetTaskId = stage.tasks[stage.tasks.length - 1].id;
-    }
-    const clone = cloneExecutorTemplate(template);
-    dispatch((p) => withTask(p, targetStageId, targetTaskId, (t) => ({ ...t, executors: [...t.executors, clone] })));
-    activateExecutor(targetStageId, targetTaskId, clone.id);
-  }, [activeStageId, activeTaskId, project]);
+  const applyQuickAccess = useCallback((item, stageId = activeStageId, taskId = activeTaskId) => {
+    if (!stageId || !taskId) { window.alert("Сначала выберите задачу"); return; }
+    const performer = performers.find((entry) => entry.id === item.performerId);
+    if (performer) dispatch((current) => addPerformerToTask(current, stageId, taskId, performer));
+  }, [activeStageId, activeTaskId, performers]);
+  const toggleQuickAccessPin = (item) => commitQuickAccess(item.pinned ? unpinQuickAccessItem(quickAccess, item.id) : pinQuickAccessItem(quickAccess, item.id));
+  const visibleQuickAccess = sortQuickAccessItems(quickAccess).map((item) => ({ item, performer: performers.find((performer) => performer.id === item.performerId) })).filter((entry) => entry.performer);
 
   const handleApplyTaskTemplate = useCallback((template, overrideStageId) => {
     let targetStageId = overrideStageId || activeStageId;
@@ -280,7 +274,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
   }));
 
   const rightPanel = (
-    <RightPanel project={project} view={view} setView={changeView} dispatch={dispatch}
+    <RightPanel project={project} dispatch={dispatch}
       activeStageId={activeStageId} activeTaskId={activeTaskId} activeExecutorId={activeExecutorId} />
   );
 
@@ -306,15 +300,14 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
 
           <div className="kb-spacer" />
 
-          <div className={"kb-total-badge" + (view === "external" ? " kb-total-badge-price" : "")}>
-            <span className="kb-total-label">{view === "external" ? "ИТОГО" : "Итого себестоимость"}</span>
-            <span className="kb-total-figure">{fmt(view === "external" ? totalPrice : total)} ₽</span>
+          <div className="kb-total-badge">
+            <span className="kb-total-label">Итого</span>
+            <span className="kb-total-figure">{fmt(total)} ₽</span>
           </div>
         </div>
       </header>
 
-      {view === "internal" ? (
-        <div className="kb-layout">
+      <div className="kb-layout">
           <PalettePanel
             activeExecutorId={activeExecutorId}
             activeExecutorTags={activeExecutorTags}
@@ -323,13 +316,13 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
             onAddStage={addStageByClick}
             onAddTask={addTaskByClick}
             onAddExecutor={addExecutorByClick}
-            performerTemplates={performerTemplates}
+            quickAccessItems={visibleQuickAccess} onCreatePerformer={openNewPerformer}
+            onApplyQuickAccess={applyQuickAccess} onToggleQuickAccessPin={toggleQuickAccessPin}
+            onRemoveQuickAccess={(item) => commitQuickAccess(removeQuickAccessItem(quickAccess, item.id))}
             taskTemplates={taskTemplates}
             stageTemplates={stageTemplates}
-            onApplyPerformerTemplate={handleApplyPerformerTemplate}
             onApplyTaskTemplate={handleApplyTaskTemplate}
             onApplyStageTemplate={handleApplyStageTemplate}
-            onRemovePerformerTemplate={handleRemovePerformerTemplate}
             onRemoveTaskTemplate={handleRemoveTaskTemplate}
             onRemoveStageTemplate={handleRemoveStageTemplate}
           />
@@ -371,13 +364,12 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
                       onRemove={() => removeStage(s.id)}
                       onSaveStageTemplate={handleSaveStageTemplate}
                       onSaveTaskTemplate={handleSaveTaskTemplate}
-                      onSavePerformerTemplate={handleSavePerformerTemplate}
+                      onSaveExecutorToPerformer={handleSaveExecutorToPerformer}
                       stageTemplates={stageTemplates}
                       onApplyStageTemplate={handleApplyStageTemplate}
                       taskTemplates={taskTemplates}
                       onApplyTaskTemplate={handleApplyTaskTemplate}
-                      performerTemplates={performerTemplates}
-                      onApplyPerformerTemplate={handleApplyPerformerTemplate} />
+                      quickAccessItems={visibleQuickAccess.map((entry) => entry.item)} onApplyQuickAccess={applyQuickAccess} />
                   ))}
                   <CanvasDropZone isEmpty={false}
                     onDropStage={(payload) => {
@@ -394,169 +386,9 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false }
             </div>
           </main>
           {rightPanel}
-        </div>
-      ) : (
-        <div className="kb-layout">
-          {/* п.4: палитра остаётся видна и во внешнем виде (задел на будущее) */}
-          <PalettePanel
-            activeExecutorId={activeExecutorId}
-            activeExecutorTags={activeExecutorTags}
-            activeTaskId={activeTaskId}
-            onAddTagToActive={addTagToActive}
-            onAddStage={addStageByClick}
-            onAddTask={addTaskByClick}
-            onAddExecutor={addExecutorByClick}
-            performerTemplates={performerTemplates}
-            taskTemplates={taskTemplates}
-            stageTemplates={stageTemplates}
-            onApplyPerformerTemplate={handleApplyPerformerTemplate}
-            onApplyTaskTemplate={handleApplyTaskTemplate}
-            onApplyStageTemplate={handleApplyStageTemplate}
-            onRemovePerformerTemplate={handleRemovePerformerTemplate}
-            onRemoveTaskTemplate={handleRemoveTaskTemplate}
-            onRemoveStageTemplate={handleRemoveStageTemplate}
-          />
-          <ExternalView project={project} globalMarkup={globalMarkup}
-            activeStageId={activeStageId} onActivateStage={activateStage} onClear={clearSelection}
-            onSetTaskOverride={setTaskMarkupOverride} />
-          {rightPanel}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ============================================================
-   Внешний (клиентский) вид: только Этапы → Задачи → цены.
-   Исполнители/теги/себестоимость скрыты. Один источник данных.
-   ============================================================ */
-function ExternalTaskRow({ project, task, stageId, globalMarkup, mode, onSetOverride }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useOutsideClose(ref, () => setOpen(false));
-
-  const base = taskSum(task);
-  const overridden = task.markupOverride !== null && task.markupOverride !== undefined;
-  const effectiveMarkup = taskMarkup(task, globalMarkup);
-  // В режиме «Отдельная строка» (Cost-Plus) строки показывают чистую себестоимость,
-  // маркап вынесен вниз одной строкой. В «Размазать» — цена с зашитым маркапом.
-  const price = externalTaskPrice(task, globalMarkup, mode);
-  const displayPrice = externalTaskPriceWithCharges(project, task);
-
-  const onPercentInput = (val) => {
-    onSetOverride(stageId, task.id, val === "" ? null : numVal(val));
-  };
-  const onSumInput = (val) => {
-    if (base === 0) return; // деление на ноль — override не задаём
-    if (val === "") { onSetOverride(stageId, task.id, null); return; }
-    const pct = Math.round((numVal(val) / base - 1) * 100 * 100) / 100; // до 2 знаков
-    onSetOverride(stageId, task.id, pct);
-  };
-  const resetOverride = () => { onSetOverride(stageId, task.id, null); setOpen(false); };
-
-  return (
-    <div className="kb-ext-task">
-      <span className="kb-ext-task-name">{task.name || "Без названия"}</span>
-
-      {/* п.7: правка маркапа по задачам доступна только в классическом режиме */}
-      {mode !== "transparent" && overridden && <span className="kb-ext-dot" title="Ручной маркап на задаче" />}
-
-      {mode !== "transparent" && (
-        <button type="button" className="kb-ext-editbtn" title="Настроить маркап задачи"
-          onClick={() => setOpen((o) => !o)}>
-          <Percent size={13} strokeWidth={1.5} />
-        </button>
-      )}
-
-      <span className="kb-ext-price">{fmt(displayPrice)} ₽</span>
-
-      {mode !== "transparent" && open && (
-        <div className="kb-ext-pop" ref={ref}>
-          <div className="kb-ext-pop-row">
-            <span className="kb-ext-pop-lbl">Маркап, %</span>
-            <input className="kb-input kb-input-num kb-ext-pop-input" value={overridden ? task.markupOverride : ""}
-              placeholder={String(globalMarkup)}
-              onChange={(e) => onPercentInput(e.target.value)} />
-          </div>
-          <div className="kb-ext-pop-row">
-            <span className="kb-ext-pop-lbl">Сумма, ₽</span>
-            <input className="kb-input kb-input-num kb-ext-pop-input"
-              value={base === 0 ? "" : Math.round(price)}
-              placeholder={base === 0 ? "—" : "0"}
-              disabled={base === 0}
-              onChange={(e) => onSumInput(e.target.value)} />
-          </div>
-          <div className="kb-ext-pop-foot">
-            <span className="kb-ext-pop-hint">
-              {overridden ? "Ручной: " + fmt(effectiveMarkup) + "%" : "Глобальный: " + fmt(globalMarkup) + "%"}
-            </span>
-            <button type="button" className="kb-ext-reset" onClick={resetOverride} disabled={!overridden}>
-              Сбросить
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ExternalView({ project, globalMarkup, activeStageId, onActivateStage, onClear, onSetTaskOverride }) {
-  const mode = getMarkupMode(project);
-  const markupAmount = projectMarkupAmount(project);
-  return (
-    <main className="kb-canvas" onMouseDown={onClear}>
-      <div className="kb-canvas-ext">
-        {project.stages.length === 0 && (
-          <div className="kb-ext-empty">В проекте пока нет этапов. Переключитесь на внутренний вид, чтобы собрать смету.</div>
-        )}
-        {project.stages.map((s) => (
-          <div key={s.id} className={"kb-ext-stage" + (activeStageId === s.id ? " kb-ext-stage-active" : "")}>
-            <div className="kb-ext-stage-head kb-ext-stage-head-sel"
-              onMouseDown={(e) => { e.stopPropagation(); onActivateStage(s.id); }}
-              title="Показать сводку по этапу">
-              <span className="kb-ext-stage-name">{s.name || "Без названия"}</span>
-              <span className="kb-sum kb-sum-stage">{fmt(externalStagePriceWithCharges(project, s))} ₽</span>
-            </div>
-            {s.tasks.length > 0 && (
-              <div className="kb-ext-stage-body">
-                {s.tasks.map((t) => (
-                  <ExternalTaskRow key={t.id} project={project} task={t} stageId={s.id}
-                    globalMarkup={globalMarkup} mode={mode} onSetOverride={onSetTaskOverride} />
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-
-        {/* Cost-Plus: прозрачная строка комиссии внизу */}
-        {mode === "transparent" && markupAmount > 0 && (
-          <div className="kb-ext-stage kb-ext-commission">
-            <div className="kb-ext-stage-head">
-              <span className="kb-ext-stage-name">Агентская комиссия / Маркап ({fmt(projectEffectiveMarkupPct(project))}%)</span>
-              <span className="kb-sum kb-sum-stage">{fmt(markupAmount)} ₽</span>
-            </div>
-          </div>
-        )}
-
-        {/* п.6: налог поверх — прибавляется после маркапа */}
-        {projectTaxPct(project) > 0 && chargeIsVisible(project.tax) && (
-          <div className="kb-ext-stage kb-ext-commission">
-            <div className="kb-ext-stage-head">
-              <span className="kb-ext-stage-name">Налог {projectTaxSystemLabel(project)} ({fmt(projectTaxPct(project))}%)</span>
-              <span className="kb-sum kb-sum-stage">{fmt(projectTaxAmount(project))} ₽</span>
-            </div>
-          </div>
-        )}
-
-        {projectVatPct(project) > 0 && (
-          <div className="kb-ext-stage kb-ext-commission">
-            <div className="kb-ext-stage-head">
-              <span className="kb-ext-stage-name">НДС ({fmt(projectVatPct(project))}%)</span>
-              <span className="kb-sum kb-sum-stage">{fmt(projectVatAmount(project))} ₽</span>
-            </div>
-          </div>
-        )}
+          {performerModal && <PerformerModal initial={performerModal.draft} isNew={!performerModal.existingId} initialAddToQuickAccess={performerModal.addToQuickAccess} onSave={savePerformerCard} onClose={() => setPerformerModal(null)} />}
       </div>
-    </main>
+    </div>
   );
 }
+

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Plus, X, Box, FileText, Bookmark, Star, MoreHorizontal, Pencil, Trash2, UploadCloud } from "lucide-react";
 import { fmt } from "../utils.js";
 import { projectSum } from "../calculations.js";
-import { Logo } from "../Logo.jsx";
+import { AppTopNavigation } from "./AppTopNavigation.jsx";
 import { saveProjectTemplate, loadTemplates, TEMPLATE_KEYS } from "../templates.js";
 import LeftPanel, { loadDashboardCategories } from "./LeftPanel.jsx";
 
@@ -122,7 +122,7 @@ function NewProjectCard({ onCreate }) {
   </div>;
 }
 
-export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, onDelete, projectTemplates, onTemplatesChange, onEditTemplate, onToggleFavorite, onRenameProject }) {
+export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, onDelete, projectTemplates, onTemplatesChange, onEditTemplate, onToggleFavorite, onRenameProject, onSectionChange }) {
   const [activeNav, setActiveNav] = useState("all");
   const [categories, setCategories] = useState(loadDashboardCategories);
   const [toast, setToast] = useState("");
@@ -171,7 +171,7 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, on
   const visibleTemplates = activeCategory ? templates.filter((template) => template.folderId === activeCategory.id) : [];
 
   return <div className="kb-root">
-    <header className="kb-header kb-header-dash"><div className="kb-header-inner"><Logo size={21} /><div className="kb-brand"><span className="kb-brand-name">Kubiki</span><span className="kb-brand-sub">умная смета для продакшена и агентств</span></div></div></header>
+    <AppTopNavigation activeSection="projects" onSectionChange={onSectionChange} />
     <div className="kb-dashboard-layout">
       <LeftPanel activeNav={activeNav} onNavChange={setActiveNav} categories={categories} onCategoriesChange={setCategories}
         templates={templates} onMoveTemplate={moveTemplate} onDeleteCategory={deleteCategory}
