@@ -49,6 +49,8 @@ export const CSS = `
 .kb-app-nav button{position:relative;border:0;background:transparent;padding:2px 0 0;color:var(--text-muted);font:inherit;font-size:var(--fs-base);cursor:pointer}
 .kb-app-nav button:hover,.kb-app-nav button.is-active{color:var(--text)}
 .kb-app-nav button.is-active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px 2px 0 0;background:var(--accent)}
+.kb-sign-out{border:1px solid var(--line);background:transparent;color:var(--text-muted);font-size:var(--fs-sm);font-weight:var(--fw-medium);padding:6px 11px;border-radius:6px;cursor:pointer;transition:.15s}
+.kb-sign-out:hover{color:var(--text);background:var(--accent-soft);border-color:var(--accent)}
 /* п.2: содержимое шапки рабочей зоны выровнено по той же ширине/центру,
    что и .kb-layout ниже — лого и «ИТОГО» оказываются точно над панелями */
 .kb-header-inner{display:flex; align-items:center; gap:12px; width:100%; max-width:var(--layout-max); margin:0 auto}
@@ -63,6 +65,16 @@ export const CSS = `
 .kb-btn-secondary{border:1px solid var(--line); background:transparent; color:var(--text);
   font-size:var(--fs-base); font-weight:var(--fw-medium); padding:7px 13px; border-radius:6px; cursor:pointer; transition:.15s}
 .kb-btn-secondary:hover{background:var(--accent-soft); border-color:var(--accent)}
+.kb-auth-screen{min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg);font-family:'Geist','Inter',system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--text)}
+.kb-auth-loading{font-size:var(--fs-base);color:var(--text-muted)}
+.kb-auth-card{width:100%;max-width:360px;display:flex;flex-direction:column;gap:18px;padding:30px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(26,34,48,.06)}
+.kb-auth-heading{font-size:var(--fs-xl);font-weight:var(--fw-semibold);letter-spacing:-.02em}
+.kb-auth-field{display:flex;flex-direction:column;gap:7px;color:var(--text-muted);font-size:var(--fs-sm);font-weight:var(--fw-medium)}
+.kb-auth-field .kb-input{width:100%;font-size:var(--fs-base);color:var(--text)}
+.kb-auth-error{margin-top:-4px;color:#B42318;font-size:var(--fs-sm)}
+.kb-auth-submit{border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:var(--fs-base);font-weight:var(--fw-medium);padding:9px 14px;border-radius:6px;cursor:pointer;transition:.15s}
+.kb-auth-submit:hover:not(:disabled){filter:brightness(.96)}
+.kb-auth-submit:disabled{cursor:default;opacity:.65}
 .kb-total-badge{display:flex; flex-direction:column; align-items:flex-end; gap:2px; line-height:1.2;
   padding:7px 16px; border-radius:9px; background:var(--accent-soft)}
 .kb-total-badge-price{background:var(--accent); }

@@ -122,7 +122,7 @@ function NewProjectCard({ onCreate }) {
   </div>;
 }
 
-export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, onDelete, projectTemplates, onTemplatesChange, onEditTemplate, onToggleFavorite, onRenameProject, onSectionChange }) {
+export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, onDelete, projectTemplates, onTemplatesChange, onEditTemplate, onToggleFavorite, onRenameProject, onSectionChange, onSignOut }) {
   const [activeNav, setActiveNav] = useState("all");
   const [categories, setCategories] = useState(loadDashboardCategories);
   const [toast, setToast] = useState("");
@@ -171,7 +171,7 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, on
   const visibleTemplates = activeCategory ? templates.filter((template) => template.folderId === activeCategory.id) : [];
 
   return <div className="kb-root">
-    <AppTopNavigation activeSection="projects" onSectionChange={onSectionChange} />
+    <AppTopNavigation activeSection="projects" onSectionChange={onSectionChange} onSignOut={onSignOut} />
     <div className="kb-dashboard-layout">
       <LeftPanel activeNav={activeNav} onNavChange={setActiveNav} categories={categories} onCategoriesChange={setCategories}
         templates={templates} onMoveTemplate={moveTemplate} onDeleteCategory={deleteCategory}

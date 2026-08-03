@@ -1,7 +1,7 @@
 import { Logo } from "../Logo.jsx";
 import { APP_SECTIONS, isAppSectionActive } from "../appNavigation.js";
 
-export function AppTopNavigation({ activeSection, onSectionChange }) {
+export function AppTopNavigation({ activeSection, onSectionChange, onSignOut }) {
   return <header className="kb-header kb-app-header">
     <div className="kb-header-inner">
       <div className="kb-app-brand"><Logo size={21} /><span className="kb-brand-name">Kubiki</span></div>
@@ -13,7 +13,8 @@ export function AppTopNavigation({ activeSection, onSectionChange }) {
           aria-current={isAppSectionActive(activeSection, APP_SECTIONS.KNOWLEDGE_BASE) ? "page" : undefined}
           onClick={() => onSectionChange(APP_SECTIONS.KNOWLEDGE_BASE)}>База знаний</button>
       </nav>
+      <div className="kb-spacer" />
+      <button type="button" className="kb-sign-out" onClick={onSignOut}>Выйти</button>
     </div>
   </header>;
 }
-

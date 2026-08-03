@@ -26,7 +26,7 @@ export function PerformerLibraryItem({ performer, inQuickAccess, onEdit, onToggl
   </article>;
 }
 
-export function KnowledgeBasePage({ performers, quickAccess, onSectionChange, onSavePerformer, onToggleQuickAccess, onDeletePerformer }) {
+export function KnowledgeBasePage({ performers, quickAccess, onSectionChange, onSavePerformer, onToggleQuickAccess, onDeletePerformer, onSignOut }) {
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState(null);
   const visible = useMemo(() => searchPerformers(performers, query), [performers, query]);
@@ -37,7 +37,7 @@ export function KnowledgeBasePage({ performers, quickAccess, onSectionChange, on
     if (window.confirm("Удалить карточку исполнителя из базы? Исполнители, уже добавленные в сметы, останутся в проектах.")) onDeletePerformer(id);
   };
   return <div className="kb-root">
-    <AppTopNavigation activeSection="knowledgeBase" onSectionChange={onSectionChange} />
+    <AppTopNavigation activeSection="knowledgeBase" onSectionChange={onSectionChange} onSignOut={onSignOut} />
     <main className="kb-knowledge-page">
       <div className="kb-knowledge-eyebrow">База знаний</div><h1>Исполнители</h1>
       {performers.length ? <>
@@ -53,4 +53,3 @@ export function KnowledgeBasePage({ performers, quickAccess, onSectionChange, on
       onSave={(draft, addToQuickAccess) => { onSavePerformer(draft, addToQuickAccess, editing.performer?.id || null); setEditing(null); }} onClose={() => setEditing(null)} />}
   </div>;
 }
-

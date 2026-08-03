@@ -24,7 +24,7 @@ import {
 /* ============================================================
    Рабочая зона
    ============================================================ */
-export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onPerformersChange, quickAccess, onQuickAccessChange }) {
+export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onPerformersChange, quickAccess, onQuickAccessChange, onSignOut }) {
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
   // в Клайне можно persist'ить в localStorage.
   const [importFile, setImportFile] = useState(null);
@@ -190,7 +190,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
     }));
   };
 
-  const isEmpty = project.stages.length === 0;
+  const isEmpty = (project?.stages || []).length === 0;
   // п.4: смена вида снимает любое выделение (и в панели «Свойства»).
   /* ---- шаблоны (localStorage) ---- */
   const [taskTemplates, setTaskTemplates] = useState(() => loadTemplates(TEMPLATE_KEYS.tasks));
@@ -254,24 +254,61 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
     activateTask(targetStageId, clone.id);
   }, [activeStageId, project]);
 
-  const handleApplyStageTemplate = useCallback((template) => {
-    const clone = cloneStageTemplate(template);
-    dispatch((p) => ({ ...p, stages: [...p.stages, clone] }));
-    activateStage(clone.id);
-  }, []);
+ const handleApplyStageTemplate = useCallback((template) => {
+  const clone = cloneStageTemplate(template);
 
-  const allCollapsed = project.stages.length > 0 && project.stages.every((stage) =>
-    stage.collapsed && stage.tasks.every((task) => task.collapsed)
-  );
-
-  const toggleAllCollapsed = () => dispatch((current) => ({
-    ...current,
-    stages: current.stages.map((stage) => ({
-      ...stage,
-      collapsed: !allCollapsed,
-      tasks: stage.tasks.map((task) => ({ ...task, collapsed: !allCollapsed })),
-    })),
+  dispatch((projectState) => ({
+    ...projectState,
+    stages: [
+      ...(Array.isArray(projectState?.stages) ? projectState.stages : []),
+      clone,
+    ],
   }));
+
+  activateStage(clone.id);
+}, []);
+
+const safeStages = Array.isArray(project?.stages)
+  ? project.stages
+  : [];
+
+const allCollapsed =
+  safeStages.length > 0 &&
+  safeStages.every((stage) => {
+    const safeTasks = Array.isArray(stage?.tasks)
+      ? stage.tasks
+      : [];
+
+    return (
+      stage?.collapsed &&
+      safeTasks.every((task) => task?.collapsed)
+    );
+  });
+
+const toggleAllCollapsed = () =>
+  dispatch((current) => {
+    const currentStages = Array.isArray(current?.stages)
+      ? current.stages
+      : [];
+
+    return {
+      ...current,
+      stages: currentStages.map((stage) => {
+        const stageTasks = Array.isArray(stage?.tasks)
+          ? stage.tasks
+          : [];
+
+        return {
+          ...stage,
+          collapsed: !allCollapsed,
+          tasks: stageTasks.map((task) => ({
+            ...task,
+            collapsed: !allCollapsed,
+          })),
+        };
+      }),
+    };
+  });
 
   const rightPanel = (
     <RightPanel project={project} dispatch={dispatch}
@@ -299,6 +336,8 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
           </nav>
 
           <div className="kb-spacer" />
+
+          <button type="button" className="kb-sign-out" onClick={onSignOut}>Выйти</button>
 
           <div className="kb-total-badge">
             <span className="kb-total-label">Итого</span>

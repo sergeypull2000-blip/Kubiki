@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { makeProject } from "./store.js";
-import { useGeistFont } from "./hooks.js";
+import { makeProject, normalizeProject } from "./store.js";
 import { Dashboard } from "./components/Dashboard.jsx";
 import { Workspace } from "./components/Workspace.jsx";
 import { KnowledgeBasePage } from "./components/KnowledgeBasePage.jsx";
-import { CSS } from "./styles.js";
 import { TEMPLATE_KEYS, saveTemplates, cloneProjectTemplate, migrateProjectTemplates } from "./templates.js";
 import { ImportModal, GenerateEstimateModal } from "./importExcel.jsx";
 import { APP_SECTIONS } from "./appNavigation.js";
@@ -50,8 +48,7 @@ function loadStoredState() {
      components/            — Left/Right панели, Рабочая зона, Этап/Задача/Исполнитель
    ============================================================ */
 
-export default function KubikiApp() {
-  useGeistFont();
+export default function KubikiApp({ onSignOut }) {
   const [projects, setProjects] = useState(() => loadStoredState()?.projects || []);
   const [currentId, setCurrentId] = useState(() => loadStoredState()?.currentId || null);
   const [editingTemplateId, setEditingTemplateId] = useState(null);
@@ -59,7 +56,8 @@ export default function KubikiApp() {
   const [activeSection, setActiveSection] = useState(APP_SECTIONS.PROJECTS);
   const [performers, setPerformers] = useState(loadPerformerLibrary);
   const [quickAccess, setQuickAccess] = useState(() => migrateLegacyQuickAccess(loadQuickAccessState()));
-  const currentProject = projects.find((p) => p.id === currentId) || null;
+  const storedCurrentProject = projects.find((p) => p.id === currentId) || null;
+  const currentProject = storedCurrentProject ? normalizeProject(storedCurrentProject) : null;
 
   // шаблоны проектов — управляемое состояние (нужно для DnD папок)
   const [projectTemplates, setProjectTemplates] = useState(() =>
@@ -82,7 +80,7 @@ export default function KubikiApp() {
   }, []);
 
   const createProject = (template) => {
-    const p = template ? cloneProjectTemplate(template) : makeProject();
+    const p = normalizeProject(template ? cloneProjectTemplate(template) : makeProject());
     p.createdAt = new Date().toISOString();
     setProjects((prev) => [...prev, p]);
     setCurrentId(p.id);
@@ -93,7 +91,7 @@ export default function KubikiApp() {
     project.stages = stages;
     if (meta && Number.isFinite(meta.globalMarkup)) project.globalMarkup = meta.globalMarkup;
     if (meta?.projectName) project.name = meta.projectName;
-    setProjects((previous) => [...previous, project]);
+    setProjects((previous) => [...previous, normalizeProject(project)]);
     setProjectSource(null);
     setCurrentId(project.id);
   };
@@ -101,7 +99,9 @@ export default function KubikiApp() {
   const toggleFavorite = (id) => setProjects((prev) => prev.map((p) => p.id === id ? { ...p, favorite: !p.favorite } : p));
   const renameProject = (id, name) => setProjects((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
   const updateCurrent = (updater) =>
-    setProjects((prev) => prev.map((p) => (p.id === currentId ? updater(p) : p)));
+    setProjects((prev) => prev.map((p) => (p.id === currentId
+      ? normalizeProject(updater(normalizeProject(p)))
+      : p)));
   const savePerformer = (draft, addToQuickAccess, existingId = null) => {
     const next = existingId ? updatePerformer(performers, existingId, draft) : createPerformer(performers, draft);
     const saved = existingId ? next.find((item) => item.id === existingId) : next[next.length - 1];
@@ -120,34 +120,37 @@ export default function KubikiApp() {
 
   return (
     <>
-      <style>{CSS}</style>
       {projectSource?.file && <ImportModal file={projectSource.file} instruction={projectSource.description || ""}
         onClose={() => setProjectSource(null)} onConfirm={createProjectFromEstimate} />}
       {projectSource && !projectSource.file && <GenerateEstimateModal description={projectSource.description}
         onClose={() => setProjectSource(null)} onConfirm={createProjectFromEstimate} />}
       {editingTemplateId ? (
         <Workspace
-          project={projectTemplates.find((template) => template.id === editingTemplateId)}
-          onChange={(updater) => handleTemplatesChange(projectTemplates.map((template) => template.id === editingTemplateId ? updater(template) : template))}
+          project={normalizeProject(projectTemplates.find((template) => template.id === editingTemplateId))}
+          onChange={(updater) => handleTemplatesChange(projectTemplates.map((template) => template.id === editingTemplateId
+            ? normalizeProject(updater(normalizeProject(template)))
+            : template))}
           onBack={() => setEditingTemplateId(null)}
           editingTemplate
           performers={performers} onPerformersChange={setPerformers}
           quickAccess={quickAccess} onQuickAccessChange={setQuickAccess}
+          onSignOut={onSignOut}
         />
       ) : currentProject ? (
         <Workspace project={currentProject} onChange={updateCurrent} onBack={() => setCurrentId(null)}
           performers={performers} onPerformersChange={setPerformers}
-          quickAccess={quickAccess} onQuickAccessChange={setQuickAccess} />
+          quickAccess={quickAccess} onQuickAccessChange={setQuickAccess} onSignOut={onSignOut} />
       ) : activeSection === APP_SECTIONS.KNOWLEDGE_BASE ? (
         <KnowledgeBasePage performers={performers} quickAccess={quickAccess} onSectionChange={setActiveSection}
-          onSavePerformer={savePerformer} onToggleQuickAccess={togglePerformerQuickAccess} onDeletePerformer={deletePerformerCard} />
+          onSavePerformer={savePerformer} onToggleQuickAccess={togglePerformerQuickAccess} onDeletePerformer={deletePerformerCard}
+          onSignOut={onSignOut} />
       ) : (
         <Dashboard projects={projects} onOpen={setCurrentId} onCreate={createProject} onDelete={deleteProject}
           onImport={(file, description) => setProjectSource({ file, description })}
           onGenerate={(description, file) => setProjectSource({ file, description })}
           projectTemplates={projectTemplates}
           onTemplatesChange={handleTemplatesChange} onEditTemplate={setEditingTemplateId}
-          onToggleFavorite={toggleFavorite} onRenameProject={renameProject} onSectionChange={setActiveSection} />
+          onToggleFavorite={toggleFavorite} onRenameProject={renameProject} onSectionChange={setActiveSection} onSignOut={onSignOut} />
       )}
     </>
   );
