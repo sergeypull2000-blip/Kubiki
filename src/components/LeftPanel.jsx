@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, ChevronDown, ChevronRight, FileText, Pencil, Pin, Plus, Trash2, UserRound, X } from "lucide-react";
 import { DND_TYPES, useDragSource } from "../store.js";
 import { fmt, uid } from "../utils.js";
@@ -63,25 +63,22 @@ export function loadDashboardCategories() {
   } catch { return DEFAULT_CATEGORIES; }
 }
 
-function saveCategories(categories) {
-  try { localStorage.setItem(FOLDERS_KEY, JSON.stringify(categories.filter((category) => !category.system))); } catch { /* unavailable */ }
-}
-
-export default function LeftPanel({ activeNav, onNavChange, categories = [], onCategoriesChange, templates = [], onMoveTemplate, onDeleteCategory, onRenameTemplate, onDeleteTemplate }) {
+export default function LeftPanel({ activeNav, onNavChange, categories = [], onCategoriesChange, openCategoryIds = ["new"], onOpenCategoryIdsChange, templates = [], onMoveTemplate, onDeleteCategory, onRenameTemplate, onDeleteTemplate }) {
   const [addingFolder, setAddingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
-  const [openFolders, setOpenFolders] = useState(() => new Set(["new"]));
+  const [openFolders, setOpenFolders] = useState(() => new Set(openCategoryIds));
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState("");
 
-  const updateCategories = (next) => { onCategoriesChange(next); saveCategories(next); };
+  useEffect(() => setOpenFolders(new Set(openCategoryIds)), [openCategoryIds]);
+  const updateCategories = (next) => onCategoriesChange(next);
   const addFolder = () => {
     if (!newFolderName.trim()) return;
     updateCategories([...categories, { id: uid(), name: newFolderName.trim(), order: Date.now() }]);
     setNewFolderName(""); setAddingFolder(false);
   };
   const toggleFolder = (id) => setOpenFolders((previous) => {
-    const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next;
+    const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); onOpenCategoryIdsChange?.([...next]); return next;
   });
   const renameFolder = (id) => {
     if (!editingName.trim()) return;
@@ -97,11 +94,11 @@ export default function LeftPanel({ activeNav, onNavChange, categories = [], onC
     {categories.map((category) => {
       const open = openFolders.has(category.id);
       const folderTemplates = templates.filter((template) => template.folderId === category.id);
-      return <div className="kb-template-tree-folder" key={category.id} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }} onDrop={(event) => { event.preventDefault(); const id = event.dataTransfer.getData("application/x-kubiki-template"); if (id) { onMoveTemplate(id, category.id); setOpenFolders((old) => new Set(old).add(category.id)); } }}>
+      return <div className="kb-template-tree-folder" key={category.id} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }} onDrop={(event) => { event.preventDefault(); const id = event.dataTransfer.getData("application/x-kubiki-template"); if (id) { onMoveTemplate(id, category.id); const next = new Set(openFolders).add(category.id); setOpenFolders(next); onOpenCategoryIdsChange?.([...next]); } }}>
         <div className={`kb-dash-nav-folder-row${activeNav === `category:${category.id}` ? " kb-dash-nav-item-active" : ""}`}>
           <button type="button" className="kb-tree-toggle" onClick={() => toggleFolder(category.id)} title={open ? "Свернуть" : "Раскрыть"} aria-expanded={open}>{open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</button>
           {editingId === category.id ? <input className="kb-dash-nav-input" value={editingName} autoFocus onChange={(event) => setEditingName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") renameFolder(category.id); if (event.key === "Escape") setEditingId(null); }} /> : <button type="button" className="kb-dash-nav-item kb-tree-folder-btn" onClick={() => { onNavChange(`category:${category.id}`); setOpenFolders((old) => new Set(old).add(category.id)); }}><span>{category.name}</span></button>}
-          {!category.system && <div className="kb-dash-nav-folder-actions">{editingId === category.id ? <><button type="button" className="kb-icon-btn-small" onClick={() => renameFolder(category.id)}><Check size={13} /></button><button type="button" className="kb-icon-btn-small" onClick={() => setEditingId(null)}><X size={13} /></button></> : <><button type="button" className="kb-icon-btn-small" onClick={() => { setEditingId(category.id); setEditingName(category.name); }} title="Переименовать"><Pencil size={12} /></button><button type="button" className="kb-icon-btn-small" onClick={() => { const next = categories.filter((item) => item.id !== category.id); onDeleteCategory(category.id); saveCategories(next); }} title="Удалить"><Trash2 size={12} /></button></>}</div>}
+          {!category.system && <div className="kb-dash-nav-folder-actions">{editingId === category.id ? <><button type="button" className="kb-icon-btn-small" onClick={() => renameFolder(category.id)}><Check size={13} /></button><button type="button" className="kb-icon-btn-small" onClick={() => setEditingId(null)}><X size={13} /></button></> : <><button type="button" className="kb-icon-btn-small" onClick={() => { setEditingId(category.id); setEditingName(category.name); }} title="Переименовать"><Pencil size={12} /></button><button type="button" className="kb-icon-btn-small" onClick={() => onDeleteCategory(category.id)} title="Удалить"><Trash2 size={12} /></button></>}</div>}
         </div>
         {open && <div className="kb-template-tree-files">{folderTemplates.map((template) => <div key={template.id} className="kb-template-tree-file" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-kubiki-template", template.id); event.dataTransfer.effectAllowed = "move"; }} onClick={() => onNavChange(`category:${category.id}`)}><FileText size={13} /><span onDoubleClick={() => { const name = window.prompt("Название шаблона", template.templateName || template.name); if (name?.trim()) onRenameTemplate(template.id, name.trim()); }}>{template.templateName || template.name || "Без названия"}</span><div className="kb-template-tree-actions" onClick={(event) => event.stopPropagation()}><button type="button" className="kb-icon-btn-small" onClick={() => onDeleteTemplate(template.id)} title="Удалить шаблон"><Trash2 size={11} /></button></div></div>)}</div>}
       </div>;

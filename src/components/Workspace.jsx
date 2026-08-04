@@ -15,16 +15,12 @@ import { RightPanel } from "./RightPanel.jsx";
 import { PerformerModal } from "./PerformerLibrary.jsx";
 import { addPerformerToTask, buildPerformerFromExecutor, linkExecutorToPerformer, normalizePerformer } from "../performerLibrary.js";
 import { sortQuickAccessItems } from "../quickAccess.js";
-import {
-  TEMPLATE_KEYS, loadTemplates, removeTemplate,
-  saveTaskTemplate, saveStageTemplate,
-  cloneTaskTemplate, cloneStageTemplate,
-} from "../templates.js";
+import { createTaskTemplate, createStageTemplate, cloneTaskTemplate, cloneStageTemplate } from "../templates.js";
 
 /* ============================================================
    Рабочая зона
    ============================================================ */
-export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onSignOut, saveState = "saved", saveError = "", onRetrySave }) {
+export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onSignOut, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange }) {
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
   // в Клайне можно persist'ить в localStorage.
   const [importFile, setImportFile] = useState(null);
@@ -191,12 +187,6 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
   const isEmpty = (project?.stages || []).length === 0;
   // п.4: смена вида снимает любое выделение (и в панели «Свойства»).
   /* ---- шаблоны (localStorage) ---- */
-  const [taskTemplates, setTaskTemplates] = useState(() => loadTemplates(TEMPLATE_KEYS.tasks));
-  const [stageTemplates, setStageTemplates] = useState(() => loadTemplates(TEMPLATE_KEYS.stages));
-
-  const refreshTaskTemplates = () => setTaskTemplates(loadTemplates(TEMPLATE_KEYS.tasks));
-  const refreshStageTemplates = () => setStageTemplates(loadTemplates(TEMPLATE_KEYS.stages));
-
   // Уровень 1: сохранить исполнителя как шаблон
   const handleSaveExecutorToPerformer = useCallback((executor) => {
     const linked = executor.performerId && performers.find((item) => item.id === executor.performerId);
@@ -213,19 +203,17 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
 
   // Уровень 2: сохранить задачу как шаблон
   const handleSaveTaskTemplate = useCallback((task) => {
-    saveTaskTemplate(task);
-    refreshTaskTemplates();
-  }, []);
+    onTaskTemplatesChange?.([...taskTemplates, createTaskTemplate(task)]);
+  }, [onTaskTemplatesChange, taskTemplates]);
 
   // Уровень 3: сохранить этап как шаблон
   const handleSaveStageTemplate = useCallback((stage) => {
-    saveStageTemplate(stage);
-    refreshStageTemplates();
-  }, []);
+    onStageTemplatesChange?.([...stageTemplates, createStageTemplate(stage)]);
+  }, [onStageTemplatesChange, stageTemplates]);
 
   // удаление шаблонов
-  const handleRemoveTaskTemplate = (id) => { removeTemplate(TEMPLATE_KEYS.tasks, id); refreshTaskTemplates(); };
-  const handleRemoveStageTemplate = (id) => { removeTemplate(TEMPLATE_KEYS.stages, id); refreshStageTemplates(); };
+  const handleRemoveTaskTemplate = (id) => onTaskTemplatesChange?.(taskTemplates.filter((item) => item.id !== id));
+  const handleRemoveStageTemplate = (id) => onStageTemplatesChange?.(stageTemplates.filter((item) => item.id !== id));
 
   // применение шаблонов
   const applyQuickAccess = useCallback((item, stageId = activeStageId, taskId = activeTaskId) => {

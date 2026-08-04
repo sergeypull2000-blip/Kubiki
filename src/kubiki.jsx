@@ -3,7 +3,7 @@ import { makeProject, normalizeProject } from "./store.js";
 import { Dashboard } from "./components/Dashboard.jsx";
 import { Workspace } from "./components/Workspace.jsx";
 import { KnowledgeBasePage } from "./components/KnowledgeBasePage.jsx";
-import { TEMPLATE_KEYS, saveTemplates, cloneProjectTemplate, migrateProjectTemplates } from "./templates.js";
+import { cloneProjectTemplate } from "./templates.js";
 import { ImportModal, GenerateEstimateModal } from "./importExcel.jsx";
 import { APP_SECTIONS } from "./appNavigation.js";
 import { createPerformer, removePerformer, savePerformerLibrary, updatePerformer } from "./performerLibrary.js";
@@ -14,6 +14,8 @@ import { performerRepository } from "./repositories/performerRepository.js";
 import { createPerformerBackup, localPerformersForUser, markPerformerServerOwner, migrateLocalPerformers, missingLocalPerformers } from "./performerServer.js";
 import { quickAccessRepository } from "./repositories/quickAccessRepository.js";
 import { createQuickAccessBackup, localQuickAccessForUser, markQuickAccessServerOwner, migrateLocalQuickAccess, missingLocalQuickAccessItems } from "./quickAccessServer.js";
+import { templateLibraryRepository } from "./repositories/templateLibraryRepository.js";
+import { createTemplateLibraryBackup, hasMeaningfulTemplateLibrary, localTemplateLibraryForUser, markTemplateServerOwner, migrateLocalTemplateLibrary, normalizeTemplateLibrary, saveLocalTemplateLibrary, templateLibrariesEqual } from "./templateLibrary.js";
 
 /* ============================================================
    п.7.1: автосохранение в localStorage браузера — заменяет бэкенд
@@ -247,10 +249,16 @@ export default function KubikiApp({ userId, onSignOut }) {
     };
   }, [userId, retryVersion, replaceProjects]);
 
-  // шаблоны проектов — управляемое состояние (нужно для DnD папок)
-  const [projectTemplates, setProjectTemplates] = useState(() =>
-    migrateProjectTemplates()
-  );
+  const initialLocalTemplates = useRef(localTemplateLibraryForUser(userId));
+  const [templateLibrary, setTemplateLibrary] = useState(() => initialLocalTemplates.current);
+  const templateLibraryRef = useRef(templateLibrary);
+  const templateSyncEnabledRef = useRef(false);
+  const templateTimerRef = useRef(null);
+  const templatePendingRef = useRef(null);
+  const [templateState, setTemplateState] = useState("loading");
+  const [templateMessage, setTemplateMessage] = useState("");
+  const [templateRetry, setTemplateRetry] = useState(0);
+  const projectTemplates = templateLibrary.projectTemplates;
 
   useEffect(() => {
     try {
@@ -261,11 +269,69 @@ export default function KubikiApp({ userId, onSignOut }) {
   useEffect(() => { performersRef.current = performers; }, [performers]);
   useEffect(() => { quickAccessRef.current = quickAccess; }, [quickAccess]);
 
-  // синхронизация шаблонов в localStorage
-  const handleTemplatesChange = useCallback((updated) => {
-    setProjectTemplates(updated);
-    saveTemplates(TEMPLATE_KEYS.projects, updated);
-  }, []);
+  const saveTemplateLibraryNow = useCallback(async (library = templatePendingRef.current) => {
+    if (!templateSyncEnabledRef.current || !library) return false;
+    setTemplateState("saving");
+    try {
+      const saved = await templateLibraryRepository.upsertTemplateLibrary(userId, library);
+      if (templatePendingRef.current === library) {
+        templatePendingRef.current = null;
+        templateLibraryRef.current = saved; setTemplateLibrary(saved); saveLocalTemplateLibrary(saved);
+        setTemplateState("ready"); setTemplateMessage("");
+      } else {
+        setTemplateState("saving");
+      }
+      return true;
+    } catch (error) {
+      if (!templatePendingRef.current) templatePendingRef.current = library;
+      setTemplateState("save-error"); setTemplateMessage(`${error.message}. Локальная копия сохранена.`); return false;
+    }
+  }, [userId]);
+
+  const replaceTemplateLibrary = useCallback((next, { persist = true, schedule = true } = {}) => {
+    const value = normalizeTemplateLibrary(typeof next === "function" ? next(templateLibraryRef.current) : next);
+    templateLibraryRef.current = value; setTemplateLibrary(value);
+    if (persist) saveLocalTemplateLibrary(value);
+    if (schedule && templateSyncEnabledRef.current) {
+      templatePendingRef.current = value; setTemplateState("saving");
+      if (templateTimerRef.current) clearTimeout(templateTimerRef.current);
+      templateTimerRef.current = setTimeout(() => { templateTimerRef.current = null; saveTemplateLibraryNow(templatePendingRef.current); }, 650);
+    }
+    return value;
+  }, [saveTemplateLibraryNow]);
+
+  const flushTemplateLibrary = useCallback(async () => {
+    if (templateTimerRef.current) clearTimeout(templateTimerRef.current);
+    templateTimerRef.current = null;
+    return templatePendingRef.current ? saveTemplateLibraryNow(templatePendingRef.current) : true;
+  }, [saveTemplateLibraryNow]);
+
+  useEffect(() => {
+    let cancelled = false;
+    templateSyncEnabledRef.current = false; templatePendingRef.current = null;
+    if (templateTimerRef.current) clearTimeout(templateTimerRef.current);
+    templateTimerRef.current = null; setTemplateState("loading"); setTemplateMessage("");
+    const local = localTemplateLibraryForUser(userId);
+    templateLibraryRepository.loadTemplateLibrary(userId).then(({ exists, library: serverLibrary }) => {
+      if (cancelled) return;
+      createTemplateLibraryBackup();
+      if (!exists && hasMeaningfulTemplateLibrary(local)) { replaceTemplateLibrary(local, { schedule: false }); setTemplateState("migration-offer"); return; }
+      if (exists) {
+        if (hasMeaningfulTemplateLibrary(local) && !templateLibrariesEqual(local, serverLibrary)) setTemplateMessage("Локальная библиотека отличается от серверной и сохранена в резервной копии.");
+        replaceTemplateLibrary(serverLibrary, { schedule: false }); markTemplateServerOwner(userId); templateSyncEnabledRef.current = true; setTemplateState("ready");
+      } else {
+        replaceTemplateLibrary(serverLibrary, { schedule: false }); markTemplateServerOwner(userId); templateSyncEnabledRef.current = true; setTemplateState("ready");
+      }
+    }).catch((error) => {
+      if (cancelled) return;
+      replaceTemplateLibrary(local, { schedule: false }); setTemplateState("error"); setTemplateMessage(error.message || "Не удалось загрузить библиотеку шаблонов");
+    });
+    return () => { cancelled = true; templateSyncEnabledRef.current = false; if (templateTimerRef.current) clearTimeout(templateTimerRef.current); templateTimerRef.current = null; templatePendingRef.current = null; templateLibraryRef.current = normalizeTemplateLibrary(); };
+  }, [userId, templateRetry, replaceTemplateLibrary]);
+
+  const handleTemplatesChange = useCallback((updated) => replaceTemplateLibrary((library) => ({ ...library, projectTemplates: updated })), [replaceTemplateLibrary]);
+  const handleTaskTemplatesChange = useCallback((updated) => replaceTemplateLibrary((library) => ({ ...library, taskTemplates: updated })), [replaceTemplateLibrary]);
+  const handleStageTemplatesChange = useCallback((updated) => replaceTemplateLibrary((library) => ({ ...library, stageTemplates: updated })), [replaceTemplateLibrary]);
 
   const commitProject = useCallback((id, updater, delay = 800) => {
     const existing = projectsRef.current.find((project) => project.id === id);
@@ -337,14 +403,28 @@ export default function KubikiApp({ userId, onSignOut }) {
   };
 
   const handleSignOut = async () => {
-    await flushAll();
+    await Promise.all([flushAll(), flushTemplateLibrary()]);
     syncEnabledRef.current = false;
+    templateSyncEnabledRef.current = false;
+    if (templateTimerRef.current) clearTimeout(templateTimerRef.current);
+    templateTimerRef.current = null; templatePendingRef.current = null;
+    replaceTemplateLibrary(normalizeTemplateLibrary(), { persist: false, schedule: false });
     performerSyncEnabledRef.current = false;
     quickAccessSyncEnabledRef.current = false;
     quickAccessOperationVersionRef.current += 1;
     replacePerformers([], false);
     replaceQuickAccess({ items: [] }, false);
     await onSignOut();
+  };
+
+  const handleTemplateMigration = async () => {
+    setTemplateState("migrating"); setTemplateMessage("");
+    try {
+      await migrateLocalTemplateLibrary({ userId, library: templateLibraryRef.current, repository: templateLibraryRepository });
+      const { library } = await templateLibraryRepository.loadTemplateLibrary(userId);
+      replaceTemplateLibrary(library, { schedule: false }); markTemplateServerOwner(userId);
+      templateSyncEnabledRef.current = true; setTemplateState("ready"); setTemplateMessage("Библиотека шаблонов перенесена");
+    } catch (error) { templateSyncEnabledRef.current = false; setTemplateState("migration-offer"); setTemplateMessage(error.message); }
   };
 
   const addQuickAccessForPerformer = async (performerId) => {
@@ -458,6 +538,15 @@ export default function KubikiApp({ userId, onSignOut }) {
           </div>
         </div>
       </div>}
+      {(templateState === "migration-offer" || templateState === "migrating") && <div className="kb-modal-overlay kb-server-overlay">
+        <div className="kb-modal kb-server-card" role="dialog" aria-modal="true" aria-labelledby="template-migration-title">
+          <div className="kb-server-title" id="template-migration-title">Перенести библиотеку шаблонов</div>
+          <div className="kb-server-text">На этом устройстве найдены шаблоны и категории.<br />Перенести их в аккаунт, чтобы библиотека была доступна с других устройств?<br />Локальная резервная копия сохранится.</div>
+          {templateMessage && <div className="kb-server-error" role="alert">{templateMessage}</div>}
+          <div className="kb-modal-actions"><button className="kb-btn kb-btn-ghost" type="button" disabled={templateState === "migrating"} onClick={() => setTemplateState("local-deferred")}>Не сейчас</button><button className="kb-btn kb-btn-primary" type="button" disabled={templateState === "migrating"} onClick={handleTemplateMigration}>{templateState === "migrating" ? "Переносим…" : "Перенести"}</button></div>
+        </div>
+      </div>}
+      {["error", "save-error"].includes(templateState) && <div className="kb-toast" role="alert">{templateMessage}<button className="kb-toast-retry" type="button" onClick={() => templateState === "error" ? setTemplateRetry((value) => value + 1) : flushTemplateLibrary()}>Повторить</button></div>}
       {(performerState === "migration-offer" || performerState === "migrating") && <div className="kb-modal-overlay kb-server-overlay">
         <div className="kb-modal kb-server-card" role="dialog" aria-modal="true" aria-labelledby="performer-migration-title">
           <div className="kb-server-title" id="performer-migration-title">Перенести базу исполнителей</div>
@@ -488,17 +577,21 @@ export default function KubikiApp({ userId, onSignOut }) {
           onChange={(updater) => handleTemplatesChange(projectTemplates.map((template) => template.id === editingTemplateId
             ? normalizeProject(updater(normalizeProject(template)))
             : template))}
-          onBack={() => setEditingTemplateId(null)}
+          onBack={async () => { await flushTemplateLibrary(); setEditingTemplateId(null); }}
           editingTemplate
+          taskTemplates={templateLibrary.taskTemplates} stageTemplates={templateLibrary.stageTemplates}
+          onTaskTemplatesChange={handleTaskTemplatesChange} onStageTemplatesChange={handleStageTemplatesChange}
           performers={performers} onSavePerformer={savePerformer}
           quickAccess={quickAccess} onToggleQuickAccessPin={toggleQuickAccessPin} onRemoveQuickAccess={removeQuickAccessByItem}
           onSignOut={handleSignOut}
         />
       ) : currentProject ? (
-        <Workspace project={currentProject} onChange={updateCurrent} onBack={async () => { await flushProject(currentProject.id); setCurrentId(null); }}
+        <Workspace project={currentProject} onChange={updateCurrent} onBack={async () => { await Promise.all([flushProject(currentProject.id), flushTemplateLibrary()]); setCurrentId(null); }}
           saveState={saveState} saveError={serverMessage} onRetrySave={() => flushProject(currentProject.id)}
           performers={performers} onSavePerformer={savePerformer}
-          quickAccess={quickAccess} onToggleQuickAccessPin={toggleQuickAccessPin} onRemoveQuickAccess={removeQuickAccessByItem} onSignOut={handleSignOut} />
+          quickAccess={quickAccess} onToggleQuickAccessPin={toggleQuickAccessPin} onRemoveQuickAccess={removeQuickAccessByItem} onSignOut={handleSignOut}
+          taskTemplates={templateLibrary.taskTemplates} stageTemplates={templateLibrary.stageTemplates}
+          onTaskTemplatesChange={handleTaskTemplatesChange} onStageTemplatesChange={handleStageTemplatesChange} />
       ) : activeSection === APP_SECTIONS.KNOWLEDGE_BASE ? (
         <KnowledgeBasePage performers={performers} performerState={performerState} performerMessage={performerMessage} onRetryPerformers={() => setPerformerRetry((value) => value + 1)} quickAccess={quickAccess} onSectionChange={setActiveSection}
           onSavePerformer={savePerformer} onToggleQuickAccess={togglePerformerQuickAccess} onDeletePerformer={deletePerformerCard}
@@ -509,6 +602,8 @@ export default function KubikiApp({ userId, onSignOut }) {
           onGenerate={(description, file) => setProjectSource({ file, description })}
           projectTemplates={projectTemplates}
           onTemplatesChange={handleTemplatesChange} onEditTemplate={setEditingTemplateId}
+          categories={templateLibrary.categories} onCategoriesChange={(categories) => replaceTemplateLibrary((library) => ({ ...library, categories }))}
+          openCategoryIds={templateLibrary.metadata.openCategoryIds || ["new"]} onOpenCategoryIdsChange={(openCategoryIds) => replaceTemplateLibrary((library) => ({ ...library, metadata: { ...library.metadata, openCategoryIds } }))}
           onToggleFavorite={toggleFavorite} onRenameProject={renameProject} onSectionChange={setActiveSection} onSignOut={handleSignOut} />
       )}
     </>

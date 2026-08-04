@@ -3,8 +3,8 @@ import { Plus, X, Box, FileText, Bookmark, Star, MoreHorizontal, Pencil, Trash2,
 import { fmt } from "../utils.js";
 import { projectSum } from "../calculations.js";
 import { AppTopNavigation } from "./AppTopNavigation.jsx";
-import { saveProjectTemplate, loadTemplates, TEMPLATE_KEYS } from "../templates.js";
-import LeftPanel, { loadDashboardCategories } from "./LeftPanel.jsx";
+import { createProjectTemplate } from "../templates.js";
+import LeftPanel from "./LeftPanel.jsx";
 
 function isToday(dateStr) {
   if (!dateStr) return false;
@@ -122,9 +122,8 @@ function NewProjectCard({ onCreate }) {
   </div>;
 }
 
-export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, onDelete, projectTemplates, onTemplatesChange, onEditTemplate, onToggleFavorite, onRenameProject, onSectionChange, onSignOut }) {
+export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, onDelete, projectTemplates, onTemplatesChange, categories, onCategoriesChange, openCategoryIds, onOpenCategoryIdsChange, onEditTemplate, onToggleFavorite, onRenameProject, onSectionChange, onSignOut }) {
   const [activeNav, setActiveNav] = useState("all");
-  const [categories, setCategories] = useState(loadDashboardCategories);
   const [toast, setToast] = useState("");
   const [sourceModal, setSourceModal] = useState(null);
 
@@ -142,10 +141,11 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, on
   }, [categories, projectTemplates, onTemplatesChange]);
 
   const handleMakeTemplate = useCallback((project) => {
-    const result = saveProjectTemplate(project, project.name || "Шаблон сметы");
-    onTemplatesChange(loadTemplates(TEMPLATE_KEYS.projects));
-    setToast(result.created ? "Шаблон сохранён" : "Этот проект уже сохранён как шаблон");
-  }, [onTemplatesChange]);
+    const sourceProjectId = project.sourceProjectId || project.id;
+    if (projectTemplates.some((item) => item.sourceProjectId === sourceProjectId)) { setToast("Этот проект уже сохранён как шаблон"); return; }
+    onTemplatesChange([...projectTemplates, createProjectTemplate(project, project.name || "Шаблон сметы")]);
+    setToast("Шаблон сохранён");
+  }, [onTemplatesChange, projectTemplates]);
 
   const deleteTemplate = (id) => onTemplatesChange(projectTemplates.filter((template) => template.id !== id));
   const renameTemplate = (id, name) => onTemplatesChange(projectTemplates.map((template) => template.id === id ? { ...template, templateName: name, name } : template));
@@ -153,7 +153,7 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, on
   const deleteCategory = (id) => {
     onTemplatesChange(projectTemplates.map((template) => template.folderId === id ? { ...template, folderId: "new" } : template));
     const next = categories.filter((category) => category.id !== id);
-    setCategories(next);
+    onCategoriesChange(next);
     if (activeNav === `category:${id}`) setActiveNav("category:new");
   };
 
@@ -173,7 +173,8 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, on
   return <div className="kb-root">
     <AppTopNavigation activeSection="projects" onSectionChange={onSectionChange} onSignOut={onSignOut} />
     <div className="kb-dashboard-layout">
-      <LeftPanel activeNav={activeNav} onNavChange={setActiveNav} categories={categories} onCategoriesChange={setCategories}
+      <LeftPanel activeNav={activeNav} onNavChange={setActiveNav} categories={categories} onCategoriesChange={onCategoriesChange}
+        openCategoryIds={openCategoryIds} onOpenCategoryIdsChange={onOpenCategoryIdsChange}
         templates={templates} onMoveTemplate={moveTemplate} onDeleteCategory={deleteCategory}
         onRenameTemplate={renameTemplate} onDeleteTemplate={deleteTemplate} />
       <main className="kb-dashboard"><div className="kb-board">

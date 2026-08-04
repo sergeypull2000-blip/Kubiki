@@ -143,18 +143,37 @@ export function savePerformerTemplate(executor) {
 
 /** Сохранить задачу как шаблон (со всеми вложенными исполнителями). */
 export function saveTaskTemplate(task) {
+  const snapshot = createTaskTemplate(task);
+  return addTemplate(TEMPLATE_KEYS.tasks, snapshot);
+}
+
+export function createTaskTemplate(task) {
   const snapshot = JSON.parse(JSON.stringify(task));
   snapshot.sourceEntityId = task.sourceEntityId || task.id;
   snapshot.id = uid();
-  return addTemplate(TEMPLATE_KEYS.tasks, snapshot);
+  return snapshot;
 }
 
 /** Сохранить этап как шаблон (со всеми задачами и исполнителями). */
 export function saveStageTemplate(stage) {
+  const snapshot = createStageTemplate(stage);
+  return addTemplate(TEMPLATE_KEYS.stages, snapshot);
+}
+
+export function createStageTemplate(stage) {
   const snapshot = JSON.parse(JSON.stringify(stage));
   snapshot.sourceEntityId = stage.sourceEntityId || stage.id;
   snapshot.id = uid();
-  return addTemplate(TEMPLATE_KEYS.stages, snapshot);
+  return snapshot;
+}
+
+export function createProjectTemplate(project, name) {
+  const snapshot = JSON.parse(JSON.stringify(project));
+  snapshot.id = uid();
+  snapshot.sourceProjectId = project.sourceProjectId || project.id;
+  snapshot.templateName = name || snapshot.name || "Шаблон сметы";
+  snapshot.folderId = "new";
+  return snapshot;
 }
 
 /** Сохранить проект как шаблон. */
