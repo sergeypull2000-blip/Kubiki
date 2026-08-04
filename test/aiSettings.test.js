@@ -1,0 +1,80 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { AI_SETTINGS_KEY, AI_SETTINGS_OWNER_KEY, loadLocalAiSettings, normalizeAiSettings, sanitizePersonalization, saveLocalAiSettings } from "../src/aiSettings.js";
+import { createAiSettingsRepository } from "../src/repositories/aiSettingsRepository.js";
+import { loadOwnAiSettings, normalizeServerAiSettings } from "../api/_lib/aiSettings.js";
+
+const memoryStorage = (initial = {}) => { const values = new Map(Object.entries(initial)); return { values, getItem: (key) => values.has(key) ? values.get(key) : null, setItem: (key, value) => values.set(key, value) }; };
+
+test("AI settings are minimal and history is explicit opt-in", () => {
+  assert.deepEqual(normalizeAiSettings(), { personalization: "", useProjectHistory: false });
+  assert.deepEqual(normalizeAiSettings({ personalization: "  Делить на этапы ", use_project_history: true }), { personalization: "Делить на этапы", useProjectHistory: true });
+  assert.deepEqual(Object.keys(normalizeAiSettings({ universal: true, currency: "RUB" })), ["personalization", "useProjectHistory"]);
+});
+
+test("personalization removes financial, contact and secret-bearing lines", () => {
+  const result = sanitizePersonalization("Декомпозировать по этапам\nМаркап 25%\nПисать на studio@example.com\nAPI key: secret\nНе дробить микрозадачи");
+  assert.equal(result, "Декомпозировать по этапам\nНе дробить микрозадачи");
+  assert.equal(normalizeServerAiSettings({ personalization: result }).personalization, result);
+});
+
+test("local fallback is owner scoped and keeps opt-in", () => {
+  const storage = memoryStorage();
+  saveLocalAiSettings({ personalization: "Учитывать препродакшн", useProjectHistory: true }, "u1", storage);
+  assert.equal(storage.getItem(AI_SETTINGS_OWNER_KEY), "u1");
+  assert.equal(loadLocalAiSettings("u1", storage).useProjectHistory, true);
+  assert.deepEqual(loadLocalAiSettings("u2", storage), { personalization: "", useProjectHistory: false });
+  assert.ok(storage.getItem(AI_SETTINGS_KEY));
+});
+
+function repositoryClient(responseFactory) {
+  return { from(table) {
+    assert.equal(table, "ai_settings");
+    const state = { operation: "", payload: null, userId: "" };
+    const builder = {
+      select() { state.operation ||= "select"; return builder; },
+      eq(column, value) { assert.equal(column, "user_id"); state.userId = value; return builder; },
+      maybeSingle: async () => responseFactory(state),
+      upsert(payload, options) { state.operation = "upsert"; state.payload = payload; assert.deepEqual(options, { onConflict: "user_id" }); return builder; },
+      single: async () => responseFactory(state),
+    };
+    return builder;
+  } };
+}
+
+test("AI settings repository scopes load/upsert to user_id", async () => {
+  const calls = [];
+  const client = repositoryClient((state) => { calls.push(structuredClone(state)); return { data: { user_id: "u1", personalization: state.payload?.personalization || "Текст", use_project_history: state.payload?.use_project_history ?? false }, error: null }; });
+  const repository = createAiSettingsRepository(client);
+  assert.equal((await repository.loadAiSettings("u1")).settings.personalization, "Текст");
+  const saved = await repository.upsertAiSettings("u1", { personalization: "Правила", useProjectHistory: true });
+  assert.equal(saved.useProjectHistory, true);
+  assert.equal(calls[1].payload.user_id, "u1");
+});
+
+test("server settings loader rejects a foreign row", async () => {
+  const client = repositoryClient(() => ({ data: { user_id: "u2", personalization: "foreign", use_project_history: true }, error: null }));
+  await assert.rejects(() => loadOwnAiSettings(client, "u1"), /недоступны/);
+});
+
+test("ai_settings migration is one narrow table with complete owner RLS", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/20260804050000_create_ai_settings.sql", import.meta.url), "utf8");
+  assert.match(sql, /create table public\.ai_settings/);
+  assert.match(sql, /personalization text not null default ''/);
+  assert.match(sql, /use_project_history boolean not null default false/);
+  assert.doesNotMatch(sql, /jsonb|service_role/i);
+  for (const operation of ["select", "insert", "update", "delete"]) assert.match(sql, new RegExp(`for ${operation}`));
+  assert.match(sql, /using \(\(select auth\.uid\(\)\) = user_id\)/);
+  assert.match(sql, /with check \(\(select auth\.uid\(\)\) = user_id\)/);
+});
+
+test("Kubiki integrates owner-bound hydration, local fallback, save and logout cleanup", () => {
+  const source = readFileSync(new URL("../src/kubiki.jsx", import.meta.url), "utf8");
+  assert.match(source, /aiSettingsRepository\.loadAiSettings\(userId\)/);
+  assert.match(source, /replaceAiSettings\(local\)/);
+  assert.match(source, /aiSettingsRepository\.upsertAiSettings\(userId, value\)/);
+  assert.match(source, /aiSettingsSyncEnabledRef\.current = false/);
+  assert.match(source, /replaceAiSettings\(normalizeAiSettings\(\), false\)/);
+});
+

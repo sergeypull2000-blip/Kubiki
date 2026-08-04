@@ -16,6 +16,10 @@ import { quickAccessRepository } from "./repositories/quickAccessRepository.js";
 import { createQuickAccessBackup, localQuickAccessForUser, markQuickAccessServerOwner, migrateLocalQuickAccess, missingLocalQuickAccessItems } from "./quickAccessServer.js";
 import { templateLibraryRepository } from "./repositories/templateLibraryRepository.js";
 import { createTemplateLibraryBackup, hasMeaningfulTemplateLibrary, localTemplateLibraryForUser, markTemplateServerOwner, migrateLocalTemplateLibrary, normalizeTemplateLibrary, saveLocalTemplateLibrary, templateLibrariesEqual } from "./templateLibrary.js";
+import { aiSettingsRepository } from "./repositories/aiSettingsRepository.js";
+import { loadLocalAiSettings, normalizeAiSettings, saveLocalAiSettings } from "./aiSettings.js";
+import { AIPersonalizationModal } from "./components/AIPersonalizationModal.jsx";
+import { isAiHydrationReady } from "./ai/hydrationGate.js";
 
 /* ============================================================
    п.7.1: автосохранение в localStorage браузера — заменяет бэкенд
@@ -94,6 +98,13 @@ export default function KubikiApp({ userId, onSignOut }) {
   const [quickAccessMessage, setQuickAccessMessage] = useState("");
   const [quickAccessRetry, setQuickAccessRetry] = useState(0);
   const [quickAccessMigrationCandidates, setQuickAccessMigrationCandidates] = useState([]);
+  const initialAiSettings = useRef(loadLocalAiSettings(userId));
+  const [aiSettings, setAiSettings] = useState(() => initialAiSettings.current);
+  const aiSettingsRef = useRef(aiSettings);
+  const aiSettingsSyncEnabledRef = useRef(false);
+  const [aiSettingsState, setAiSettingsState] = useState("loading");
+  const [aiSettingsMessage, setAiSettingsMessage] = useState("");
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const storedCurrentProject = projects.find((p) => p.id === currentId) || null;
   const currentProject = storedCurrentProject ? normalizeProject(storedCurrentProject) : null;
 
@@ -113,6 +124,41 @@ export default function KubikiApp({ userId, onSignOut }) {
     setQuickAccess(next);
     if (persist) saveQuickAccessState(next);
   }, []);
+
+  const replaceAiSettings = useCallback((next, persist = true) => {
+    const value = normalizeAiSettings(next);
+    aiSettingsRef.current = value;
+    setAiSettings(value);
+    if (persist) saveLocalAiSettings(value, userId);
+    return value;
+  }, [userId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    aiSettingsSyncEnabledRef.current = false;
+    setAiSettingsState("loading"); setAiSettingsMessage("");
+    const local = loadLocalAiSettings(userId);
+    aiSettingsRepository.loadAiSettings(userId).then(({ settings }) => {
+      if (cancelled) return;
+      replaceAiSettings(settings); aiSettingsSyncEnabledRef.current = true; setAiSettingsState("ready");
+    }).catch(() => {
+      if (cancelled) return;
+      replaceAiSettings(local); setAiSettingsState("error"); setAiSettingsMessage("Настройки ИИ пока не синхронизированы с сервером. Используется локальная копия.");
+    });
+    return () => { cancelled = true; aiSettingsSyncEnabledRef.current = false; aiSettingsRef.current = normalizeAiSettings(); };
+  }, [userId, replaceAiSettings]);
+
+  const saveAiSettings = useCallback(async (draft) => {
+    const value = replaceAiSettings(draft);
+    if (!aiSettingsSyncEnabledRef.current) { setAiSettingsState("save-error"); setAiSettingsMessage("Серверные настройки ещё недоступны. Изменение сохранено локально."); return false; }
+    setAiSettingsState("saving"); setAiSettingsMessage("");
+    try {
+      const saved = await aiSettingsRepository.upsertAiSettings(userId, value);
+      replaceAiSettings(saved); setAiSettingsState("ready"); return true;
+    } catch (error) {
+      setAiSettingsState("save-error"); setAiSettingsMessage(`${error.message}. Изменение сохранено локально.`); return false;
+    }
+  }, [replaceAiSettings, userId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -263,6 +309,7 @@ export default function KubikiApp({ userId, onSignOut }) {
   const templateTimerRef = useRef(null);
   const templatePendingRef = useRef(null);
   const [templateState, setTemplateState] = useState("loading");
+  const aiGenerationReady = isAiHydrationReady({ projects: serverState, performers: performerState, templates: templateState, aiSettings: aiSettingsState });
   const [templateMessage, setTemplateMessage] = useState("");
   const [templateRetry, setTemplateRetry] = useState(0);
   const projectTemplates = templateLibrary.projectTemplates;
@@ -362,6 +409,7 @@ export default function KubikiApp({ userId, onSignOut }) {
     project.stages = stages;
     if (meta && Number.isFinite(meta.globalMarkup)) project.globalMarkup = meta.globalMarkup;
     if (meta?.projectName) project.name = meta.projectName;
+    if (meta?.generationMetadata) project.metadata = { ...project.metadata, aiGeneration: meta.generationMetadata };
     const normalized = normalizeProject(project);
     replaceProjects([...projectsRef.current, normalized]);
     scheduleProjectSave(normalized, 0);
@@ -421,6 +469,8 @@ export default function KubikiApp({ userId, onSignOut }) {
     quickAccessOperationVersionRef.current += 1;
     replacePerformers([], false);
     replaceQuickAccess({ items: [] }, false);
+    aiSettingsSyncEnabledRef.current = false;
+    replaceAiSettings(normalizeAiSettings(), false);
     await onSignOut();
   };
 
@@ -545,6 +595,7 @@ export default function KubikiApp({ userId, onSignOut }) {
           </div>
         </div>
       </div>}
+      {aiSettingsOpen && <AIPersonalizationModal settings={aiSettings} state={aiSettingsState} message={aiSettingsMessage} onSave={saveAiSettings} onClose={() => setAiSettingsOpen(false)} />}
       {(templateState === "migration-offer" || templateState === "migrating") && <div className="kb-modal-overlay kb-server-overlay">
         <div className="kb-modal kb-server-card" role="dialog" aria-modal="true" aria-labelledby="template-migration-title">
           <div className="kb-server-title" id="template-migration-title">Перенести библиотеку шаблонов</div>
@@ -578,9 +629,9 @@ export default function KubikiApp({ userId, onSignOut }) {
         </div>
       </div>}
       {["error", "save-error"].includes(quickAccessState) && <div className="kb-toast" role="alert">{quickAccessMessage}<button className="kb-toast-retry" type="button" onClick={() => setQuickAccessRetry((value) => value + 1)}>Повторить</button><button className="kb-toast-retry" type="button" onClick={() => { setQuickAccessState("ready"); setQuickAccessMessage(""); }}>Закрыть</button></div>}
-      {projectSource?.file && <ImportModal file={projectSource.file} instruction={projectSource.description || ""}
+      {aiGenerationReady && projectSource?.file && <ImportModal file={projectSource.file} instruction={projectSource.description || ""}
         onClose={() => setProjectSource(null)} onConfirm={createProjectFromEstimate} />}
-      {projectSource && !projectSource.file && <GenerateEstimateModal description={projectSource.description}
+      {aiGenerationReady && projectSource && !projectSource.file && <GenerateEstimateModal description={projectSource.description}
         onClose={() => setProjectSource(null)} onConfirm={createProjectFromEstimate} />}
       {editingTemplateId ? (
         <Workspace
@@ -594,6 +645,8 @@ export default function KubikiApp({ userId, onSignOut }) {
           onTaskTemplatesChange={handleTaskTemplatesChange} onStageTemplatesChange={handleStageTemplatesChange}
           performers={performers} onSavePerformer={savePerformer}
           quickAccess={quickAccess} onToggleQuickAccessPin={toggleQuickAccessPin} onRemoveQuickAccess={removeQuickAccessByItem}
+          onOpenAiSettings={() => setAiSettingsOpen(true)}
+          aiGenerationReady={aiGenerationReady}
           onSignOut={handleSignOut}
         />
       ) : currentProject ? (
@@ -601,21 +654,24 @@ export default function KubikiApp({ userId, onSignOut }) {
           saveState={saveState} saveError={serverMessage} onRetrySave={() => flushProject(currentProject.id)}
           performers={performers} onSavePerformer={savePerformer}
           quickAccess={quickAccess} onToggleQuickAccessPin={toggleQuickAccessPin} onRemoveQuickAccess={removeQuickAccessByItem} onSignOut={handleSignOut}
+          onOpenAiSettings={() => setAiSettingsOpen(true)}
+          aiGenerationReady={aiGenerationReady}
           taskTemplates={templateLibrary.taskTemplates} stageTemplates={templateLibrary.stageTemplates}
           onTaskTemplatesChange={handleTaskTemplatesChange} onStageTemplatesChange={handleStageTemplatesChange} />
       ) : activeSection === APP_SECTIONS.KNOWLEDGE_BASE ? (
         <KnowledgeBasePage performers={performers} performerState={performerState} performerMessage={performerMessage} onRetryPerformers={() => setPerformerRetry((value) => value + 1)} quickAccess={quickAccess} onSectionChange={setActiveSection}
           onSavePerformer={savePerformer} onToggleQuickAccess={togglePerformerQuickAccess} onDeletePerformer={deletePerformerCard}
-          onSignOut={handleSignOut} />
+          onOpenAiSettings={() => setAiSettingsOpen(true)} onSignOut={handleSignOut} />
       ) : (
         <Dashboard projects={projects} onOpen={setCurrentId} onCreate={createProject} onDelete={deleteProject}
           onImport={(file, description) => setProjectSource({ file, description })}
           onGenerate={(description, file) => setProjectSource({ file, description })}
+          aiGenerationReady={aiGenerationReady}
           projectTemplates={projectTemplates}
           onTemplatesChange={handleTemplatesChange} onEditTemplate={setEditingTemplateId}
           categories={templateLibrary.categories} onCategoriesChange={(categories) => replaceTemplateLibrary((library) => ({ ...library, categories }))}
           openCategoryIds={templateLibrary.metadata.openCategoryIds || ["new"]} onOpenCategoryIdsChange={(openCategoryIds) => replaceTemplateLibrary((library) => ({ ...library, metadata: { ...library.metadata, openCategoryIds } }))}
-          onToggleFavorite={toggleFavorite} onRenameProject={renameProject} onSectionChange={setActiveSection} onSignOut={handleSignOut} />
+          onToggleFavorite={toggleFavorite} onRenameProject={renameProject} onSectionChange={setActiveSection} onOpenAiSettings={() => setAiSettingsOpen(true)} onSignOut={handleSignOut} />
       )}
     </>
   );

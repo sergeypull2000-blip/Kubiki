@@ -1,3 +1,13 @@
+import { authenticateRequest } from "./_lib/auth.js";
+import { validateGenerationInput } from "./_lib/brief.js";
+import { createDeepSeekClient, DeepSeekError } from "./_lib/deepseek.js";
+import { runEstimateGeneration } from "./_lib/generationOrchestrator.js";
+import { loadOwnKnowledge } from "./_lib/knowledgeRepository.js";
+import { projectKnowledge } from "./_lib/knowledgeProjection.js";
+import { buildShortlist } from "./_lib/retrieval.js";
+import { loadOwnAiSettings, normalizeServerAiSettings } from "./_lib/aiSettings.js";
+import { buildGenerationMetadata, serializeGenerationMetadata } from "./_lib/generationMetadata.js";
+
 /* ============================================================
    Vercel serverless: POST /api/generate-estimate
    Принимает { description } → вызывает DeepSeek API →
@@ -520,97 +530,51 @@ WEB И DIGITAL
 `;
 
 export default async function handler(req, res) {
-  // CORS — разрешаем запросы с любого origin (для preview на Vercel)
-  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Expose-Headers", "X-Kubiki-Generation-Metadata");
+  res.setHeader("Cache-Control", "no-store");
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
+  const auth = await authenticateRequest(req);
+  if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+
+  const input = validateGenerationInput(req.body);
+  if (!input.ok) return res.status(input.status).json({ error: input.error });
+
   const key = process.env.DEEPSEEK_API_KEY;
   if (!key) return res.status(500).json({ error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" });
-
-  const { description } = req.body || {};
-  if (!description || !String(description).trim()) return res.status(400).json({ error: "Нет описания проекта в теле запроса" });
-
-  const requestModel = async (messages) => {
-    const r = await fetch(DEEPSEEK_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages,
-        response_format: { type: "json_object" },
-        temperature: 0,
-        max_tokens: 4000,
-      }),
-    });
-
-    if (!r.ok) {
-      const errText = await r.text().catch(() => "");
-      console.error("DeepSeek API error:", r.status, errText);
-      throw new Error(`DeepSeek API ответил ${r.status}. Попробуйте позже.`);
-    }
-
-    const data = await r.json();
-    return data.choices?.[0]?.message?.content || "";
-  };
-
-  const parseAndValidate = (raw) => {
-    if (!raw) return null;
-    let parsed;
-    try {
-      parsed = JSON.parse(raw.trim());
-    } catch {
-      return null;
-    }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-    if (typeof parsed.projectName !== "string" || !parsed.projectName.trim()) return null;
-    if (!Array.isArray(parsed.stages) || parsed.stages.length === 0) return null;
-    if (!Array.isArray(parsed.warnings) || !parsed.warnings.every((item) => typeof item === "string")) return null;
-    const validStages = parsed.stages.every((stage) =>
-      stage && typeof stage.name === "string" && stage.name.trim() &&
-      Array.isArray(stage.tasks) && stage.tasks.length > 0 &&
-      stage.tasks.every((task) => task && typeof task.name === "string" && task.name.trim() &&
-        Number.isInteger(task.cost) && task.cost >= 0)
-    );
-    return validStages ? parsed : null;
-  };
-
-  const messages = [
-    { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: String(description).trim() },
-  ];
+  const requestModel = createDeepSeekClient({ apiKey: key, url: DEEPSEEK_URL, model: MODEL });
 
   try {
-    const raw = await requestModel(messages);
-    let parsed = parseAndValidate(raw);
-
-    if (!parsed) {
-      const repairPrompt = `Исправь предыдущий ответ. Верни только один валидный JSON-объект строго по заданной схеме. Не добавляй markdown, пояснения или текст вне JSON. Проверь, что строки завершены, stages и tasks — непустые массивы, cost — целое неотрицательное число.`;
-      const repairedRaw = await requestModel([
-        ...messages,
-        { role: "assistant", content: raw || "{}" },
-        { role: "user", content: repairPrompt },
-      ]);
-      parsed = parseAndValidate(repairedRaw);
-    }
-
-    if (!parsed) {
+    const result = await runEstimateGeneration({
+      brief: input.brief,
+      instruction: input.instruction,
+      systemPrompt: SYSTEM_PROMPT,
+      requestModel,
+      getGenerationContext: async (profile) => {
+        let settings = normalizeServerAiSettings();
+        try { settings = await loadOwnAiSettings(auth.client, auth.user.id); }
+        catch (error) { console.error("AI settings loading failed", { name: error?.name || "Error" }); }
+        try {
+          const rawKnowledge = await loadOwnKnowledge(auth.client, auth.user.id, { includeHistory: settings.useProjectHistory });
+          return { shortlist: buildShortlist(profile, projectKnowledge(rawKnowledge)), personalization: settings.personalization };
+        } catch (error) {
+          console.error("AI knowledge loading failed", { name: error?.name || "Error" });
+          return { shortlist: buildShortlist(profile, {}), personalization: settings.personalization };
+        }
+      },
+    });
+    if (!result.estimate) {
       console.error("generate-estimate: модель дважды вернула ответ, не соответствующий JSON-схеме");
       return res.status(502).json({ error: "Не удалось обработать ответ. Попробуйте снова" });
     }
-
-    return res.status(200).json(parsed);
+    res.setHeader("X-Kubiki-Generation-Metadata", serializeGenerationMetadata(buildGenerationMetadata(result)));
+    return res.status(200).json(result.estimate);
   } catch (e) {
-    console.error("generate-estimate error:", e);
-    const isApiError = typeof e?.message === "string" && e.message.startsWith("DeepSeek API ответил");
-    return res.status(isApiError ? 502 : 500).json({
-      error: isApiError ? e.message : "Не удалось обработать ответ. Попробуйте снова",
-    });
+    console.error("generate-estimate error", { name: e?.name || "Error", code: e?.code || "unknown" });
+    return res.status(e instanceof DeepSeekError ? e.status : 500).json({ error: e instanceof DeepSeekError ? e.message : "Не удалось обработать ответ. Попробуйте снова" });
   }
 }

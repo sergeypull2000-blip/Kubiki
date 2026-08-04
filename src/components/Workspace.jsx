@@ -20,7 +20,7 @@ import { createTaskTemplate, createStageTemplate, cloneTaskTemplate, cloneStageT
 /* ============================================================
    Рабочая зона
    ============================================================ */
-export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onSignOut, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange }) {
+export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onOpenAiSettings, onSignOut, aiGenerationReady = false, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange }) {
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
   // в Клайне можно persist'ить в localStorage.
   const [importFile, setImportFile] = useState(null);
@@ -181,6 +181,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
       ...p,
       stages: [...(p.stages || []), ...stages],
       ...(meta && Number.isFinite(meta.globalMarkup) ? { globalMarkup: meta.globalMarkup } : {}),
+      ...(meta?.generationMetadata ? { metadata: { ...p.metadata, aiGeneration: meta.generationMetadata } } : {}),
     }));
   };
 
@@ -322,6 +323,7 @@ const toggleAllCollapsed = () =>
             {saveState === "error" && onRetrySave && <button type="button" onClick={onRetrySave}>Повторить</button>}
           </div>}
 
+          {onOpenAiSettings && <button type="button" className="kb-ai-settings-open" onClick={onOpenAiSettings}>Персонализация ИИ</button>}
           <button type="button" className="kb-sign-out" onClick={onSignOut}>Выйти</button>
 
           <div className="kb-total-badge">
@@ -355,6 +357,7 @@ const toggleAllCollapsed = () =>
             onMouseDown={clearSelection}
             onScroll={(event) => setCollapseButtonCompact(event.currentTarget.scrollTop > 12)}>
             <div className="kb-canvas-inner">
+              {project.metadata?.aiGeneration?.knowledgeNames?.length > 0 && <div className="kb-generation-knowledge">Использованы знания студии: {project.metadata.aiGeneration.knowledgeNames.join(", ")}</div>}
               {!isEmpty && <button type="button" className={`kb-collapse-all-btn${collapseButtonCompact ? " is-compact" : ""}`}
                 onMouseDown={(event) => event.stopPropagation()}
                 onClick={toggleAllCollapsed}
@@ -374,7 +377,7 @@ const toggleAllCollapsed = () =>
                       }
                     }}
                     onAddStage={() => addStageByClick(CUSTOM_STAGE)} />
-                  <UnifiedImportEmptyState onPickFile={(file, instruction) => setImportFile({ file, instruction })} onGenerate={setGenerateDescription} />
+                  <UnifiedImportEmptyState disabled={!aiGenerationReady} onPickFile={(file, instruction) => setImportFile({ file, instruction })} onGenerate={setGenerateDescription} />
                 </>
               ) : (
                 <>

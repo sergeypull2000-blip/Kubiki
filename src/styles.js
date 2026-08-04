@@ -50,6 +50,8 @@ export const CSS = `
 .kb-app-nav button{position:relative;border:0;background:transparent;padding:2px 0 0;color:var(--text-muted);font:inherit;font-size:var(--fs-base);cursor:pointer}
 .kb-app-nav button:hover,.kb-app-nav button.is-active{color:var(--text)}
 .kb-app-nav button.is-active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px 2px 0 0;background:var(--accent)}
+.kb-ai-settings-open{display:flex;align-items:center;gap:6px;border:0;background:transparent;color:var(--text-muted);font:inherit;font-size:12px;cursor:pointer}.kb-ai-settings-open:hover{color:var(--text)}
+.kb-ai-settings-modal{max-width:620px}.kb-ai-settings-text{width:100%;resize:vertical;min-height:180px;line-height:1.5}.kb-ai-settings-count{text-align:right;color:var(--text-muted);font-size:11px;margin-top:5px}.kb-ai-history-option{display:flex;align-items:flex-start;gap:10px;margin-top:18px;padding:12px;border:1px solid var(--line);border-radius:8px;cursor:pointer}.kb-ai-history-option input{margin-top:3px}.kb-ai-history-option span{display:flex;flex-direction:column;gap:4px;font-size:13px}.kb-ai-history-option small{color:var(--text-muted);line-height:1.4}
 .kb-sign-out{border:1px solid var(--line);background:transparent;color:var(--text-muted);font-size:var(--fs-sm);font-weight:var(--fw-medium);padding:6px 11px;border-radius:6px;cursor:pointer;transition:.15s}
 .kb-sign-out:hover{color:var(--text);background:var(--accent-soft);border-color:var(--accent)}
 /* п.2: содержимое шапки рабочей зоны выровнено по той же ширине/центру,
@@ -138,6 +140,8 @@ export const CSS = `
 .kb-canvas{flex:1; min-width:0; padding:20px 28px 120px; overflow-y:auto}
 /* рабочее поле центрировано в своей колонке между палитрой и правой панелью */
 .kb-canvas-inner{max-width:1010px; margin:0 auto}
+.kb-generation-knowledge{margin:0 0 10px; color:var(--text-muted); font-size:11px; line-height:1.4}
+.kb-ai-hydration-note{margin-right:auto; color:var(--text-muted); font-size:11px}
 
 /* palette accordion */
 .kb-palette-section{padding-bottom:4px; margin-bottom:6px}

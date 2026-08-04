@@ -14,10 +14,12 @@
     "@supabase/supabase-js": "^2.112.0",
     "exceljs": "^4.4.0",
     "lucide-react": "^1.24.0",
+    "mammoth": "^1.12.0",
     "pdfjs-dist": "^6.1.200",
     "pdfmake": "^0.3.11",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "word-extractor": "^1.0.4",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

@@ -65,17 +65,18 @@ function EntityCard({ item, template = false, onOpen, onDelete, onMakeTemplate, 
   );
 }
 
-function ProjectSourceModal({ mode, onClose, onSubmit }) {
+function ProjectSourceModal({ mode, aiGenerationReady, onClose, onSubmit }) {
   const [description, setDescription] = useState("");
   const [file, setFile] = useState(null);
   const [over, setOver] = useState(false);
   const inputRef = useRef(null);
   const isImport = mode === "import";
   const pickFile = (nextFile) => {
-    if (nextFile && /\.(xlsx|csv|pdf)$/i.test(nextFile.name)) setFile(nextFile);
+    const supported = isImport ? /\.(xlsx|csv|pdf)$/i : /\.(docx|doc)$/i;
+    if (nextFile && supported.test(nextFile.name)) setFile(nextFile);
     if (inputRef.current) inputRef.current.value = "";
   };
-  const canSubmit = isImport ? Boolean(file) : Boolean(description.trim() || file);
+  const canSubmit = aiGenerationReady && (isImport ? Boolean(file) : Boolean(description.trim() || file));
 
   return <div className="kb-modal-overlay" onMouseDown={onClose}>
     <div className={`kb-modal kb-project-source-modal is-${mode}`} onMouseDown={(event) => event.stopPropagation()}>
@@ -86,7 +87,7 @@ function ProjectSourceModal({ mode, onClose, onSubmit }) {
       <div className="kb-modal-body">
         {!isImport && <textarea className="kb-generate-textarea kb-project-source-description is-primary" rows={7}
           value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Описание проекта" />}
-        <input ref={inputRef} type="file" accept=".xlsx,.csv,.pdf" hidden onChange={(event) => pickFile(event.target.files?.[0])} />
+        <input ref={inputRef} type="file" accept={isImport ? ".xlsx,.csv,.pdf" : ".docx,.doc"} hidden onChange={(event) => pickFile(event.target.files?.[0])} />
         <div className={`kb-import-zone kb-project-source-file ${isImport ? "is-primary" : "is-secondary"}${over ? " is-over" : ""}`}
           onClick={() => inputRef.current?.click()}
           onDragOver={(event) => { event.preventDefault(); setOver(true); }}
@@ -103,6 +104,7 @@ function ProjectSourceModal({ mode, onClose, onSubmit }) {
         {isImport && <textarea className="kb-generate-textarea kb-project-source-description is-secondary" rows={3}
           value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Дополнительные инструкции (необязательно)" />}
         <div className="kb-modal-actions">
+          {!aiGenerationReady && <span className="kb-ai-hydration-note">Загружаем знания студии…</span>}
           <button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button>
           <button type="button" className="kb-btn kb-btn-primary" disabled={!canSubmit}
             onClick={() => onSubmit({ file, description: description.trim() })}>
@@ -122,7 +124,7 @@ function NewProjectCard({ onCreate }) {
   </div>;
 }
 
-export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, onDelete, projectTemplates, onTemplatesChange, categories, onCategoriesChange, openCategoryIds, onOpenCategoryIdsChange, onEditTemplate, onToggleFavorite, onRenameProject, onSectionChange, onSignOut }) {
+export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, aiGenerationReady = false, onDelete, projectTemplates, onTemplatesChange, categories, onCategoriesChange, openCategoryIds, onOpenCategoryIdsChange, onEditTemplate, onToggleFavorite, onRenameProject, onSectionChange, onOpenAiSettings, onSignOut }) {
   const [activeNav, setActiveNav] = useState("all");
   const [toast, setToast] = useState("");
   const [sourceModal, setSourceModal] = useState(null);
@@ -171,7 +173,7 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, on
   const visibleTemplates = activeCategory ? templates.filter((template) => template.folderId === activeCategory.id) : [];
 
   return <div className="kb-root">
-    <AppTopNavigation activeSection="projects" onSectionChange={onSectionChange} onSignOut={onSignOut} />
+    <AppTopNavigation activeSection="projects" onSectionChange={onSectionChange} onOpenAiSettings={onOpenAiSettings} onSignOut={onSignOut} />
     <div className="kb-dashboard-layout">
       <LeftPanel activeNav={activeNav} onNavChange={setActiveNav} categories={categories} onCategoriesChange={onCategoriesChange}
         openCategoryIds={openCategoryIds} onOpenCategoryIdsChange={onOpenCategoryIdsChange}
@@ -188,7 +190,7 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, on
         </>}
       </div></main>
     </div>
-    {sourceModal && <ProjectSourceModal mode={sourceModal} onClose={() => setSourceModal(null)}
+    {sourceModal && <ProjectSourceModal mode={sourceModal} aiGenerationReady={aiGenerationReady} onClose={() => setSourceModal(null)}
       onSubmit={({ file, description }) => {
         setSourceModal(null);
         if (sourceModal === "import") onImport(file, description);

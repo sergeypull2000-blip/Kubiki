@@ -1,7 +1,8 @@
 import { Logo } from "../Logo.jsx";
 import { APP_SECTIONS, isAppSectionActive } from "../appNavigation.js";
+import { Sparkles } from "lucide-react";
 
-export function AppTopNavigation({ activeSection, onSectionChange, onSignOut }) {
+export function AppTopNavigation({ activeSection, onSectionChange, onOpenAiSettings, onSignOut }) {
   return <header className="kb-header kb-app-header">
     <div className="kb-header-inner">
       <div className="kb-app-brand"><Logo size={21} /><span className="kb-brand-name">Kubiki</span></div>
@@ -14,6 +15,7 @@ export function AppTopNavigation({ activeSection, onSectionChange, onSignOut }) 
           onClick={() => onSectionChange(APP_SECTIONS.KNOWLEDGE_BASE)}>База знаний</button>
       </nav>
       <div className="kb-spacer" />
+      {onOpenAiSettings && <button type="button" className="kb-ai-settings-open" onClick={onOpenAiSettings}><Sparkles size={14} />Персонализация ИИ</button>}
       <button type="button" className="kb-sign-out" onClick={onSignOut}>Выйти</button>
     </div>
   </header>;

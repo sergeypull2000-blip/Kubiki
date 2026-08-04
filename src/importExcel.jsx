@@ -9,6 +9,8 @@ import {
 import { uid, fmt, numVal } from "./utils.js";
 import { Logo } from "./Logo.jsx";
 import { useOutsideClose } from "./hooks.js";
+import { generateEstimateRequest } from "./ai/generationClient.js";
+import { extractWordBrief } from "./ai/wordBrief.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
@@ -114,16 +116,8 @@ async function llmParseText(sheetText, filename, instruction = "") {
    Тот же пайплайн, что и импорт из Excel/PDF (validateParsed →
    превью → costFromExternalPrice → stagesFromParsed), меняется только
    вход (описание вместо таблицы) и системный промпт на сервере. */
-async function llmGenerateEstimate(description) {
-  const r = await fetch("/api/generate-estimate", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ description }),
-  });
-  if (!r.ok) {
-    const err = await r.json().catch(() => ({}));
-    throw new Error(err.error || `Ошибка DeepSeek API (${r.status}). Попробуйте ещё раз.`);
-  }
-  const j = await r.json();
+async function llmGenerateEstimate(description, instruction = "") {
+  const j = await generateEstimateRequest({ description, instruction });
   if (!j || !Array.isArray(j.stages)) throw new Error("Модель вернула некорректный ответ.");
   return j;
 }
@@ -247,7 +241,7 @@ function useEstimateEditor(initialMarkupPct = "", convertExternalPrices = false)
    для импорта из файла и генерации по описанию. showKindToggle скрывает
    выбор «внутренняя/внешняя», когда источник всегда клиентские цены
    (генерация по описанию) — тогда пересчёт по маркапу применяется всегда. */
-function EstimatePreviewStep({ editor, noteText, draftNotice, warnTitle, warnProminent, showKindToggle = true, hidePricing = false, confirmLabel = "Импортировать", onClose, onConfirm }) {
+function EstimatePreviewStep({ editor, generationMetadata, noteText, draftNotice, warnTitle, warnProminent, showKindToggle = true, hidePricing = false, confirmLabel = "Импортировать", onClose, onConfirm }) {
   const {
     parsed, warnings, importKind, setImportKind, markupPct, setMarkupPct,
     setStageName, setTaskField, delTask, delStage,
@@ -258,7 +252,7 @@ function EstimatePreviewStep({ editor, noteText, draftNotice, warnTitle, warnPro
   const confirm = () => {
     const res = buildConfirm();
     if (!res.ok) { setLocalError(res.message); return; }
-    onConfirm(res.stages, res.meta);
+    onConfirm(res.stages, generationMetadata ? { ...res.meta, generationMetadata } : res.meta);
   };
 
   const showMarkupBlock = showKindToggle ? importKind === "external" : true;
@@ -345,17 +339,28 @@ function EstimatePreviewStep({ editor, noteText, draftNotice, warnTitle, warnPro
    редактируемое превью (вид сметы + обратный пересчёт) → вставка. */
 export function ImportModal({ file, instruction = "", onClose, onConfirm }) {
   const isPdf = /\.pdf$/i.test(file.name);
+  const isWord = /\.(docx|doc)$/i.test(file.name);
   const [step, setStep] = useState("reading"); // reading|sheet|parsing|preview|error
   const [wb, setWb] = useState(null);
   const [sheetNames, setSheetNames] = useState([]);
   const [errorMsg, setErrorMsg] = useState("");
-  const editor = useEstimateEditor();
+  const [generationMetadata, setGenerationMetadata] = useState(null);
+  const editor = useEstimateEditor(isWord ? "25" : undefined, isWord);
 
   // шаг 1: извлечение текста из файла (в коде, не в LLM) — способ зависит
   // от расширения, дальше единый пайплайн (LLM-разбор/превью/вставка)
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (isWord) {
+        try {
+          const text = await extractWordBrief(file);
+          if (!cancelled) runGenerateWord(text);
+        } catch (error) {
+          if (!cancelled) { setErrorMsg(error?.message || "Не удалось прочитать Word-файл."); setStep("error"); }
+        }
+        return;
+      }
       if (isPdf) {
         try {
           const rows = await extractPdfRows(file);
@@ -404,7 +409,21 @@ export function ImportModal({ file, instruction = "", onClose, onConfirm }) {
     }
   };
 
+  const runGenerateWord = async (text) => {
+    setStep("parsing");
+    try {
+      const raw = await llmGenerateEstimate(text, instruction);
+      setGenerationMetadata(raw.__generationMetadata || null);
+      editor.load(validateParsed(raw));
+      setStep("preview");
+    } catch (error) {
+      setErrorMsg(error?.message || "Не удалось собрать смету по Word-брифу.");
+      setStep("error");
+    }
+  };
+
   const retry = () => {
+    if (isWord) { setErrorMsg(""); setStep("reading"); extractWordBrief(file).then(runGenerateWord).catch((error) => { setErrorMsg(error?.message || "Не удалось прочитать Word-файл."); setStep("error"); }); return; }
     if (isPdf) { setErrorMsg(""); setStep("reading"); extractPdfRows(file).then((rows) => {
       if (rows.length === 0) { setErrorMsg("Не удалось прочитать текст из PDF — возможно, это скан. Попробуйте Excel или PDF с текстом."); setStep("error"); return; }
       runParseText(serializePdfRows(rows), file.name);
@@ -416,7 +435,7 @@ export function ImportModal({ file, instruction = "", onClose, onConfirm }) {
     <div className="kb-modal-overlay" onMouseDown={onClose}>
       <div className="kb-modal kb-import-modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="kb-modal-head">
-          <span className="kb-modal-title">Импорт сметы</span>
+          <span className="kb-modal-title">{isWord ? "Черновая смета по Word-брифу" : "Импорт сметы"}</span>
           <button type="button" className="kb-icon-btn" onClick={onClose}><X size={16} strokeWidth={1.5} /></button>
         </div>
 
@@ -442,15 +461,17 @@ export function ImportModal({ file, instruction = "", onClose, onConfirm }) {
             <div className="kb-modal-status is-error"><AlertTriangle size={20} strokeWidth={1.5} /> {errorMsg}</div>
             <div className="kb-modal-actions">
               <button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Закрыть</button>
-              {(wb || isPdf) && <button type="button" className="kb-btn kb-btn-primary" onClick={retry}>Попробовать снова</button>}
+              {(wb || isPdf || isWord) && <button type="button" className="kb-btn kb-btn-primary" onClick={retry}>Попробовать снова</button>}
             </div>
           </div>
         )}
 
         {step === "preview" && editor.parsed && (
           <EstimatePreviewStep editor={editor}
+            generationMetadata={generationMetadata}
             noteText="Проверьте распознанное и при необходимости поправьте. Каждая задача добавится с кубиком «фикс за всё»."
-            hidePricing onClose={onClose} onConfirm={onConfirm} />
+            draftNotice={isWord ? "Черновая оценка по тексту Word-брифа. Проверьте структуру и цены." : undefined}
+            hidePricing={!isWord} showKindToggle={!isWord} onClose={onClose} onConfirm={onConfirm} />
         )}
       </div>
     </div>
@@ -464,12 +485,13 @@ export function ImportModal({ file, instruction = "", onClose, onConfirm }) {
 export function GenerateEstimateModal({ description, onClose, onConfirm }) {
   const [step, setStep] = useState("parsing"); // parsing|preview|error
   const [errorMsg, setErrorMsg] = useState("");
+  const [generationMetadata, setGenerationMetadata] = useState(null);
   const editor = useEstimateEditor("25", true); // дефолт маркапа для клиентских цен модели
 
   const run = () => {
     setStep("parsing");
     llmGenerateEstimate(description)
-      .then((raw) => { editor.load(validateParsed(raw)); setStep("preview"); })
+      .then((raw) => { setGenerationMetadata(raw.__generationMetadata || null); editor.load(validateParsed(raw)); setStep("preview"); })
       .catch((e) => { setErrorMsg(e.message || "Не удалось собрать смету."); setStep("error"); });
   };
 
@@ -498,6 +520,7 @@ export function GenerateEstimateModal({ description, onClose, onConfirm }) {
 
         {step === "preview" && editor.parsed && (
           <EstimatePreviewStep editor={editor}
+            generationMetadata={generationMetadata}
             draftNotice="Черновая оценка. Цены примерные — поправьте под свой проект."
             noteText="Проверьте распознанную структуру и при необходимости поправьте. Каждая задача добавится с кубиком «фикс за всё»."
             warnTitle={`Допущения ИИ, проверьте (${editor.warnings.length}):`}
@@ -514,17 +537,18 @@ export function GenerateEstimateModal({ description, onClose, onConfirm }) {
    зоне: импорт файла и генерация черновой сметы по текстовому описанию —
    два равноправных альтернативных входа в один и тот же пайплайн
    (разбор LLM → превью → вставка). */
-export function UnifiedImportEmptyState({ onPickFile, onGenerate }) {
+export function UnifiedImportEmptyState({ onPickFile, onGenerate, disabled = false }) {
   const [over, setOver] = useState(false);
   const inputRef = useRef(null);
   const [desc, setDesc] = useState("");
   const [file, setFile] = useState(null);
   const pick = (nextFile) => {
-    if (!nextFile || !/\.(xlsx|xls|pdf)$/i.test(nextFile.name)) return;
+    if (!nextFile || !/\.(xlsx|xls|pdf|docx|doc)$/i.test(nextFile.name)) return;
     setFile(nextFile);
     if (inputRef.current) inputRef.current.value = "";
   };
   const submit = () => {
+    if (disabled) return;
     const text = desc.trim();
     if (!text && !file) return;
     if (file) onPickFile(file, text);
@@ -537,19 +561,20 @@ export function UnifiedImportEmptyState({ onPickFile, onGenerate }) {
         onDragOver={(e) => { e.preventDefault(); setOver(true); }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(false); }}
         onDrop={(e) => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files?.[0]); }}>
-        <input ref={inputRef} type="file" accept=".xlsx,.xls,.pdf" hidden onChange={(e) => pick(e.target.files?.[0])} />
+        <input ref={inputRef} type="file" accept=".xlsx,.xls,.pdf,.docx,.doc" hidden onChange={(e) => pick(e.target.files?.[0])} />
         <div className="kb-unified-input">
           <textarea className="kb-generate-textarea" rows={4} value={desc}
             onChange={(e) => setDesc(e.target.value)}
             onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") submit(); }}
             placeholder="Опишите проект, импортируйте файл сметы или сделайте и то, и другое." />
           <button type="button" className="kb-icon-btn kb-attach-btn" onClick={() => inputRef.current?.click()} title="Прикрепить файл"><Paperclip size={16} strokeWidth={1.5} /></button>
-          <button type="button" className="kb-send-btn" onClick={submit} disabled={!desc.trim() && !file} title="Создать смету" aria-label="Создать смету"><ArrowUp size={15} strokeWidth={1.8} /></button>
+          <button type="button" className="kb-send-btn" onClick={submit} disabled={disabled || (!desc.trim() && !file)} title="Создать смету" aria-label="Создать смету"><ArrowUp size={15} strokeWidth={1.8} /></button>
         </div>
         {file && <div className="kb-attached-file" title={file.name}>
           <FileSpreadsheet size={15} strokeWidth={1.5} /><span>{file.name}</span>
           <button type="button" className="kb-icon-btn" onClick={() => setFile(null)} title="Удалить файл"><X size={14} strokeWidth={1.5} /></button>
         </div>}
+        {disabled && <div className="kb-ai-hydration-note">Загружаем знания студии…</div>}
       </div>
     </div>
   );
@@ -562,7 +587,7 @@ export function ImportEmptyState({ onPickFile, onGenerate }) {
   const [file, setFile] = useState(null);
   const pick = (file) => {
     if (!file) return;
-    if (!/\.(xlsx|csv|pdf)$/i.test(file.name)) return;
+    if (!/\.(xlsx|csv|pdf|docx|doc)$/i.test(file.name)) return;
     setFile(file);
     if (inputRef.current) inputRef.current.value = "";
   };
@@ -576,7 +601,7 @@ export function ImportEmptyState({ onPickFile, onGenerate }) {
     <div className="kb-import-empty">
       <div className="kb-import-empty-or">или</div>
       <div className="kb-import-entry">
-        <input ref={inputRef} type="file" accept=".xlsx,.csv,.pdf" hidden onChange={(e) => pick(e.target.files?.[0])} />
+        <input ref={inputRef} type="file" accept=".xlsx,.csv,.pdf,.docx,.doc" hidden onChange={(e) => pick(e.target.files?.[0])} />
         <div className="kb-import-panels">
           <div className={"kb-import-panel kb-import-panel-minimal kb-import-file-field" + (over ? " is-over" : "")}
             onDragOver={(e) => { e.preventDefault(); setOver(true); }}
