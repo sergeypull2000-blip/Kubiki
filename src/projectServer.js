@@ -1,4 +1,4 @@
-import { normalizeProject } from "./store.js";
+import { PROJECT_DATA_VERSION, normalizeProject } from "./store.js";
 
 export const PROJECTS_STORAGE_KEY = "kubiki_state_v1";
 export const PRE_SERVER_BACKUP_KEY = "kubiki_state_pre_server_backup_v1";
@@ -27,7 +27,9 @@ export function buildProjectRow(userId, project) {
     user_id: userId,
     client_id: getProjectClientId(canonical),
     name: typeof canonical.name === "string" ? canonical.name : "",
-    data_version: canonical.dataVersion ?? null,
+    data_version: Number.isInteger(canonical.dataVersion) && canonical.dataVersion > 0
+      ? canonical.dataVersion
+      : PROJECT_DATA_VERSION,
     project_data: canonical,
   };
 }

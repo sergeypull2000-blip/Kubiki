@@ -7,6 +7,7 @@ import {
   getProjectClientId, migrateLocalProjects, normalizeServerProjects,
   serializeProjectForServer, shouldOfferProjectMigration,
 } from "../src/projectServer.js";
+import { PROJECT_DATA_VERSION } from "../src/store.js";
 
 const project = () => ({ id: "abc123", name: "Одинаковое имя", dataVersion: 7, stages: [{ id: "s", tasks: [{ id: "t", executors: [] }] }], unknown: { kept: true } });
 
@@ -30,6 +31,30 @@ test("Project преобразуется в серверную строку бе
 test("undefined безопасно нормализуется в project_data", () => {
   const result = serializeProjectForServer({ ...project(), optional: undefined });
   assert.equal(result.optional, null);
+});
+
+test("legacy and broken projects always produce a valid data_version", () => {
+  for (const input of [
+    { id: "missing" },
+    { id: "null", dataVersion: null },
+    { id: "undefined", dataVersion: undefined },
+    { id: "broken", dataVersion: "invalid", stages: [{ tasks: [{}] }] },
+  ]) {
+    const row = buildProjectRow("user-1", input);
+    assert.equal(row.data_version, PROJECT_DATA_VERSION);
+    assert.equal(row.project_data.dataVersion, PROJECT_DATA_VERSION);
+    assert.notEqual(row.data_version, null);
+  }
+});
+
+test("shared insert, update and upsert payload builder never emits null data_version", () => {
+  const legacy = { id: "legacy", dataVersion: null, custom: { kept: true } };
+  const payloads = ["insert", "update", "upsert"].map(() => buildProjectRow("user-1", legacy));
+  for (const payload of payloads) {
+    assert.equal(payload.data_version, PROJECT_DATA_VERSION);
+    assert.equal(payload.project_data.dataVersion, PROJECT_DATA_VERSION);
+    assert.deepEqual(payload.project_data.custom, { kept: true });
+  }
 });
 
 test("серверная строка преобразуется в нормализованный Project", () => {
@@ -112,6 +137,9 @@ test("repository использует owner-scoped conflict key и не соде
   const source = readFileSync(new URL("../src/repositories/projectRepository.js", import.meta.url), "utf8");
   assert.match(source, /onConflict: "user_id,client_id"/);
   assert.match(source, /\.eq\("user_id", userId\)/);
+  assert.match(source, /\.insert\(buildProjectRow\(userId, project\)\)/);
+  assert.match(source, /const row = buildProjectRow\(userId, project\)/);
+  assert.match(source, /\.upsert\(buildProjectRow\(userId, project\)/);
   assert.doesNotMatch(source, /service_role|secret/i);
 });
 

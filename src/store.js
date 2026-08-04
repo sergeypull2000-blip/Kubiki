@@ -3,6 +3,12 @@ import { uid } from "./utils.js";
 import { STAGE_PRESETS, CUSTOM_STAGE } from "./constants.js";
 import { DEFAULT_EXPORT_SETTINGS } from "./exportEstimate.js";
 
+export const PROJECT_DATA_VERSION = 1;
+
+function normalizeProjectDataVersion(value) {
+  return Number.isInteger(value) && value > 0 ? value : PROJECT_DATA_VERSION;
+}
+
 /* ---------- factories ----------
    Тег на исполнителе: { id, key, value, payment? }
    - value: строка-состояние (для text/combo/select). "" = пустой тег.
@@ -18,7 +24,7 @@ export const makeTask = () => ({ id: uid(), name: "", executors: [], markupOverr
 export const makeStage = (preset) => ({
   id: uid(), presetKey: preset.key, name: preset.name, tasks: [], collapsed: false,
 });
-export const makeProject = () => ({ id: uid(), name: "Новый проект", stages: [], globalMarkup: 25, markupMode: "embedded", tax: { type: "osno", percent: "", visible: true }, vat: { percent: "" }, branding: { logo: "", studioName: "", contacts: "" }, exportSettings: { ...DEFAULT_EXPORT_SETTINGS } });
+export const makeProject = () => ({ id: uid(), name: "Новый проект", dataVersion: PROJECT_DATA_VERSION, stages: [], globalMarkup: 25, markupMode: "embedded", tax: { type: "osno", percent: "", visible: true }, vat: { percent: "" }, branding: { logo: "", studioName: "", contacts: "" }, exportSettings: { ...DEFAULT_EXPORT_SETTINGS } });
 
 /** Normalize persisted or external project data for safe runtime use. */
 export function normalizeProject(project) {
@@ -27,6 +33,7 @@ export function normalizeProject(project) {
 
   return {
     ...source,
+    dataVersion: normalizeProjectDataVersion(source.dataVersion),
     stages: stages.map((stage) => {
       const stageSource = stage && typeof stage === "object" && !Array.isArray(stage) ? stage : {};
       const tasks = Array.isArray(stageSource.tasks) ? stageSource.tasks : [];

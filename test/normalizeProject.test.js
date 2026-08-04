@@ -1,13 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeProject } from "../src/store.js";
+import { PROJECT_DATA_VERSION, makeProject, normalizeProject } from "../src/store.js";
+
+test("new project has the canonical data version", () => {
+  assert.equal(makeProject().dataVersion, PROJECT_DATA_VERSION);
+});
 
 test("normalizeProject(undefined) returns a safe project", () => {
-  assert.deepEqual(normalizeProject(undefined), { stages: [] });
+  assert.deepEqual(normalizeProject(undefined), { dataVersion: PROJECT_DATA_VERSION, stages: [] });
 });
 
 test("project without stages gets an empty stages array", () => {
-  assert.deepEqual(normalizeProject({ id: "legacy" }), { id: "legacy", stages: [] });
+  assert.deepEqual(normalizeProject({ id: "legacy" }), { id: "legacy", dataVersion: PROJECT_DATA_VERSION, stages: [] });
+});
+
+test("legacy project without dataVersion gets the canonical version", () => {
+  assert.equal(normalizeProject({ id: "legacy" }).dataVersion, PROJECT_DATA_VERSION);
+});
+
+test("valid existing dataVersion is preserved", () => {
+  assert.equal(normalizeProject({ dataVersion: 7 }).dataVersion, 7);
 });
 
 test("stage without tasks gets an empty tasks array", () => {
@@ -21,7 +33,7 @@ test("task without executors gets an empty executors array", () => {
 
 test("existing stages, tasks and executors are preserved", () => {
   const executor = { id: "executor", amount: "1250" };
-  const input = { stages: [{ id: "stage", tasks: [{ id: "task", executors: [executor] }] }] };
+  const input = { dataVersion: PROJECT_DATA_VERSION, stages: [{ id: "stage", tasks: [{ id: "task", executors: [executor] }] }] };
   assert.deepEqual(normalizeProject(input), input);
 });
 
