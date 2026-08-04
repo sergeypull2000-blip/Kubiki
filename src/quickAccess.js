@@ -6,17 +6,19 @@ export const QUICK_ACCESS_MIGRATION_KEY = "kubiki_quick_access_v2_migrated";
 
 const text = (value) => typeof value === "string" ? value.trim() : "";
 const number = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+const cloneObject = (value) => { try { return structuredClone(value); } catch { try { return JSON.parse(JSON.stringify(value)); } catch { return {}; } } };
 
 export function normalizeQuickAccessItem(value = {}, fallbackOrder = 0, now = new Date().toISOString()) {
-  const performerId = text(value.performerId);
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const performerId = text(source.performerId);
   if (!performerId) return null;
-  return { id: text(value.id) || uid(), performerId, pinned: Boolean(value.pinned), order: number(value.order, fallbackOrder), createdAt: text(value.createdAt) || now };
+  return { ...cloneObject(source), id: text(source.id) || uid(), performerId, pinned: Boolean(source.pinned), order: number(source.order, fallbackOrder), createdAt: text(source.createdAt) || now };
 }
 
 export function normalizeQuickAccessState(value) {
   const source = Array.isArray(value) ? value : Array.isArray(value?.items) ? value.items : [];
-  const seenIds = new Set();
-  const items = source.map((item, index) => normalizeQuickAccessItem(item, index)).filter((item) => item && !seenIds.has(item.id) && seenIds.add(item.id));
+  const seenIds = new Set(), seenPerformers = new Set();
+  const items = source.map((item, index) => normalizeQuickAccessItem(item, index)).filter((item) => item && !seenIds.has(item.id) && !seenPerformers.has(item.performerId) && seenIds.add(item.id) && seenPerformers.add(item.performerId));
   return { items };
 }
 
@@ -34,7 +36,7 @@ export function addQuickAccessItem(state, input) {
   if (next.items.some((entry) => entry.performerId === item.performerId)) return next;
   const pinned = next.items.filter((entry) => entry.pinned), unpinned = next.items.filter((entry) => !entry.pinned);
   if (item.pinned) return { items: [...pinned, { ...item, order: pinned.length }, ...unpinned] };
-  return { items: [...pinned, { ...item, order: -1 }, ...unpinned.map((entry) => ({ ...entry, order: entry.order + 1 }))] };
+  return { items: [...pinned, { ...item, order: Math.min(0, ...unpinned.map((entry) => entry.order)) - 1 }, ...unpinned] };
 }
 export function applyQuickAccessPreference(state, performerId, enabled) {
   return enabled ? addQuickAccessItem(state, createQuickAccessItem(performerId)) : normalizeQuickAccessState(state);
@@ -46,7 +48,8 @@ export function pinQuickAccessItem(state, itemId) {
 }
 export function unpinQuickAccessItem(state, itemId) {
   const next = normalizeQuickAccessState(state);
-  return { items: next.items.map((item) => item.id === itemId ? { ...item, pinned: false, order: -1 } : !item.pinned ? { ...item, order: item.order + 1 } : item) };
+  const firstOrder = Math.min(0, ...next.items.filter((item) => !item.pinned).map((item) => item.order)) - 1;
+  return { items: next.items.map((item) => item.id === itemId ? { ...item, pinned: false, order: firstOrder } : item) };
 }
 export function removeQuickAccessItem(state, itemId) { return { items: normalizeQuickAccessState(state).items.filter((item) => item.id !== itemId) }; }
 export function removeQuickAccessByPerformerId(state, performerId) { return { items: normalizeQuickAccessState(state).items.filter((item) => item.performerId !== performerId) }; }

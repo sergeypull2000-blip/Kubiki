@@ -6,10 +6,14 @@ import { KnowledgeBasePage } from "./components/KnowledgeBasePage.jsx";
 import { TEMPLATE_KEYS, saveTemplates, cloneProjectTemplate, migrateProjectTemplates } from "./templates.js";
 import { ImportModal, GenerateEstimateModal } from "./importExcel.jsx";
 import { APP_SECTIONS } from "./appNavigation.js";
-import { createPerformer, loadPerformerLibrary, removePerformer, savePerformerLibrary, updatePerformer } from "./performerLibrary.js";
-import { applyQuickAccessPreference, loadQuickAccessState, migrateLegacyQuickAccess, removeQuickAccessByPerformerId, saveQuickAccessState } from "./quickAccess.js";
+import { createPerformer, removePerformer, savePerformerLibrary, updatePerformer } from "./performerLibrary.js";
+import { applyQuickAccessPreference, migrateLegacyQuickAccess, pinQuickAccessItem, removeQuickAccessByPerformerId, removeQuickAccessItem, saveQuickAccessState, unpinQuickAccessItem } from "./quickAccess.js";
 import { projectRepository } from "./repositories/projectRepository.js";
 import { createLocalServerBackup, diffProjectCollections, migrateLocalProjects, shouldOfferProjectMigration } from "./projectServer.js";
+import { performerRepository } from "./repositories/performerRepository.js";
+import { createPerformerBackup, localPerformersForUser, markPerformerServerOwner, migrateLocalPerformers, missingLocalPerformers } from "./performerServer.js";
+import { quickAccessRepository } from "./repositories/quickAccessRepository.js";
+import { createQuickAccessBackup, localQuickAccessForUser, markQuickAccessServerOwner, migrateLocalQuickAccess, missingLocalQuickAccessItems } from "./quickAccessServer.js";
 
 /* ============================================================
    п.7.1: автосохранение в localStorage браузера — заменяет бэкенд
@@ -67,8 +71,26 @@ export default function KubikiApp({ userId, onSignOut }) {
   const [editingTemplateId, setEditingTemplateId] = useState(null);
   const [projectSource, setProjectSource] = useState(null);
   const [activeSection, setActiveSection] = useState(APP_SECTIONS.PROJECTS);
-  const [performers, setPerformers] = useState(loadPerformerLibrary);
-  const [quickAccess, setQuickAccess] = useState(() => migrateLegacyQuickAccess(loadQuickAccessState()));
+  const initialLocalPerformers = useRef(localPerformersForUser(userId));
+  const [performers, setPerformers] = useState(() => initialLocalPerformers.current);
+  const performersRef = useRef(performers);
+  const performerSyncEnabledRef = useRef(false);
+  const [performerState, setPerformerState] = useState("loading");
+  const [performerMessage, setPerformerMessage] = useState("");
+  const [performerRetry, setPerformerRetry] = useState(0);
+  const [migrationCandidates, setMigrationCandidates] = useState([]);
+  const serverPerformerIdsRef = useRef(new Set());
+  const performerHydratedUserRef = useRef(null);
+  const [performerHydrationVersion, setPerformerHydrationVersion] = useState(0);
+  const initialLocalQuickAccess = useRef(migrateLegacyQuickAccess(localQuickAccessForUser(userId)));
+  const [quickAccess, setQuickAccess] = useState(() => initialLocalQuickAccess.current);
+  const quickAccessRef = useRef(quickAccess);
+  const quickAccessSyncEnabledRef = useRef(false);
+  const quickAccessOperationVersionRef = useRef(0);
+  const [quickAccessState, setQuickAccessState] = useState("waiting");
+  const [quickAccessMessage, setQuickAccessMessage] = useState("");
+  const [quickAccessRetry, setQuickAccessRetry] = useState(0);
+  const [quickAccessMigrationCandidates, setQuickAccessMigrationCandidates] = useState([]);
   const storedCurrentProject = projects.find((p) => p.id === currentId) || null;
   const currentProject = storedCurrentProject ? normalizeProject(storedCurrentProject) : null;
 
@@ -76,6 +98,69 @@ export default function KubikiApp({ userId, onSignOut }) {
     projectsRef.current = next;
     setProjects(next);
   }, []);
+
+  const replacePerformers = useCallback((next, persist = true) => {
+    performersRef.current = next;
+    setPerformers(next);
+    if (persist) savePerformerLibrary(next);
+  }, []);
+
+  const replaceQuickAccess = useCallback((next, persist = true) => {
+    quickAccessRef.current = next;
+    setQuickAccess(next);
+    if (persist) saveQuickAccessState(next);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    quickAccessOperationVersionRef.current += 1;
+    performerSyncEnabledRef.current = false;
+    replacePerformers([], false);
+    setPerformerState("loading");
+    setPerformerMessage("");
+    const local = localPerformersForUser(userId);
+    performerRepository.listPerformers(userId).then((serverPerformers) => {
+      if (cancelled) return;
+      serverPerformerIdsRef.current = new Set(serverPerformers.map((item) => item.id));
+      performerHydratedUserRef.current = userId;
+      const missing = missingLocalPerformers(local, serverPerformers);
+      if (missing.length) createPerformerBackup();
+      replacePerformers(serverPerformers);
+      markPerformerServerOwner(userId);
+      if (missing.length) { setMigrationCandidates(missing); setPerformerState("migration-offer"); }
+      else { performerSyncEnabledRef.current = true; setPerformerState("ready"); }
+      setPerformerHydrationVersion((value) => value + 1);
+    }).catch((error) => {
+      if (cancelled) return;
+      replacePerformers(local);
+      setPerformerMessage(error.message || "Не удалось загрузить базу исполнителей");
+      setPerformerState("error");
+    });
+    return () => { cancelled = true; performerSyncEnabledRef.current = false; performerHydratedUserRef.current = null; serverPerformerIdsRef.current = new Set(); performersRef.current = []; };
+  }, [userId, performerRetry, replacePerformers]);
+
+  useEffect(() => {
+    if (performerHydratedUserRef.current !== userId || performerHydrationVersion === 0) return;
+    let cancelled = false;
+    quickAccessSyncEnabledRef.current = false;
+    quickAccessOperationVersionRef.current += 1;
+    replaceQuickAccess({ items: [] }, false);
+    setQuickAccessState("loading"); setQuickAccessMessage("");
+    const local = localQuickAccessForUser(userId);
+    const performerIds = [...serverPerformerIdsRef.current];
+    quickAccessRepository.listQuickAccessItems(userId, performerIds).then((serverState) => {
+      if (cancelled) return;
+      if (local.items.length) createQuickAccessBackup();
+      const { items, skipped } = missingLocalQuickAccessItems(local, serverState, performerIds);
+      replaceQuickAccess(serverState); markQuickAccessServerOwner(userId);
+      if (items.length) { setQuickAccessMigrationCandidates(items); setQuickAccessState("migration-offer"); setQuickAccessMessage(skipped.length ? `Пропущено битых ссылок: ${skipped.length}` : ""); }
+      else { quickAccessSyncEnabledRef.current = true; setQuickAccessState("ready"); if (skipped.length) setQuickAccessMessage(`Пропущено битых ссылок: ${skipped.length}`); }
+    }).catch((error) => {
+      if (cancelled) return;
+      replaceQuickAccess(local); setQuickAccessState("error"); setQuickAccessMessage(error.message || "Не удалось загрузить быстрый доступ");
+    });
+    return () => { cancelled = true; quickAccessSyncEnabledRef.current = false; };
+  }, [userId, performerHydrationVersion, quickAccessRetry, replaceQuickAccess]);
 
   const saveProjectNow = useCallback(async (project) => {
     if (!syncEnabledRef.current || !project) return false;
@@ -173,8 +258,8 @@ export default function KubikiApp({ userId, onSignOut }) {
     } catch (_) { /* переполнение хранилища / приватный режим — тихо пропускаем */ }
   }, [projects, currentId, userId]);
 
-  useEffect(() => { savePerformerLibrary(performers); }, [performers]);
-  useEffect(() => { saveQuickAccessState(quickAccess); }, [quickAccess]);
+  useEffect(() => { performersRef.current = performers; }, [performers]);
+  useEffect(() => { quickAccessRef.current = quickAccess; }, [quickAccess]);
 
   // синхронизация шаблонов в localStorage
   const handleTemplatesChange = useCallback((updated) => {
@@ -254,22 +339,100 @@ export default function KubikiApp({ userId, onSignOut }) {
   const handleSignOut = async () => {
     await flushAll();
     syncEnabledRef.current = false;
+    performerSyncEnabledRef.current = false;
+    quickAccessSyncEnabledRef.current = false;
+    quickAccessOperationVersionRef.current += 1;
+    replacePerformers([], false);
+    replaceQuickAccess({ items: [] }, false);
     await onSignOut();
   };
-  const savePerformer = (draft, addToQuickAccess, existingId = null) => {
-    const next = existingId ? updatePerformer(performers, existingId, draft) : createPerformer(performers, draft);
-    const saved = existingId ? next.find((item) => item.id === existingId) : next[next.length - 1];
-    setPerformers(next);
-    if (saved) setQuickAccess((current) => addToQuickAccess
-      ? applyQuickAccessPreference(current, saved.id, true)
-      : removeQuickAccessByPerformerId(current, saved.id));
+
+  const addQuickAccessForPerformer = async (performerId) => {
+    const existing = quickAccessRef.current.items.find((item) => item.performerId === performerId);
+    if (existing) return existing;
+    if (!quickAccessSyncEnabledRef.current || !serverPerformerIdsRef.current.has(performerId)) { setQuickAccessState("save-error"); setQuickAccessMessage("Быстрый доступ ещё не готов к синхронизации"); return null; }
+    const next = applyQuickAccessPreference(quickAccessRef.current, performerId, true);
+    const item = next.items.find((entry) => entry.performerId === performerId);
+    const operationVersion = quickAccessOperationVersionRef.current;
+    replaceQuickAccess(next); setQuickAccessState("saving");
+    try { const saved = await quickAccessRepository.upsertQuickAccessItem(userId, item); if (operationVersion !== quickAccessOperationVersionRef.current) return null; setQuickAccessState("ready"); setQuickAccessMessage(""); return saved; }
+    catch (error) { if (operationVersion !== quickAccessOperationVersionRef.current) return null; setQuickAccessState("save-error"); setQuickAccessMessage(`${error.message}. Локальная копия сохранена.`); return null; }
   };
-  const togglePerformerQuickAccess = (performerId) => setQuickAccess((current) => current.items.some((item) => item.performerId === performerId)
-    ? removeQuickAccessByPerformerId(current, performerId)
-    : applyQuickAccessPreference(current, performerId, true));
-  const deletePerformerCard = (performerId) => {
-    setPerformers((current) => removePerformer(current, performerId));
-    setQuickAccess((current) => removeQuickAccessByPerformerId(current, performerId));
+
+  const removeQuickAccessByItem = async (item) => {
+    if (!quickAccessSyncEnabledRef.current) { setQuickAccessState("save-error"); setQuickAccessMessage("Быстрый доступ ещё не готов к синхронизации"); return false; }
+    const operationVersion = quickAccessOperationVersionRef.current;
+    setQuickAccessState("saving");
+    try { await quickAccessRepository.deleteQuickAccessItem(userId, item.id); if (operationVersion !== quickAccessOperationVersionRef.current) return false; }
+    catch (error) { if (operationVersion !== quickAccessOperationVersionRef.current) return false; setQuickAccessState("save-error"); setQuickAccessMessage(error.message); return false; }
+    replaceQuickAccess(removeQuickAccessItem(quickAccessRef.current, item.id)); setQuickAccessState("ready"); setQuickAccessMessage(""); return true;
+  };
+
+  const removeQuickAccessForPerformer = async (performerId) => {
+    const item = quickAccessRef.current.items.find((entry) => entry.performerId === performerId);
+    return item ? removeQuickAccessByItem(item) : true;
+  };
+
+  const toggleQuickAccessPin = async (item) => {
+    if (!quickAccessSyncEnabledRef.current) { setQuickAccessState("save-error"); setQuickAccessMessage("Быстрый доступ ещё не готов к синхронизации"); return false; }
+    const next = item.pinned ? unpinQuickAccessItem(quickAccessRef.current, item.id) : pinQuickAccessItem(quickAccessRef.current, item.id);
+    const changed = next.items.find((entry) => entry.id === item.id);
+    const operationVersion = quickAccessOperationVersionRef.current;
+    replaceQuickAccess(next); setQuickAccessState("saving");
+    try { await quickAccessRepository.updateQuickAccessItem(userId, changed); if (operationVersion !== quickAccessOperationVersionRef.current) return false; setQuickAccessState("ready"); setQuickAccessMessage(""); return true; }
+    catch (error) { if (operationVersion !== quickAccessOperationVersionRef.current) return false; setQuickAccessState("save-error"); setQuickAccessMessage(`${error.message}. Изменение сохранено локально.`); return false; }
+  };
+  const savePerformer = async (draft, addToQuickAccess, existingId = null) => {
+    const current = performersRef.current;
+    const next = existingId ? updatePerformer(current, existingId, draft) : createPerformer(current, draft);
+    const saved = existingId ? next.find((item) => item.id === existingId) : next[next.length - 1];
+    replacePerformers(next);
+    if (!performerSyncEnabledRef.current) { setPerformerMessage("Серверная база ещё не готова. Изменение сохранено локально."); return null; }
+    setPerformerState("saving");
+    try { await performerRepository.upsertPerformer(userId, saved); serverPerformerIdsRef.current.add(saved.id); setPerformerState("ready"); setPerformerMessage("Карточка сохранена"); }
+    catch (error) { setPerformerState("save-error"); setPerformerMessage(`${error.message}. Локальная копия сохранена.`); return null; }
+    if (saved) {
+      if (addToQuickAccess) await addQuickAccessForPerformer(saved.id);
+      else await removeQuickAccessForPerformer(saved.id);
+    }
+    return saved;
+  };
+  const togglePerformerQuickAccess = async (performerId) => quickAccessRef.current.items.some((item) => item.performerId === performerId)
+    ? removeQuickAccessForPerformer(performerId)
+    : addQuickAccessForPerformer(performerId);
+  const deletePerformerCard = async (performerId) => {
+    if (!performerSyncEnabledRef.current) { setPerformerMessage("Удаление доступно после загрузки серверной базы"); return false; }
+    setPerformerState("saving");
+    try { await performerRepository.deletePerformer(userId, performerId); }
+    catch (error) { setPerformerState("save-error"); setPerformerMessage(error.message); return false; }
+    replacePerformers(removePerformer(performersRef.current, performerId));
+    serverPerformerIdsRef.current.delete(performerId);
+    replaceQuickAccess(removeQuickAccessByPerformerId(quickAccessRef.current, performerId));
+    setPerformerState("ready"); setPerformerMessage("Карточка удалена"); return true;
+  };
+
+  const handleQuickAccessMigration = async () => {
+    setQuickAccessState("migrating"); setQuickAccessMessage("");
+    try {
+      const results = await migrateLocalQuickAccess({ userId, items: quickAccessMigrationCandidates, performerIds: [...serverPerformerIdsRef.current], repository: quickAccessRepository });
+      const serverQuickAccess = await quickAccessRepository.listQuickAccessItems(userId, [...serverPerformerIdsRef.current]);
+      replaceQuickAccess(serverQuickAccess); markQuickAccessServerOwner(userId); quickAccessSyncEnabledRef.current = true;
+      setQuickAccessMigrationCandidates([]); setQuickAccessState("ready");
+      const skipped = results.filter((result) => result.skipped).length;
+      setQuickAccessMessage(skipped ? `Перенос завершён. Пропущено битых ссылок: ${skipped}` : "Быстрый доступ перенесён");
+    } catch (error) { quickAccessSyncEnabledRef.current = false; setQuickAccessState("migration-offer"); setQuickAccessMessage(error.message); }
+  };
+
+  const handlePerformerMigration = async () => {
+    setPerformerState("migrating"); setPerformerMessage("");
+    try {
+      await migrateLocalPerformers({ userId, performers: migrationCandidates, repository: performerRepository });
+      const serverPerformers = await performerRepository.listPerformers(userId);
+      serverPerformerIdsRef.current = new Set(serverPerformers.map((item) => item.id));
+      replacePerformers(serverPerformers); markPerformerServerOwner(userId); performerSyncEnabledRef.current = true;
+      setPerformerHydrationVersion((value) => value + 1);
+      setMigrationCandidates([]); setPerformerState("ready"); setPerformerMessage(`Перенесено карточек: ${migrationCandidates.length}`);
+    } catch (error) { performerSyncEnabledRef.current = false; setPerformerState("migration-offer"); setPerformerMessage(error.message); }
   };
 
   if (serverState === "loading") return <div className="kb-server-screen"><div className="kb-auth-loading">Загружаем проекты…</div></div>;
@@ -295,7 +458,26 @@ export default function KubikiApp({ userId, onSignOut }) {
           </div>
         </div>
       </div>}
+      {(performerState === "migration-offer" || performerState === "migrating") && <div className="kb-modal-overlay kb-server-overlay">
+        <div className="kb-modal kb-server-card" role="dialog" aria-modal="true" aria-labelledby="performer-migration-title">
+          <div className="kb-server-title" id="performer-migration-title">Перенести базу исполнителей</div>
+          <div className="kb-server-text">На этом устройстве найдено карточек: {migrationCandidates.length}.<br />Перенести их в аккаунт, чтобы база была доступна с других устройств?<br />Локальная резервная копия сохранится.</div>
+          {performerMessage && <div className="kb-server-error" role="alert">{performerMessage}</div>}
+          <div className="kb-modal-actions"><button className="kb-btn kb-btn-ghost" type="button" disabled={performerState === "migrating"} onClick={() => { replacePerformers([...performersRef.current, ...migrationCandidates]); setPerformerState("local-deferred"); }}>Не сейчас</button><button className="kb-btn kb-btn-primary" type="button" disabled={performerState === "migrating"} onClick={handlePerformerMigration}>{performerState === "migrating" ? "Переносим…" : "Перенести карточки"}</button></div>
+        </div>
+      </div>}
+      {performerState === "error" && <div className="kb-toast" role="alert">{performerMessage}. Локальная копия не изменена. <button className="kb-toast-retry" onClick={() => setPerformerRetry((value) => value + 1)}>Повторить</button></div>}
+      {["saving", "save-error"].includes(performerState) && <div className="kb-toast" role="status">{performerState === "saving" ? "Сохраняем карточку…" : performerMessage}</div>}
       {serverMessage && serverState === "ready" && <div className="kb-toast" role="status">{serverMessage}{saveState === "error" && <button type="button" className="kb-toast-retry" onClick={flushAll}>Повторить</button>}</div>}
+      {(quickAccessState === "migration-offer" || quickAccessState === "migrating") && <div className="kb-modal-overlay kb-server-overlay">
+        <div className="kb-modal kb-server-card" role="dialog" aria-modal="true" aria-labelledby="quick-access-migration-title">
+          <div className="kb-server-title" id="quick-access-migration-title">Перенести быстрый доступ</div>
+          <div className="kb-server-text">На этом устройстве найдено исполнителей в быстром доступе: {quickAccessMigrationCandidates.length}.<br />Перенести их в аккаунт, чтобы список был доступен с других устройств?<br />Локальная резервная копия сохранится.</div>
+          {quickAccessMessage && <div className="kb-server-error" role="alert">{quickAccessMessage}</div>}
+          <div className="kb-modal-actions"><button className="kb-btn kb-btn-ghost" type="button" disabled={quickAccessState === "migrating"} onClick={() => { replaceQuickAccess({ items: [...quickAccessRef.current.items, ...quickAccessMigrationCandidates] }); setQuickAccessState("local-deferred"); }}>Не сейчас</button><button className="kb-btn kb-btn-primary" type="button" disabled={quickAccessState === "migrating"} onClick={handleQuickAccessMigration}>{quickAccessState === "migrating" ? "Переносим…" : "Перенести"}</button></div>
+        </div>
+      </div>}
+      {["error", "save-error"].includes(quickAccessState) && <div className="kb-toast" role="alert">{quickAccessMessage}<button className="kb-toast-retry" type="button" onClick={() => setQuickAccessRetry((value) => value + 1)}>Повторить</button><button className="kb-toast-retry" type="button" onClick={() => { setQuickAccessState("ready"); setQuickAccessMessage(""); }}>Закрыть</button></div>}
       {projectSource?.file && <ImportModal file={projectSource.file} instruction={projectSource.description || ""}
         onClose={() => setProjectSource(null)} onConfirm={createProjectFromEstimate} />}
       {projectSource && !projectSource.file && <GenerateEstimateModal description={projectSource.description}
@@ -308,17 +490,17 @@ export default function KubikiApp({ userId, onSignOut }) {
             : template))}
           onBack={() => setEditingTemplateId(null)}
           editingTemplate
-          performers={performers} onPerformersChange={setPerformers}
-          quickAccess={quickAccess} onQuickAccessChange={setQuickAccess}
+          performers={performers} onSavePerformer={savePerformer}
+          quickAccess={quickAccess} onToggleQuickAccessPin={toggleQuickAccessPin} onRemoveQuickAccess={removeQuickAccessByItem}
           onSignOut={handleSignOut}
         />
       ) : currentProject ? (
         <Workspace project={currentProject} onChange={updateCurrent} onBack={async () => { await flushProject(currentProject.id); setCurrentId(null); }}
           saveState={saveState} saveError={serverMessage} onRetrySave={() => flushProject(currentProject.id)}
-          performers={performers} onPerformersChange={setPerformers}
-          quickAccess={quickAccess} onQuickAccessChange={setQuickAccess} onSignOut={handleSignOut} />
+          performers={performers} onSavePerformer={savePerformer}
+          quickAccess={quickAccess} onToggleQuickAccessPin={toggleQuickAccessPin} onRemoveQuickAccess={removeQuickAccessByItem} onSignOut={handleSignOut} />
       ) : activeSection === APP_SECTIONS.KNOWLEDGE_BASE ? (
-        <KnowledgeBasePage performers={performers} quickAccess={quickAccess} onSectionChange={setActiveSection}
+        <KnowledgeBasePage performers={performers} performerState={performerState} performerMessage={performerMessage} onRetryPerformers={() => setPerformerRetry((value) => value + 1)} quickAccess={quickAccess} onSectionChange={setActiveSection}
           onSavePerformer={savePerformer} onToggleQuickAccess={togglePerformerQuickAccess} onDeletePerformer={deletePerformerCard}
           onSignOut={handleSignOut} />
       ) : (

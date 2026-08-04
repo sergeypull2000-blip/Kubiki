@@ -13,8 +13,8 @@ import { PalettePanel } from "./LeftPanel.jsx";
 import { StageCard, CanvasDropZone } from "./Stage.jsx";
 import { RightPanel } from "./RightPanel.jsx";
 import { PerformerModal } from "./PerformerLibrary.jsx";
-import { addPerformerToTask, buildPerformerFromExecutor, createPerformer, linkExecutorToPerformer, normalizePerformer, updatePerformer } from "../performerLibrary.js";
-import { applyQuickAccessPreference, pinQuickAccessItem, removeQuickAccessByPerformerId, removeQuickAccessItem, sortQuickAccessItems, unpinQuickAccessItem } from "../quickAccess.js";
+import { addPerformerToTask, buildPerformerFromExecutor, linkExecutorToPerformer, normalizePerformer } from "../performerLibrary.js";
+import { sortQuickAccessItems } from "../quickAccess.js";
 import {
   TEMPLATE_KEYS, loadTemplates, removeTemplate,
   saveTaskTemplate, saveStageTemplate,
@@ -24,7 +24,7 @@ import {
 /* ============================================================
    Рабочая зона
    ============================================================ */
-export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onPerformersChange, quickAccess, onQuickAccessChange, onSignOut, saveState = "saved", saveError = "", onRetrySave }) {
+export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onSignOut, saveState = "saved", saveError = "", onRetrySave }) {
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
   // в Клайне можно persist'ить в localStorage.
   const [importFile, setImportFile] = useState(null);
@@ -36,8 +36,6 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
   const [performerModal, setPerformerModal] = useState(null);
   const clipboardRef = useRef(null); // скопированный исполнитель (Ctrl+C/Ctrl+V)
   const dispatch = (fn) => onChange(fn);
-  const commitPerformers = (next) => { onPerformersChange(next); return next; };
-  const commitQuickAccess = (next) => { onQuickAccessChange(next); return next; };
   const total = projectSum(project);
 
   // теги выделенного исполнителя — для контекстной подсказки под «Кубиками исполнителя»
@@ -205,16 +203,11 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
     setPerformerModal({ draft: linked || buildPerformerFromExecutor(executor), executorId: executor.id, existingId: linked?.id || null, addToQuickAccess: true });
   }, [performers]);
 
-  const savePerformerCard = (draft, addToQuickAccess) => {
+  const savePerformerCard = async (draft, addToQuickAccess) => {
     const existingId = performerModal?.existingId || (performers.some((item) => item.id === draft.id) ? draft.id : null);
-    let next = existingId ? updatePerformer(performers, existingId, draft) : createPerformer(performers, draft);
-    next = commitPerformers(next);
-    const saved = existingId ? next.find((item) => item.id === existingId) : next[next.length - 1];
+    const saved = await onSavePerformer(draft, addToQuickAccess, existingId);
     if (performerModal?.executorId && saved) dispatch((current) => linkExecutorToPerformer(current, performerModal.executorId, saved));
-    if (saved) commitQuickAccess(addToQuickAccess
-      ? applyQuickAccessPreference(quickAccess, saved.id, true)
-      : removeQuickAccessByPerformerId(quickAccess, saved.id));
-    setPerformerModal(null);
+    if (saved) setPerformerModal(null);
   };
   const openNewPerformer = () => setPerformerModal({ draft: normalizePerformer({ id: "" }), existingId: null, addToQuickAccess: true });
 
@@ -240,7 +233,6 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
     const performer = performers.find((entry) => entry.id === item.performerId);
     if (performer) dispatch((current) => addPerformerToTask(current, stageId, taskId, performer));
   }, [activeStageId, activeTaskId, performers]);
-  const toggleQuickAccessPin = (item) => commitQuickAccess(item.pinned ? unpinQuickAccessItem(quickAccess, item.id) : pinQuickAccessItem(quickAccess, item.id));
   const visibleQuickAccess = sortQuickAccessItems(quickAccess).map((item) => ({ item, performer: performers.find((performer) => performer.id === item.performerId) })).filter((entry) => entry.performer);
 
   const handleApplyTaskTemplate = useCallback((template, overrideStageId) => {
@@ -361,8 +353,8 @@ const toggleAllCollapsed = () =>
             onAddTask={addTaskByClick}
             onAddExecutor={addExecutorByClick}
             quickAccessItems={visibleQuickAccess} onCreatePerformer={openNewPerformer}
-            onApplyQuickAccess={applyQuickAccess} onToggleQuickAccessPin={toggleQuickAccessPin}
-            onRemoveQuickAccess={(item) => commitQuickAccess(removeQuickAccessItem(quickAccess, item.id))}
+            onApplyQuickAccess={applyQuickAccess} onToggleQuickAccessPin={onToggleQuickAccessPin}
+            onRemoveQuickAccess={onRemoveQuickAccess}
             taskTemplates={taskTemplates}
             stageTemplates={stageTemplates}
             onApplyTaskTemplate={handleApplyTaskTemplate}

@@ -5,9 +5,10 @@ export const PERFORMER_LIBRARY_KEY = "kubiki_performers_v1";
 const text = (value) => typeof value === "string" ? value.trim() : "";
 const nullableText = (value) => text(value) || null;
 const nullableNumber = (value) => value === "" || value == null || !Number.isFinite(Number(value)) ? null : Number(value);
-const list = (value) => [...new Set((Array.isArray(value) ? value : []).map(text).filter(Boolean))];
+const list = (value) => (Array.isArray(value) ? value : []).map(text).filter(Boolean);
 const getTag = (executor, key) => executor?.tags?.find((tag) => tag.key === key);
 const paymentUnit = (type) => type === "hourly" ? "hour" : type === "shift" ? "shift" : type ? "total" : null;
+const cloneObject = (value) => { try { return structuredClone(value); } catch { try { return JSON.parse(JSON.stringify(value)); } catch { return {}; } } };
 
 export const performerDisplayName = (performer) => [performer?.firstName, performer?.lastName].map(text).filter(Boolean).join(" ");
 
@@ -22,16 +23,18 @@ export function searchPerformers(library, query) {
 export const removePerformer = (library, id) => normalizePerformerLibrary(library).filter((performer) => performer.id !== id);
 
 export function normalizePerformer(value = {}, now = new Date().toISOString()) {
-  const primaryRole = text(value.primaryRole);
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const primaryRole = text(source.primaryRole);
   return {
-    id: text(value.id) || uid(), firstName: text(value.firstName), lastName: text(value.lastName), primaryRole,
-    additionalRoles: list(value.additionalRoles).filter((role) => role !== primaryRole),
-    specializations: list(value.specializations), grade: nullableText(value.grade), software: list(value.software),
-    legalStatus: nullableText(value.legalStatus), defaultPaymentType: nullableText(value.defaultPaymentType),
-    defaultRate: nullableNumber(value.defaultRate), defaultUnit: nullableText(value.defaultUnit),
-    defaultTaxRate: nullableNumber(value.defaultTaxRate), defaultCommission: nullableNumber(value.defaultCommission),
-    phone: text(value.phone), email: text(value.email), telegram: text(value.telegram), notes: text(value.notes),
-    active: value.active !== false, createdAt: text(value.createdAt) || now, updatedAt: text(value.updatedAt) || now,
+    ...cloneObject(source),
+    id: text(source.id) || uid(), firstName: text(source.firstName), lastName: text(source.lastName), primaryRole,
+    additionalRoles: list(source.additionalRoles).filter((role) => role !== primaryRole),
+    specializations: list(source.specializations), grade: nullableText(source.grade), software: list(source.software),
+    legalStatus: nullableText(source.legalStatus), defaultPaymentType: nullableText(source.defaultPaymentType),
+    defaultRate: nullableNumber(source.defaultRate), defaultUnit: nullableText(source.defaultUnit),
+    defaultTaxRate: nullableNumber(source.defaultTaxRate), defaultCommission: nullableNumber(source.defaultCommission),
+    phone: text(source.phone), email: text(source.email), telegram: text(source.telegram), notes: text(source.notes),
+    active: source.active !== false, createdAt: text(source.createdAt) || now, updatedAt: text(source.updatedAt) || now,
   };
 }
 export function normalizePerformerLibrary(values) {

@@ -26,30 +26,32 @@ export function PerformerLibraryItem({ performer, inQuickAccess, onEdit, onToggl
   </article>;
 }
 
-export function KnowledgeBasePage({ performers, quickAccess, onSectionChange, onSavePerformer, onToggleQuickAccess, onDeletePerformer, onSignOut }) {
+export function KnowledgeBasePage({ performers, performerState = "ready", performerMessage = "", onRetryPerformers, quickAccess, onSectionChange, onSavePerformer, onToggleQuickAccess, onDeletePerformer, onSignOut }) {
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState(null);
   const visible = useMemo(() => searchPerformers(performers, query), [performers, query]);
   const quickIds = useMemo(() => new Set((quickAccess?.items || []).map((item) => item.performerId)), [quickAccess]);
   const create = () => setEditing({ performer: null, addToQuickAccess: true });
   const edit = (performer) => setEditing({ performer, addToQuickAccess: quickIds.has(performer.id) });
-  const remove = (id) => {
-    if (window.confirm("Удалить карточку исполнителя из базы? Исполнители, уже добавленные в сметы, останутся в проектах.")) onDeletePerformer(id);
+  const remove = async (id) => {
+    if (window.confirm("Удалить карточку исполнителя из базы? Исполнители, уже добавленные в сметы, останутся в проектах.")) await onDeletePerformer(id);
   };
   return <div className="kb-root">
     <AppTopNavigation activeSection="knowledgeBase" onSectionChange={onSectionChange} onSignOut={onSignOut} />
     <main className="kb-knowledge-page">
       <div className="kb-knowledge-eyebrow">База знаний</div><h1>Исполнители</h1>
-      {performers.length ? <>
+      {performerState === "loading" && <div className="kb-library-empty">Загружаем базу исполнителей…</div>}
+      {performerState === "error" && <div className="kb-server-error" role="alert">{performerMessage}<button type="button" className="kb-toast-retry" onClick={onRetryPerformers}>Повторить</button></div>}
+      {performerState !== "loading" && (performers.length ? <>
         <div className="kb-library-tools"><label><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по исполнителям" /></label>
           <button type="button" className="kb-btn kb-btn-primary" onClick={create}><Plus size={16} />Добавить исполнителя</button></div>
         {visible.length ? <div className="kb-performer-list">{visible.map((performer) => <PerformerLibraryItem key={performer.id} performer={performer}
           inQuickAccess={quickIds.has(performer.id)} onEdit={edit} onToggleQuickAccess={onToggleQuickAccess} onDelete={remove} />)}</div>
           : <div className="kb-library-empty">Исполнители не найдены</div>}
       </> : <div className="kb-library-empty kb-library-empty-full"><strong>В базе пока нет исполнителей</strong><span>Сохраняйте карточки из смет или создайте нового исполнителя.</span>
-        <button type="button" className="kb-btn kb-btn-primary" onClick={create}><Plus size={16} />Добавить исполнителя</button></div>}
+        <button type="button" className="kb-btn kb-btn-primary" onClick={create}><Plus size={16} />Добавить исполнителя</button></div>)}
     </main>
     {editing && <PerformerModal initial={editing.performer || {}} isNew={!editing.performer} initialAddToQuickAccess={editing.addToQuickAccess}
-      onSave={(draft, addToQuickAccess) => { onSavePerformer(draft, addToQuickAccess, editing.performer?.id || null); setEditing(null); }} onClose={() => setEditing(null)} />}
+      onSave={async (draft, addToQuickAccess) => { const saved = await onSavePerformer(draft, addToQuickAccess, editing.performer?.id || null); if (saved) setEditing(null); }} onClose={() => setEditing(null)} />}
   </div>;
 }
