@@ -65,6 +65,7 @@ export default function KubikiApp({ userId, onSignOut }) {
   const [currentId, setCurrentId] = useState(() => initialLocalState.current.currentId || null);
   const [serverState, setServerState] = useState("loading");
   const [serverMessage, setServerMessage] = useState("");
+  const [migrationNotice, setMigrationNotice] = useState("");
   const [saveState, setSaveState] = useState("saved");
   const [retryVersion, setRetryVersion] = useState(0);
   const syncEnabledRef = useRef(false);
@@ -209,6 +210,12 @@ export default function KubikiApp({ userId, onSignOut }) {
   }, [flushProject]);
 
   useEffect(() => {
+    if (!migrationNotice) return;
+    const timer = setTimeout(() => setMigrationNotice(""), 7000);
+    return () => clearTimeout(timer);
+  }, [migrationNotice]);
+
+  useEffect(() => {
     let cancelled = false;
     const timers = timersRef.current;
     const pending = pendingRef.current;
@@ -227,7 +234,7 @@ export default function KubikiApp({ userId, onSignOut }) {
         const { onlyLocal } = diffProjectCollections(localProjects, serverProjects);
         if (onlyLocal.length) {
           createLocalServerBackup();
-          setServerMessage("На устройстве остались локальные проекты. Они сохранены в резервной копии и не объединены с серверными.");
+          setMigrationNotice("На устройстве остались локальные проекты. Они сохранены в резервной копии и не объединены с серверными.");
         }
       }
       replaceProjects(serverProjects);
@@ -557,6 +564,10 @@ export default function KubikiApp({ userId, onSignOut }) {
       </div>}
       {performerState === "error" && <div className="kb-toast" role="alert">{performerMessage}. Локальная копия не изменена. <button className="kb-toast-retry" onClick={() => setPerformerRetry((value) => value + 1)}>Повторить</button></div>}
       {["saving", "save-error"].includes(performerState) && <div className="kb-toast" role="status">{performerState === "saving" ? "Сохраняем карточку…" : performerMessage}</div>}
+      {migrationNotice && serverState === "ready" && <div className="kb-toast kb-toast-dismissible" role="status">
+        <span>{migrationNotice}</span>
+        <button type="button" className="kb-toast-close" aria-label="Закрыть уведомление" onClick={() => setMigrationNotice("")}>×</button>
+      </div>}
       {serverMessage && serverState === "ready" && <div className="kb-toast" role="status">{serverMessage}{saveState === "error" && <button type="button" className="kb-toast-retry" onClick={flushAll}>Повторить</button>}</div>}
       {(quickAccessState === "migration-offer" || quickAccessState === "migrating") && <div className="kb-modal-overlay kb-server-overlay">
         <div className="kb-modal kb-server-card" role="dialog" aria-modal="true" aria-labelledby="quick-access-migration-title">

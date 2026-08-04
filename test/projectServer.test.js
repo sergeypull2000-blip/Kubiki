@@ -133,6 +133,14 @@ test("интеграция содержит hydration guard, debounce, flush и 
   assert.match(source, /parsed\.serverUserId !== userId/);
 });
 
+test("уведомление о локальных проектах закрывается вручную и автоматически", () => {
+  const source = readFileSync(new URL("../src/kubiki.jsx", import.meta.url), "utf8");
+  assert.match(source, /setMigrationNotice\("На устройстве остались локальные проекты\./);
+  assert.match(source, /setTimeout\(\(\) => setMigrationNotice\(""\), 7000\)/);
+  assert.match(source, /aria-label="Закрыть уведомление"[\s\S]*setMigrationNotice\(""\)/);
+  assert.doesNotMatch(source, /setServerMessage\("На устройстве остались локальные проекты\./);
+});
+
 test("repository использует owner-scoped conflict key и не содержит service role", () => {
   const source = readFileSync(new URL("../src/repositories/projectRepository.js", import.meta.url), "utf8");
   assert.match(source, /onConflict: "user_id,client_id"/);

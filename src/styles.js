@@ -765,6 +765,7 @@ export const CSS = `
 .kb-template-tree-input{flex:1; min-width:0; padding:2px 4px; border:1px solid var(--line-strong); border-radius:4px; background:var(--surface); color:var(--text); font:inherit; font-size:12px; outline:none}
 .kb-template-tree-input:focus{border-color:var(--accent)}
 .kb-toast{position:fixed; z-index:200; left:50%; top:50%; transform:translate(-50%,-50%); padding:10px 16px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--text); box-shadow:0 12px 40px rgba(20,30,50,.16); font-size:var(--fs-sm); font-weight:var(--fw-medium); pointer-events:none; animation:kb-toast-in .16s ease-out}
+.kb-toast-dismissible{display:flex;align-items:center;gap:12px;pointer-events:auto}.kb-toast-close{display:grid;place-items:center;width:22px;height:22px;padding:0;border:0;border-radius:5px;background:transparent;color:var(--text-muted);font:inherit;font-size:18px;line-height:1;cursor:pointer}.kb-toast-close:hover{background:var(--surface-sunken);color:var(--text)}
 @keyframes kb-toast-in{from{opacity:0; transform:translate(-50%,-46%)}to{opacity:1; transform:translate(-50%,-50%)}}
 
 /* поле ввода при редактировании названия */
