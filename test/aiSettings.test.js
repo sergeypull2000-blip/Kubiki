@@ -50,7 +50,17 @@ test("AI settings repository scopes load/upsert to user_id", async () => {
   assert.equal((await repository.loadAiSettings("u1")).settings.personalization, "Текст");
   const saved = await repository.upsertAiSettings("u1", { personalization: "Правила", useProjectHistory: true });
   assert.equal(saved.useProjectHistory, true);
-  assert.equal(calls[1].payload.user_id, "u1");
+  assert.deepEqual(calls[1].payload, { user_id: "u1", personalization: "Правила", use_project_history: true });
+  assert.deepEqual(saved, { personalization: "Правила", useProjectHistory: true });
+});
+
+test("AI settings repository surfaces an upsert error without normalizing it into empty settings", async () => {
+  const failure = { message: "write rejected", code: "42501" };
+  const repository = createAiSettingsRepository(repositoryClient(() => ({ data: null, error: failure })));
+  await assert.rejects(
+    () => repository.upsertAiSettings("u1", { personalization: "Не терять этот текст", useProjectHistory: false }),
+    (error) => error.message.includes("write rejected") && error.cause === failure,
+  );
 });
 
 test("server settings loader rejects a foreign row", async () => {
@@ -74,7 +84,8 @@ test("Kubiki integrates owner-bound hydration, local fallback, save and logout c
   assert.match(source, /aiSettingsRepository\.loadAiSettings\(userId\)/);
   assert.match(source, /replaceAiSettings\(local\)/);
   assert.match(source, /aiSettingsRepository\.upsertAiSettings\(userId, value\)/);
+  assert.match(source, /await aiSettingsHydrationRef\.current/);
+  assert.doesNotMatch(source, /const value = replaceAiSettings\(draft\)/);
   assert.match(source, /aiSettingsSyncEnabledRef\.current = false/);
   assert.match(source, /replaceAiSettings\(normalizeAiSettings\(\), false\)/);
 });
-

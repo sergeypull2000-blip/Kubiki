@@ -102,6 +102,7 @@ export default function KubikiApp({ userId, onSignOut }) {
   const [aiSettings, setAiSettings] = useState(() => initialAiSettings.current);
   const aiSettingsRef = useRef(aiSettings);
   const aiSettingsSyncEnabledRef = useRef(false);
+  const aiSettingsHydrationRef = useRef(Promise.resolve());
   const [aiSettingsState, setAiSettingsState] = useState("loading");
   const [aiSettingsMessage, setAiSettingsMessage] = useState("");
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
@@ -138,25 +139,27 @@ export default function KubikiApp({ userId, onSignOut }) {
     aiSettingsSyncEnabledRef.current = false;
     setAiSettingsState("loading"); setAiSettingsMessage("");
     const local = loadLocalAiSettings(userId);
-    aiSettingsRepository.loadAiSettings(userId).then(({ settings }) => {
+    const hydration = aiSettingsRepository.loadAiSettings(userId).then(({ settings }) => {
       if (cancelled) return;
       replaceAiSettings(settings); aiSettingsSyncEnabledRef.current = true; setAiSettingsState("ready");
     }).catch(() => {
       if (cancelled) return;
       replaceAiSettings(local); setAiSettingsState("error"); setAiSettingsMessage("Настройки ИИ пока не синхронизированы с сервером. Используется локальная копия.");
     });
+    aiSettingsHydrationRef.current = hydration;
     return () => { cancelled = true; aiSettingsSyncEnabledRef.current = false; aiSettingsRef.current = normalizeAiSettings(); };
   }, [userId, replaceAiSettings]);
 
   const saveAiSettings = useCallback(async (draft) => {
-    const value = replaceAiSettings(draft);
-    if (!aiSettingsSyncEnabledRef.current) { setAiSettingsState("save-error"); setAiSettingsMessage("Серверные настройки ещё недоступны. Изменение сохранено локально."); return false; }
+    const value = normalizeAiSettings(draft);
+    await aiSettingsHydrationRef.current;
+    if (!aiSettingsSyncEnabledRef.current) { replaceAiSettings(value); setAiSettingsState("save-error"); setAiSettingsMessage("Не удалось подключиться к серверным настройкам. Текст сохранён только на этом устройстве; попробуйте ещё раз."); return false; }
     setAiSettingsState("saving"); setAiSettingsMessage("");
     try {
       const saved = await aiSettingsRepository.upsertAiSettings(userId, value);
-      replaceAiSettings(saved); setAiSettingsState("ready"); return true;
+      replaceAiSettings(saved); setAiSettingsState("ready"); setAiSettingsMessage("Настройки сохранены"); return true;
     } catch (error) {
-      setAiSettingsState("save-error"); setAiSettingsMessage(`${error.message}. Изменение сохранено локально.`); return false;
+      replaceAiSettings(value); setAiSettingsState("save-error"); setAiSettingsMessage(`${error.message}. Текст сохранён только на этом устройстве; попробуйте ещё раз.`); return false;
     }
   }, [replaceAiSettings, userId]);
 
