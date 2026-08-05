@@ -115,7 +115,7 @@ test("invalid final JSON receives exactly one repair attempt", async () => {
   assert.ok(result.estimate);
 });
 
-test("thinking is unchanged for profile and disabled only for generation and repair", async () => {
+test("profile, generation and repair send thinking disabled in the actual request body", async () => {
   const bodies = [];
   const logs = [];
   const client = createDeepSeekClient({
@@ -131,7 +131,7 @@ test("thinking is unchanged for profile and disabled only for generation and rep
   await client([], { stage: "generation", maxTokens: 4000 });
   await client([], { stage: "repair", maxTokens: 4000, retries: 0 });
 
-  assert.equal(Object.hasOwn(bodies[0], "thinking"), false);
+  assert.deepEqual(bodies[0].thinking, { type: "disabled" });
   assert.deepEqual(bodies[1].thinking, { type: "disabled" });
   assert.deepEqual(bodies[2].thinking, { type: "disabled" });
   assert.deepEqual(bodies.map(({ model, max_tokens, response_format }) => ({ model, max_tokens, response_format })), [
@@ -140,7 +140,7 @@ test("thinking is unchanged for profile and disabled only for generation and rep
     { model: "deepseek-v4-flash", max_tokens: 4000, response_format: { type: "json_object" } },
   ]);
   assert.deepEqual(logs.map(({ stage, model, thinkingMode }) => ({ stage, model, thinkingMode })), [
-    { stage: "profile", model: "deepseek-v4-flash", thinkingMode: "provider_default" },
+    { stage: "profile", model: "deepseek-v4-flash", thinkingMode: "disabled" },
     { stage: "generation", model: "deepseek-v4-flash", thinkingMode: "disabled" },
     { stage: "repair", model: "deepseek-v4-flash", thinkingMode: "disabled" },
   ]);
