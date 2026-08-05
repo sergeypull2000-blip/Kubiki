@@ -42,7 +42,8 @@ test("endpoint keeps estimate body unchanged and Project persists only display m
   const kubiki = readFileSync(new URL("../src/kubiki.jsx", import.meta.url), "utf8");
   const workspace = readFileSync(new URL("../src/components/Workspace.jsx", import.meta.url), "utf8");
   assert.match(endpoint, /setHeader\("X-Kubiki-Generation-Metadata"/);
-  assert.match(endpoint, /json\(result\.estimate\)/);
+  assert.match(endpoint, /body: result\.estimate/);
+  assert.match(endpoint, /json\(response\.body\)/);
   assert.match(kubiki, /project\.metadata = \{ \.\.\.project\.metadata, aiGeneration: meta\.generationMetadata \}/);
   assert.match(workspace, /Использованы знания студии/);
   assert.doesNotMatch(workspace, /performerSnapshot|phone|telegram|email/i);
