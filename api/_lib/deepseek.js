@@ -22,6 +22,14 @@ export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https:/
       let hasChoices = false;
       let hasMessage = false;
       let hasContent = false;
+      let finishReason = null;
+      let contentType = "undefined";
+      let contentLength = 0;
+      let trimmedContentLength = 0;
+      let reasoningContentLength = 0;
+      let contentIsArray = false;
+      let contentIsObject = false;
+      let contentDecision = "response_not_received";
       try {
         const response = await fetchImpl(url, {
           method: "POST",
@@ -39,10 +47,32 @@ export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https:/
         }
         const data = await response.json();
         hasChoices = Array.isArray(data?.choices) && data.choices.length > 0;
-        hasMessage = Boolean(data?.choices?.[0]?.message);
-        hasContent = data?.choices?.[0]?.message?.content != null;
-        const content = data?.choices?.[0]?.message?.content;
-        if (typeof content !== "string" || !content.trim()) throw new DeepSeekError("DeepSeek вернул пустой ответ", { code: "empty_response" });
+        const choice = data?.choices?.[0];
+        const message = choice?.message;
+        hasMessage = Boolean(message);
+        finishReason = typeof choice?.finish_reason === "string" ? choice.finish_reason : null;
+        const content = message?.content;
+        const reasoningContent = message?.reasoning_content;
+        contentType = typeof content;
+        contentIsArray = Array.isArray(content);
+        contentIsObject = content !== null && typeof content === "object" && !contentIsArray;
+        contentLength = typeof content === "string" ? content.length : 0;
+        trimmedContentLength = typeof content === "string" ? content.trim().length : 0;
+        reasoningContentLength = typeof reasoningContent === "string" ? reasoningContent.length : 0;
+        hasContent = trimmedContentLength > 0;
+        if (content == null) {
+          contentDecision = "message.content.missing";
+          throw new DeepSeekError("DeepSeek вернул пустой ответ", { code: "empty_response" });
+        }
+        if (typeof content !== "string") {
+          contentDecision = "message.content.type_validation";
+          throw new DeepSeekError("DeepSeek вернул content неожиданного типа. Попробуйте позже.", { code: "invalid_content_type" });
+        }
+        if (!trimmedContentLength) {
+          contentDecision = "message.content.trim";
+          throw new DeepSeekError("DeepSeek вернул пустой ответ", { code: "empty_response" });
+        }
+        contentDecision = "message.content.accepted";
         return content;
       } catch (error) {
         const normalized = error?.name === "AbortError" ? new DeepSeekError("DeepSeek не ответил вовремя. Попробуйте позже.", { code: "timeout" }) : error;
@@ -50,7 +80,25 @@ export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https:/
         lastError = normalized;
       } finally {
         clearTimeout(timer);
-        try { logger({ event: "deepseek_attempt", stage, httpStatus, hasChoices, hasMessage, hasContent, durationMs: Date.now() - startedAt }); } catch {}
+        try {
+          logger({
+            event: "deepseek_attempt",
+            stage,
+            httpStatus,
+            hasChoices,
+            hasMessage,
+            hasContent,
+            finishReason,
+            contentType,
+            contentLength,
+            trimmedContentLength,
+            reasoningContentLength,
+            contentIsArray,
+            contentIsObject,
+            contentDecision,
+            durationMs: Date.now() - startedAt,
+          });
+        } catch {}
       }
     }
     throw lastError || new DeepSeekError("Не удалось получить ответ DeepSeek");

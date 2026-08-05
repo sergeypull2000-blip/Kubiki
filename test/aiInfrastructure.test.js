@@ -136,7 +136,7 @@ test("DeepSeek retries an empty response once and returns the second valid respo
   assert.equal(await client([], { stage: "generation" }), validEstimate());
   assert.equal(logs.length, 2);
   assert.deepEqual(logs.map(({ stage, httpStatus, hasChoices, hasMessage, hasContent }) => ({ stage, httpStatus, hasChoices, hasMessage, hasContent })), [
-    { stage: "generation", httpStatus: 200, hasChoices: true, hasMessage: true, hasContent: true },
+    { stage: "generation", httpStatus: 200, hasChoices: true, hasMessage: true, hasContent: false },
     { stage: "generation", httpStatus: 200, hasChoices: true, hasMessage: true, hasContent: true },
   ]);
   assert.equal(Object.hasOwn(logs[0], "durationMs"), true);
@@ -175,6 +175,70 @@ test("empty final generation after retry returns empty_response without repair",
   await assert.rejects(() => runEstimateGeneration({ brief: "Brief", systemPrompt: "ORIGINAL", requestModel: client }), (error) => error instanceof DeepSeekError && error.code === "empty_response");
   assert.equal(transportCalls, 3);
   assert.deepEqual(stages, ["profile", "generation", "generation"]);
+});
+
+test("non-empty string content reaches the caller unchanged", async () => {
+  const logs = [];
+  const content = `  ${validEstimate()}  `;
+  const client = createDeepSeekClient({ apiKey: "key", logger: (entry) => logs.push(entry), fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ choices: [{ finish_reason: "stop", message: { content } }] }) }) });
+  assert.equal(await client([], { stage: "generation", retries: 0 }), content);
+  assert.equal(logs[0].finishReason, "stop");
+  assert.equal(logs[0].contentType, "string");
+  assert.equal(logs[0].contentLength, content.length);
+  assert.equal(logs[0].trimmedContentLength, validEstimate().length);
+  assert.equal(logs[0].contentDecision, "message.content.accepted");
+});
+
+test("whitespace-only string is rejected at trim as empty_response", async () => {
+  const logs = [];
+  const client = createDeepSeekClient({ apiKey: "key", logger: (entry) => logs.push(entry), fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: " \n\t " } }] }) }) });
+  await assert.rejects(() => client([], { retries: 0 }), (error) => error instanceof DeepSeekError && error.code === "empty_response");
+  assert.equal(logs[0].contentLength, 4);
+  assert.equal(logs[0].trimmedContentLength, 0);
+  assert.equal(logs[0].hasContent, false);
+  assert.equal(logs[0].contentDecision, "message.content.trim");
+});
+
+test("empty string is rejected at trim as empty_response", async () => {
+  const logs = [];
+  const client = createDeepSeekClient({ apiKey: "key", logger: (entry) => logs.push(entry), fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "" } }] }) }) });
+  await assert.rejects(() => client([], { retries: 0 }), (error) => error instanceof DeepSeekError && error.code === "empty_response");
+  assert.equal(logs[0].contentType, "string");
+  assert.equal(logs[0].contentLength, 0);
+  assert.equal(logs[0].contentDecision, "message.content.trim");
+});
+
+test("object and array content return a distinct invalid_content_type error", async (t) => {
+  for (const [name, content, expected] of [["object", { text: "json" }, { contentIsArray: false, contentIsObject: true }], ["array", [{ text: "json" }], { contentIsArray: true, contentIsObject: false }]]) {
+    await t.test(name, async () => {
+      const logs = [];
+      let calls = 0;
+      const client = createDeepSeekClient({ apiKey: "key", logger: (entry) => logs.push(entry), fetchImpl: async () => { calls += 1; return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content } }] }) }; } });
+      await assert.rejects(() => client([], { stage: "generation" }), (error) => error instanceof DeepSeekError && error.code === "invalid_content_type");
+      assert.equal(calls, 1);
+      assert.equal(logs[0].contentDecision, "message.content.type_validation");
+      assert.equal(logs[0].contentIsArray, expected.contentIsArray);
+      assert.equal(logs[0].contentIsObject, expected.contentIsObject);
+    });
+  }
+});
+
+test("reasoning_content is measured but ordinary content is returned", async () => {
+  const logs = [];
+  const content = validEstimate();
+  const reasoning = "internal reasoning placeholder";
+  const client = createDeepSeekClient({ apiKey: "key", logger: (entry) => logs.push(entry), fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ choices: [{ message: { reasoning_content: reasoning, content } }] }) }) });
+  assert.equal(await client([], { stage: "generation", retries: 0 }), content);
+  assert.equal(logs[0].reasoningContentLength, reasoning.length);
+  assert.equal(logs[0].trimmedContentLength, content.length);
+});
+
+test("two valid generation calls never become empty_response", async () => {
+  let calls = 0;
+  const client = createDeepSeekClient({ apiKey: "key", logger: () => {}, fetchImpl: async () => { calls += 1; return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: validEstimate() } }] }) }; } });
+  assert.equal(parseEstimate(await client([], { stage: "generation" })).projectName, "Проект");
+  assert.equal(parseEstimate(await client([], { stage: "generation" })).projectName, "Проект");
+  assert.equal(calls, 2);
 });
 
 test("DeepSeek transport maps timeout after bounded retry", async () => {
