@@ -2,10 +2,11 @@ export const AI_SETTINGS_KEY = "kubiki_ai_settings_v1";
 export const AI_SETTINGS_OWNER_KEY = "kubiki_ai_settings_server_user_v1";
 export const MAX_PERSONALIZATION_CHARS = 8_000;
 
-const FORBIDDEN_LINE = /(?:ндс|налог\p{L}*|маркап\p{L}*|наценк\p{L}*|валют\p{L}*|курс валют|exportsettings|service[_ -]?role|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|секрет\p{L}*|парол\p{L}*|ставк(?:а|и|у|ой|е))|[^\s@]+@[^\s@]+\.[^\s@]+|(?:\+?\d[\s().-]*){7,}|(?:^|\s)@[a-zA-Z0-9_]{3,}|https?:\/\//iu;
+const SECRET_ASSIGNMENT = /(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|service[_ -]?role(?:[_ -]?key)?|password|парол\p{L}*|секрет(?:ный)?[_ -]?(?:ключ|токен))\s*(?::|=|\bis\b)\s*\S+/iu;
+const SECRET_VALUE = /(?:\bBearer\s+[A-Za-z0-9._~+/=-]{12,}|\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|\bsk-[A-Za-z0-9_-]{12,})/u;
 
 export function sanitizePersonalization(value) {
-  return String(value ?? "").normalize("NFKC").replace(/\r\n?/g, "\n").split("\n").filter((line) => !FORBIDDEN_LINE.test(line)).join("\n").replace(/[\t ]{2,}/g, " ").replace(/\n{4,}/g, "\n\n\n").trim().slice(0, MAX_PERSONALIZATION_CHARS);
+  return String(value ?? "").replace(/\r\n?/g, "\n").split("\n").filter((line) => !SECRET_ASSIGNMENT.test(line) && !SECRET_VALUE.test(line)).join("\n").slice(0, MAX_PERSONALIZATION_CHARS);
 }
 
 export function normalizeAiSettings(value) {

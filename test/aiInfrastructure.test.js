@@ -87,6 +87,14 @@ test("personalization is absent from analysis and mandatory in final prompt", as
   assert.match(calls[1][1].content, /<ai_personalization>\nНе дробить задачи/);
 });
 
+test("multiline financial personalization is passed unchanged only to the second model request", async () => {
+  const calls = [];
+  const personalization = "Этапы дроби подробно\n\nДля всех исполнителей добавлять 6% налога\nСтавки брать из карточек";
+  await runEstimateGeneration({ brief: "Brief", systemPrompt: "ORIGINAL", requestModel: async (messages) => { calls.push(messages); return calls.length === 1 ? validProfile() : validEstimate(); }, getGenerationContext: async () => ({ personalization, shortlist: { projectTemplates: [], stageTemplates: [], taskTemplates: [], performers: [], historicalProjects: [] } }) });
+  assert.doesNotMatch(calls[0][1].content, /6% налога|ai_personalization/);
+  assert.match(calls[1][1].content, new RegExp(`<ai_personalization>\\n${personalization}\\n</ai_personalization>`));
+});
+
 test("analysis failure uses deterministic fallback without blocking final generation", async () => {
   let call = 0;
   const result = await runEstimateGeneration({ brief: "Продуктовая анимация", systemPrompt: "ORIGINAL", requestModel: async () => { call += 1; if (call === 1) throw new DeepSeekError("analysis failed"); return validEstimate(); } });

@@ -9,14 +9,24 @@ const memoryStorage = (initial = {}) => { const values = new Map(Object.entries(
 
 test("AI settings are minimal and history is explicit opt-in", () => {
   assert.deepEqual(normalizeAiSettings(), { personalization: "", useProjectHistory: false });
-  assert.deepEqual(normalizeAiSettings({ personalization: "  Делить на этапы ", use_project_history: true }), { personalization: "Делить на этапы", useProjectHistory: true });
+  assert.deepEqual(normalizeAiSettings({ personalization: "  Делить на этапы ", use_project_history: true }), { personalization: "  Делить на этапы ", useProjectHistory: true });
   assert.deepEqual(Object.keys(normalizeAiSettings({ universal: true, currency: "RUB" })), ["personalization", "useProjectHistory"]);
 });
 
-test("personalization removes financial, contact and secret-bearing lines", () => {
-  const result = sanitizePersonalization("Декомпозировать по этапам\nМаркап 25%\nПисать на studio@example.com\nAPI key: secret\nНе дробить микрозадачи");
-  assert.equal(result, "Декомпозировать по этапам\nНе дробить микрозадачи");
+test("personalization keeps multiline financial rules and removes only secret-bearing lines", () => {
+  const source = "Этапы дроби как можно подробнее — чтобы клиент мог всё прозрачно увидеть\n\nДля всех исполнителей добавлять 6% налога\nСтавка режиссёра — 100 000 ₽\nТип оплаты: безналичный\nМаркап 25%\nПисать на studio@example.com\nAPI key: sk-1234567890abcdef\naccess_token=eyJhbGciOiJIUzI1NiJ9.payload.signature\nНе дробить микрозадачи";
+  const result = sanitizePersonalization(source);
+  assert.equal(result, "Этапы дроби как можно подробнее — чтобы клиент мог всё прозрачно увидеть\n\nДля всех исполнителей добавлять 6% налога\nСтавка режиссёра — 100 000 ₽\nТип оплаты: безналичный\nМаркап 25%\nПисать на studio@example.com\nНе дробить микрозадачи");
   assert.equal(normalizeServerAiSettings({ personalization: result }).personalization, result);
+});
+
+test("personalization formatting survives local Save, reopen and F5 hydration", () => {
+  const text = "Первая строка\n\n\nСтрока после двух пустых строк\n";
+  const storage = memoryStorage();
+  const saved = saveLocalAiSettings({ personalization: text }, "u1", storage);
+  assert.equal(saved.personalization, text);
+  assert.equal(loadLocalAiSettings("u1", storage).personalization, text);
+  assert.equal(loadLocalAiSettings("u1", storage).personalization, text);
 });
 
 test("local fallback is owner scoped and keeps opt-in", () => {
@@ -48,10 +58,11 @@ test("AI settings repository scopes load/upsert to user_id", async () => {
   const client = repositoryClient((state) => { calls.push(structuredClone(state)); return { data: { user_id: "u1", personalization: state.payload?.personalization || "Текст", use_project_history: state.payload?.use_project_history ?? false }, error: null }; });
   const repository = createAiSettingsRepository(client);
   assert.equal((await repository.loadAiSettings("u1")).settings.personalization, "Текст");
-  const saved = await repository.upsertAiSettings("u1", { personalization: "Правила", useProjectHistory: true });
+  const personalization = "Правило Stage\n\n\nДля всех исполнителей добавлять 6% налога\n";
+  const saved = await repository.upsertAiSettings("u1", { personalization, useProjectHistory: true });
   assert.equal(saved.useProjectHistory, true);
-  assert.deepEqual(calls[1].payload, { user_id: "u1", personalization: "Правила", use_project_history: true });
-  assert.deepEqual(saved, { personalization: "Правила", useProjectHistory: true });
+  assert.deepEqual(calls[1].payload, { user_id: "u1", personalization, use_project_history: true });
+  assert.deepEqual(saved, { personalization, useProjectHistory: true });
 });
 
 test("AI settings repository surfaces an upsert error without normalizing it into empty settings", async () => {
