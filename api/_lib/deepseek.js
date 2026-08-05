@@ -11,6 +11,15 @@ export class DeepSeekError extends Error {
 export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https://api.deepseek.com/chat/completions", model = "deepseek-v4-flash", timeoutMs = DEEPSEEK_ATTEMPT_TIMEOUT_MS, retries = DEEPSEEK_RETRIES, budget, logger = console.info } = {}) {
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY не задан в переменных окружения Vercel");
   return async function request(messages, { maxTokens = 4000, retries: requestRetries = retries, stage = "generation" } = {}) {
+    const thinkingMode = stage === "generation" || stage === "repair" ? "disabled" : "provider_default";
+    const requestBody = {
+      model,
+      messages,
+      response_format: { type: "json_object" },
+      temperature: 0,
+      max_tokens: maxTokens,
+      ...(thinkingMode === "disabled" ? { thinking: { type: "disabled" } } : {}),
+    };
     let lastError;
     for (let attempt = 0; attempt <= requestRetries; attempt += 1) {
       const remainingMs = budget?.remainingMs() ?? timeoutMs;
@@ -34,7 +43,7 @@ export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https:/
         const response = await fetchImpl(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ model, messages, response_format: { type: "json_object" }, temperature: 0, max_tokens: maxTokens }),
+          body: JSON.stringify(requestBody),
           signal: controller.signal,
         });
         httpStatus = response.status;
@@ -84,6 +93,8 @@ export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https:/
           logger({
             event: "deepseek_attempt",
             stage,
+            model,
+            thinkingMode,
             httpStatus,
             hasChoices,
             hasMessage,

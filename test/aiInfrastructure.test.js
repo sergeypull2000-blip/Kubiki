@@ -111,7 +111,52 @@ test("invalid final JSON receives exactly one repair attempt", async () => {
   assert.equal(calls.length, 3);
   assert.equal(calls[2].messages.at(-2).role, "assistant");
   assert.equal(calls[2].options.retries, 0);
+  assert.equal(calls[2].options.stage, "repair");
   assert.ok(result.estimate);
+});
+
+test("thinking is unchanged for profile and disabled only for generation and repair", async () => {
+  const bodies = [];
+  const logs = [];
+  const client = createDeepSeekClient({
+    apiKey: "key",
+    model: "deepseek-v4-flash",
+    logger: (entry) => logs.push(entry),
+    fetchImpl: async (_url, init) => {
+      bodies.push(JSON.parse(init.body));
+      return { ok: true, status: 200, json: async () => ({ choices: [{ finish_reason: "stop", message: { content: "{}" } }] }) };
+    },
+  });
+  await client([], { stage: "profile", maxTokens: 900 });
+  await client([], { stage: "generation", maxTokens: 4000 });
+  await client([], { stage: "repair", maxTokens: 4000, retries: 0 });
+
+  assert.equal(Object.hasOwn(bodies[0], "thinking"), false);
+  assert.deepEqual(bodies[1].thinking, { type: "disabled" });
+  assert.deepEqual(bodies[2].thinking, { type: "disabled" });
+  assert.deepEqual(bodies.map(({ model, max_tokens, response_format }) => ({ model, max_tokens, response_format })), [
+    { model: "deepseek-v4-flash", max_tokens: 900, response_format: { type: "json_object" } },
+    { model: "deepseek-v4-flash", max_tokens: 4000, response_format: { type: "json_object" } },
+    { model: "deepseek-v4-flash", max_tokens: 4000, response_format: { type: "json_object" } },
+  ]);
+  assert.deepEqual(logs.map(({ stage, model, thinkingMode }) => ({ stage, model, thinkingMode })), [
+    { stage: "profile", model: "deepseek-v4-flash", thinkingMode: "provider_default" },
+    { stage: "generation", model: "deepseek-v4-flash", thinkingMode: "disabled" },
+    { stage: "repair", model: "deepseek-v4-flash", thinkingMode: "disabled" },
+  ]);
+});
+
+test("generation with thinking disabled still returns valid JSON content unchanged", async () => {
+  let requestBody;
+  const content = validEstimate();
+  const client = createDeepSeekClient({ apiKey: "key", logger: () => {}, fetchImpl: async (_url, init) => {
+    requestBody = JSON.parse(init.body);
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content } }] }) };
+  } });
+  const raw = await client([], { stage: "generation" });
+  assert.deepEqual(requestBody.thinking, { type: "disabled" });
+  assert.equal(raw, content);
+  assert.equal(parseEstimate(raw).projectName, "Проект");
 });
 
 test("DeepSeek transport retries transient status once and does not log response body", async () => {
@@ -276,4 +321,10 @@ test("professional SYSTEM_PROMPT remains byte-for-byte unchanged", () => {
   const prompt = source.slice(start, end);
   assert.equal(prompt.length, 12927);
   assert.equal(createHash("sha256").update(prompt).digest("hex"), "86ed287f7347f09df9a64bfdd2f88022413f895a75771ef0e27ce767d896510e");
+});
+
+test("estimate JSON schema remains byte-for-byte unchanged", () => {
+  const source = readFileSync(new URL("../api/_lib/estimateSchema.js", import.meta.url));
+  assert.equal(source.length, 1609);
+  assert.equal(createHash("sha256").update(source).digest("hex"), "19c401aa0903d8c195c33b97eecdbc20e64fa26f11f4f9cf1e6211a5af6b0317");
 });
