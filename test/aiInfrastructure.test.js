@@ -126,6 +126,57 @@ test("DeepSeek transport retries transient status once and does not log response
   assert.equal(calls, 2);
 });
 
+test("DeepSeek retries an empty response once and returns the second valid response", async () => {
+  const logs = [];
+  const responses = [
+    { choices: [{ message: { content: "" } }] },
+    { choices: [{ message: { content: validEstimate() } }] },
+  ];
+  const client = createDeepSeekClient({ apiKey: "key", logger: (entry) => logs.push(entry), fetchImpl: async () => ({ ok: true, status: 200, json: async () => responses.shift() }) });
+  assert.equal(await client([], { stage: "generation" }), validEstimate());
+  assert.equal(logs.length, 2);
+  assert.deepEqual(logs.map(({ stage, httpStatus, hasChoices, hasMessage, hasContent }) => ({ stage, httpStatus, hasChoices, hasMessage, hasContent })), [
+    { stage: "generation", httpStatus: 200, hasChoices: true, hasMessage: true, hasContent: true },
+    { stage: "generation", httpStatus: 200, hasChoices: true, hasMessage: true, hasContent: true },
+  ]);
+  assert.equal(Object.hasOwn(logs[0], "durationMs"), true);
+  assert.equal(JSON.stringify(logs).includes(validEstimate()), false);
+});
+
+test("DeepSeek returns empty_response when both bounded attempts are empty", async () => {
+  let calls = 0;
+  const client = createDeepSeekClient({ apiKey: "key", logger: () => {}, fetchImpl: async () => { calls += 1; return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "   " } }] }) }; } });
+  await assert.rejects(() => client([], { stage: "generation" }), (error) => error instanceof DeepSeekError && error.code === "empty_response" && /пустой ответ/i.test(error.message));
+  assert.equal(calls, 2);
+});
+
+test("empty profile retries then uses deterministic fallback", async () => {
+  let transportCalls = 0;
+  const client = createDeepSeekClient({ apiKey: "key", logger: () => {}, fetchImpl: async () => {
+    transportCalls += 1;
+    const content = transportCalls <= 2 ? "" : validEstimate();
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content } }] }) };
+  } });
+  const result = await runEstimateGeneration({ brief: "Продуктовая анимация", systemPrompt: "ORIGINAL", requestModel: client });
+  assert.equal(transportCalls, 3);
+  assert.equal(result.profileFallbackUsed, true);
+  assert.deepEqual(result.profile, fallbackProfile("Продуктовая анимация"));
+  assert.ok(result.estimate);
+});
+
+test("empty final generation after retry returns empty_response without repair", async () => {
+  let transportCalls = 0;
+  const stages = [];
+  const client = createDeepSeekClient({ apiKey: "key", logger: (entry) => stages.push(entry.stage), fetchImpl: async () => {
+    transportCalls += 1;
+    const content = transportCalls === 1 ? validProfile() : "";
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content } }] }) };
+  } });
+  await assert.rejects(() => runEstimateGeneration({ brief: "Brief", systemPrompt: "ORIGINAL", requestModel: client }), (error) => error instanceof DeepSeekError && error.code === "empty_response");
+  assert.equal(transportCalls, 3);
+  assert.deepEqual(stages, ["profile", "generation", "generation"]);
+});
+
 test("DeepSeek transport maps timeout after bounded retry", async () => {
   let calls = 0;
   const client = createDeepSeekClient({ apiKey: "key", retries: 1, fetchImpl: async () => { calls += 1; const error = new Error("aborted"); error.name = "AbortError"; throw error; } });

@@ -24,7 +24,7 @@ export async function runEstimateGeneration({ brief, instruction = "", systemPro
     const rawProfile = await requestModel([
       { role: "system", content: PROFILE_SYSTEM_PROMPT },
       { role: "user", content: `<brief>\n${brief}\n</brief>` },
-    ], { maxTokens: 900 });
+    ], { maxTokens: 900, stage: "profile" });
     profile = parseProfile(rawProfile);
   } catch {
     profile = null;
@@ -38,14 +38,14 @@ export async function runEstimateGeneration({ brief, instruction = "", systemPro
     { role: "system", content: systemPrompt },
     { role: "user", content: finalUserPrompt(brief, instruction, personalization, shortlist) },
   ];
-  const raw = await requestModel(messages, { maxTokens: 4000 });
+  const raw = await requestModel(messages, { maxTokens: 4000, stage: "generation" });
   let estimate = parseEstimate(raw);
   if (!estimate) {
     const repairedRaw = await requestModel([
       ...messages,
       { role: "assistant", content: raw || "{}" },
       { role: "user", content: ESTIMATE_REPAIR_PROMPT },
-    ], { maxTokens: 4000, retries: 0 });
+    ], { maxTokens: 4000, retries: 0, stage: "repair" });
     estimate = parseEstimate(repairedRaw);
   }
   return { estimate, profile, profileFallbackUsed, shortlist };
