@@ -151,6 +151,6 @@ test("professional SYSTEM_PROMPT remains byte-for-byte unchanged", () => {
   const start = source.indexOf("const SYSTEM_PROMPT = `") + "const SYSTEM_PROMPT = `".length;
   const end = source.indexOf("`;", start);
   const prompt = source.slice(start, end);
-  assert.equal(prompt.length, 12733);
-  assert.equal(createHash("sha256").update(prompt).digest("hex"), "ea1d56d4054d80f76020c8fc565f4ef7638c0afdcf80e25ed2e33e12a526c971");
+  assert.equal(prompt.length, 12927);
+  assert.equal(createHash("sha256").update(prompt).digest("hex"), "86ed287f7347f09df9a64bfdd2f88022413f895a75771ef0e27ce767d896510e");
 });

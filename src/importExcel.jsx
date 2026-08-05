@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -6,11 +6,12 @@ import {
   X, Trash2, ChevronDown, AlertTriangle,
   Loader2, FileSpreadsheet, Download, FolderOpen, Paperclip, ArrowUp,
 } from "lucide-react";
-import { uid, fmt, numVal } from "./utils.js";
+import { fmt, numVal } from "./utils.js";
 import { Logo } from "./Logo.jsx";
 import { useOutsideClose } from "./hooks.js";
 import { generateEstimateRequest } from "./ai/generationClient.js";
 import { extractWordBrief } from "./ai/wordBrief.js";
+import { stagesFromGeneratedEstimate } from "./ai/estimateInsertion.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
@@ -114,7 +115,7 @@ async function llmParseText(sheetText, filename, instruction = "") {
 
 /* ЗАДАЧА 6 — генерация черновой сметы из текстового описания проекта.
    Тот же пайплайн, что и импорт из Excel/PDF (validateParsed →
-   превью → costFromExternalPrice → stagesFromParsed), меняется только
+   превью → прямая вставка внутренней себестоимости), меняется только
    вход (описание вместо таблицы) и системный промпт на сервере. */
 async function llmGenerateEstimate(description, instruction = "") {
   const j = await generateEstimateRequest({ description, instruction });
@@ -141,68 +142,11 @@ function validateParsed(json) {
   };
 }
 
-/* ============================================================
-   ЗАДАЧА 5 — обратный пересчёт «внешней» цены (с зашитым маркапом)
-   в себестоимость. Kubiki всегда работает от себестоимости к цене,
-   поэтому голую внешнюю цену класть в кубик нельзя — её нужно развернуть.
-   Чистая функция, без побочных эффектов — тестируется напрямую:
-   costFromExternalPrice(165000, 20) → { cost: 137500, ok: true }
-   ============================================================ */
-export function costFromExternalPrice(price, markupPct) {
-  const p = numVal(price);
-  if (!(p > 0)) return { cost: 0, ok: false, reason: "empty_price" };
-  const divisor = 1 + numVal(markupPct) / 100;
-  if (!(divisor > 0)) return { cost: 0, ok: false, reason: "bad_markup" };
-  return { cost: p / divisor, ok: true };
-}
-
-/* Применяет выбор продюсера («внутренняя как есть» / «внешняя → развернуть
-   в себестоимость по единому маркапу») к распознанным задачам. Возвращает
-   стадии с уже подставленным cost (себестоимостью) и список предупреждений
-   по позициям, которые не удалось пересчитать (не роняем импорт — 0 + warning). */
-function computeInsertCosts(parsed, kind, markupPct) {
-  if (kind !== "external") return { stages: parsed.stages, extraWarnings: [] };
-  const extraWarnings = [];
-  const stages = parsed.stages.map((s) => ({
-    ...s,
-    tasks: s.tasks.map((t) => {
-      const { cost, ok, reason } = costFromExternalPrice(t.cost, markupPct);
-      if (!ok) {
-        extraWarnings.push(`«${t.name}»: ${reason === "bad_markup" ? "некорректный маркап" : "нет цены"} — поставлено 0, поправьте вручную.`);
-      }
-      return { ...t, cost };
-    }),
-  }));
-  return { stages, extraWarnings };
-}
-
-/* Подтверждённая структура → этапы модели Kubiki.
-   В каждой задаче ОДИН исполнитель с кубиком «фикс за всё»,
-   сумма кладётся в executor.amount (как хранится фикс в модели). */
-function stagesFromParsed(parsed) {
-  return parsed.stages.map((s) => ({
-    id: uid(), presetKey: "custom", collapsed: false,
-    name: s.name || "Смета",
-    tasks: (s.tasks || []).map((t) => ({
-      id: uid(), name: t.name || "", markupOverride: null,
-      executors: [{
-        id: uid(),
-        amount: String(numVal(t.cost)),
-        tags: [{ id: uid(), key: "payment", payment: { type: "fix_total", rate: "", hours: "", shifts: "" } }],
-      }],
-    })),
-  }));
-}
-
 /* Состояние и правки редактируемого превью (общее для импорта из файла и
    генерации по описанию — единый пайплайн, разный только источник parsed). */
-function useEstimateEditor(initialMarkupPct = "", convertExternalPrices = false) {
+function useEstimateEditor() {
   const [parsed, setParsed] = useState(null);
   const [warnings, setWarnings] = useState([]);
-  // ЗАДАЧА 5: вид сметы — «внутренняя как есть» / «внешняя → развернуть
-  // в себестоимость по единому маркапу». Дефолт — «внешняя».
-  const [markupPct, setMarkupPct] = useState(initialMarkupPct);
-
   const load = (valid) => { setParsed(valid); setWarnings(valid.warnings); };
 
   const setStageName = (si, name) => setParsed((p) => ({ ...p, stages: p.stages.map((s, i) => i === si ? { ...s, name } : s) }));
@@ -215,37 +159,29 @@ function useEstimateEditor(initialMarkupPct = "", convertExternalPrices = false)
   const total = parsed ? parsed.stages.reduce((a, s) => a + s.tasks.reduce((x, t) => x + numVal(t.cost), 0), 0) : 0;
   const taskCount = parsed ? parsed.stages.reduce((a, s) => a + s.tasks.length, 0) : 0;
 
-  // пересчёт себестоимости из клиентской цены живьём, по мере ввода маркапа
-  const converted = useMemo(() => (parsed ? computeInsertCosts(parsed, convertExternalPrices ? "external" : "internal", markupPct) : null), [parsed, convertExternalPrices, markupPct]);
-  const convertedCostTotal = converted ? converted.stages.reduce((a, s) => a + s.tasks.reduce((x, t) => x + numVal(t.cost), 0), 0) : 0;
-
   const buildConfirm = () => {
     const clean = { ...parsed, stages: parsed.stages.map((s) => ({ ...s, tasks: s.tasks.filter((t) => t.name.trim()) })).filter((s) => s.tasks.length > 0) };
     if (clean.stages.length === 0) return { ok: false, message: "Нечего импортировать." };
-    const { stages: costedStages } = computeInsertCosts(clean, convertExternalPrices ? "external" : "internal", markupPct);
     const meta = {
-      ...(convertExternalPrices ? { globalMarkup: numVal(markupPct) } : {}),
       ...(clean.projectName ? { projectName: clean.projectName } : {}),
     };
-    return { ok: true, stages: stagesFromParsed({ ...clean, stages: costedStages }), meta };
+    return { ok: true, stages: stagesFromGeneratedEstimate(clean), meta };
   };
 
   return {
-    parsed, warnings, markupPct, setMarkupPct, convertExternalPrices,
+    parsed, warnings,
     load, setStageName, setTaskField, delTask, delStage,
-    total, taskCount, converted, convertedCostTotal, buildConfirm,
+    total, taskCount, buildConfirm,
   };
 }
 
 /* Редактируемое превью распознанной/сгенерированной сметы — общий шаг
-   для импорта из файла и генерации по описанию. showKindToggle скрывает
-   выбор «внутренняя/внешняя», когда источник всегда клиентские цены
-   (генерация по описанию) — тогда пересчёт по маркапу применяется всегда. */
-function EstimatePreviewStep({ editor, generationMetadata, noteText, draftNotice, warnTitle, warnProminent, showKindToggle = true, hidePricing = false, confirmLabel = "Импортировать", onClose, onConfirm }) {
+   для импорта из файла и генерации по описанию. */
+function EstimatePreviewStep({ editor, generationMetadata, noteText, draftNotice, warnTitle, warnProminent, confirmLabel = "Импортировать", onClose, onConfirm }) {
   const {
-    parsed, warnings, importKind, setImportKind, markupPct, setMarkupPct,
+    parsed, warnings,
     setStageName, setTaskField, delTask, delStage,
-    total, taskCount, converted, convertedCostTotal, buildConfirm,
+    total, taskCount, buildConfirm,
   } = editor;
   const [localError, setLocalError] = useState("");
 
@@ -255,49 +191,11 @@ function EstimatePreviewStep({ editor, generationMetadata, noteText, draftNotice
     onConfirm(res.stages, generationMetadata ? { ...res.meta, generationMetadata } : res.meta);
   };
 
-  const showMarkupBlock = showKindToggle ? importKind === "external" : true;
-
   return (
     <>
       <div className="kb-modal-body kb-import-preview">
         {draftNotice && <div className="kb-draft-notice"><AlertTriangle size={14} strokeWidth={1.5} /> {draftNotice}</div>}
         <div className="kb-modal-note">{noteText}</div>
-
-        {!hidePricing && <div className="kb-import-kind">
-          {showKindToggle ? (
-            <>
-              <div className="kb-import-kind-q">Вы импортируете внутреннюю смету или внешнюю?</div>
-              <div className="kb-import-kind-opts">
-                <button type="button" className={"kb-import-kind-opt" + (importKind === "internal" ? " is-active" : "")}
-                  onClick={() => setImportKind("internal")}>Внутреннюю</button>
-                <button type="button" className={"kb-import-kind-opt" + (importKind === "external" ? " is-active" : "")}
-                  onClick={() => setImportKind("external")}>Внешнюю</button>
-              </div>
-            </>
-          ) : (
-            <div className="kb-import-kind-q">Маркап, заложенный в цены модели, %</div>
-          )}
-          {showMarkupBlock && (
-            <>
-              <div className="kb-import-kind-markup">
-                <label className="kb-import-kind-marklbl">Маркап в этих ценах, %</label>
-                <input className="kb-input kb-input-num" value={markupPct} placeholder="20"
-                  onChange={(e) => setMarkupPct(e.target.value)} />
-              </div>
-              <div className="kb-import-kind-result">Восстановленная себестоимость: {fmt(convertedCostTotal)} ₽ (Kubiki накрутит те же {fmt(numVal(markupPct))}% обратно)</div>
-              {converted.extraWarnings.length > 0 && (
-                <div className="kb-import-kind-warn">
-                  {converted.extraWarnings.slice(0, 5).map((w, i) => <div key={i}>{w}</div>)}
-                </div>
-              )}
-              <div className="kb-import-kind-hint">
-                Пересчёт использует единый маркап на всю смету. Если в исходных цифрах маржа размазана
-                по позициям по-разному — восстановленная себестоимость будет приблизительной, точные значения
-                продюсер поправит вручную после вставки. Это осознанное упрощение, не баг.
-              </div>
-            </>
-          )}
-        </div>}
 
         {parsed.stages.map((s, si) => (
           <div key={si} className="kb-prev-stage">
@@ -336,7 +234,7 @@ function EstimatePreviewStep({ editor, generationMetadata, noteText, draftNotice
 }
 
 /* Модалка импорта: извлечение текста (Excel-лист / PDF-страницы) → разбор →
-   редактируемое превью (вид сметы + обратный пересчёт) → вставка. */
+   редактируемое превью → вставка. */
 export function ImportModal({ file, instruction = "", onClose, onConfirm }) {
   const isPdf = /\.pdf$/i.test(file.name);
   const isWord = /\.(docx|doc)$/i.test(file.name);
@@ -345,7 +243,7 @@ export function ImportModal({ file, instruction = "", onClose, onConfirm }) {
   const [sheetNames, setSheetNames] = useState([]);
   const [errorMsg, setErrorMsg] = useState("");
   const [generationMetadata, setGenerationMetadata] = useState(null);
-  const editor = useEstimateEditor(isWord ? "25" : undefined, isWord);
+  const editor = useEstimateEditor();
 
   // шаг 1: извлечение текста из файла (в коде, не в LLM) — способ зависит
   // от расширения, дальше единый пайплайн (LLM-разбор/превью/вставка)
@@ -470,8 +368,8 @@ export function ImportModal({ file, instruction = "", onClose, onConfirm }) {
           <EstimatePreviewStep editor={editor}
             generationMetadata={generationMetadata}
             noteText="Проверьте распознанное и при необходимости поправьте. Каждая задача добавится с кубиком «фикс за всё»."
-            draftNotice={isWord ? "Черновая оценка по тексту Word-брифа. Проверьте структуру и цены." : undefined}
-            hidePricing={!isWord} showKindToggle={!isWord} onClose={onClose} onConfirm={onConfirm} />
+            draftNotice={isWord ? "Черновая оценка. Суммы отражают ориентировочную внутреннюю себестоимость до маркапа и налогов." : undefined}
+            onClose={onClose} onConfirm={onConfirm} />
         )}
       </div>
     </div>
@@ -486,7 +384,7 @@ export function GenerateEstimateModal({ description, onClose, onConfirm }) {
   const [step, setStep] = useState("parsing"); // parsing|preview|error
   const [errorMsg, setErrorMsg] = useState("");
   const [generationMetadata, setGenerationMetadata] = useState(null);
-  const editor = useEstimateEditor("25", true); // дефолт маркапа для клиентских цен модели
+  const editor = useEstimateEditor();
 
   const run = () => {
     setStep("parsing");
@@ -521,10 +419,10 @@ export function GenerateEstimateModal({ description, onClose, onConfirm }) {
         {step === "preview" && editor.parsed && (
           <EstimatePreviewStep editor={editor}
             generationMetadata={generationMetadata}
-            draftNotice="Черновая оценка. Цены примерные — поправьте под свой проект."
+            draftNotice="Черновая оценка. Суммы отражают ориентировочную внутреннюю себестоимость до маркапа и налогов."
             noteText="Проверьте распознанную структуру и при необходимости поправьте. Каждая задача добавится с кубиком «фикс за всё»."
             warnTitle={`Допущения ИИ, проверьте (${editor.warnings.length}):`}
-            warnProminent showKindToggle={false} confirmLabel="Вставить в смету"
+            warnProminent confirmLabel="Вставить в смету"
             onClose={onClose} onConfirm={onConfirm} />
         )}
       </div>
