@@ -573,6 +573,7 @@ async function executeGeneration(req, budget) {
       instruction: input.instruction,
       systemPrompt: SYSTEM_PROMPT,
       requestModel,
+      remainingRequestMs: () => budget.remainingMs(),
       getGenerationContext: async (profile) => {
         let settings = normalizeServerAiSettings();
         try { settings = await loadOwnAiSettings(auth.client, auth.user.id); }
