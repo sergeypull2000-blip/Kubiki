@@ -1,16 +1,22 @@
 const TRANSIENT_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
+export const DEEPSEEK_ATTEMPT_TIMEOUT_MS = 60_000;
+export const DEEPSEEK_RETRIES = 1;
+export const MIN_DEEPSEEK_ATTEMPT_BUDGET_MS = 1_000;
+
 export class DeepSeekError extends Error {
   constructor(message, { status = 502, code = "deepseek_error" } = {}) { super(message); this.name = "DeepSeekError"; this.status = status; this.code = code; }
 }
 
-export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https://api.deepseek.com/chat/completions", model = "deepseek-v4-flash", timeoutMs = 20_000, retries = 1 } = {}) {
+export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https://api.deepseek.com/chat/completions", model = "deepseek-v4-flash", timeoutMs = DEEPSEEK_ATTEMPT_TIMEOUT_MS, retries = DEEPSEEK_RETRIES, budget } = {}) {
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY не задан в переменных окружения Vercel");
-  return async function request(messages, { maxTokens = 4000 } = {}) {
+  return async function request(messages, { maxTokens = 4000, retries: requestRetries = retries } = {}) {
     let lastError;
-    for (let attempt = 0; attempt <= retries; attempt += 1) {
+    for (let attempt = 0; attempt <= requestRetries; attempt += 1) {
+      const remainingMs = budget?.remainingMs() ?? timeoutMs;
+      if (remainingMs < MIN_DEEPSEEK_ATTEMPT_BUDGET_MS) throw new DeepSeekError("Недостаточно времени для завершения генерации. Попробуйте снова.", { status: 504, code: "request_deadline" });
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const timer = setTimeout(() => controller.abort(), Math.min(timeoutMs, remainingMs));
       try {
         const response = await fetchImpl(url, {
           method: "POST",
@@ -21,7 +27,7 @@ export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https:/
         if (!response.ok) {
           await response.text().catch(() => "");
           const error = new DeepSeekError(`DeepSeek API ответил ${response.status}. Попробуйте позже.`, { status: 502, code: `upstream_${response.status}` });
-          if (!TRANSIENT_STATUS.has(response.status) || attempt === retries) throw error;
+          if (!TRANSIENT_STATUS.has(response.status) || attempt === requestRetries) throw error;
           lastError = error;
           continue;
         }
@@ -31,11 +37,10 @@ export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https:/
         return content;
       } catch (error) {
         const normalized = error?.name === "AbortError" ? new DeepSeekError("DeepSeek не ответил вовремя. Попробуйте позже.", { code: "timeout" }) : error;
-        if (!(normalized instanceof DeepSeekError) || attempt === retries || !["timeout"].includes(normalized.code)) throw normalized;
+        if (!(normalized instanceof DeepSeekError) || attempt === requestRetries || !["timeout"].includes(normalized.code)) throw normalized;
         lastError = normalized;
       } finally { clearTimeout(timer); }
     }
     throw lastError || new DeepSeekError("Не удалось получить ответ DeepSeek");
   };
 }
-

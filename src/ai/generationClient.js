@@ -1,7 +1,7 @@
 import { attachGenerationMetadata, decodeGenerationMetadataHeader } from "./generationMetadata.js";
 import { requestErrorMessage } from "./requestErrors.js";
 
-const REQUEST_TIMEOUT_MS = 55_000;
+export const GENERATION_REQUEST_TIMEOUT_MS = 270_000;
 
 export async function generateEstimateRequest(payload, { fetchImpl = fetch, getAccessToken } = {}) {
   const resolveToken = getAccessToken || (async () => {
@@ -12,7 +12,7 @@ export async function generateEstimateRequest(payload, { fetchImpl = fetch, getA
   });
   const token = await resolveToken();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), GENERATION_REQUEST_TIMEOUT_MS);
   try {
     const response = await fetchImpl("/api/generate-estimate", {
       method: "POST",

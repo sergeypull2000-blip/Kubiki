@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateEstimateRequest } from "../src/ai/generationClient.js";
+import { generateEstimateRequest, GENERATION_REQUEST_TIMEOUT_MS } from "../src/ai/generationClient.js";
+
+test("generation client allows the bounded two-call DeepSeek budget", () => {
+  assert.equal(GENERATION_REQUEST_TIMEOUT_MS, 270_000);
+  assert.ok(GENERATION_REQUEST_TIMEOUT_MS > 240_000);
+  assert.ok(GENERATION_REQUEST_TIMEOUT_MS < 300_000);
+});
 
 test("generation client sends Supabase access token and JSON body", async () => {
   const expected = { projectName: "X", stages: [], warnings: [] };

@@ -4,10 +4,11 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { authenticateRequest } from "../api/_lib/auth.js";
 import { MAX_BRIEF_CHARS, cleanPlainText, validateGenerationInput } from "../api/_lib/brief.js";
-import { createDeepSeekClient, DeepSeekError } from "../api/_lib/deepseek.js";
+import { createDeepSeekClient, DEEPSEEK_ATTEMPT_TIMEOUT_MS, DEEPSEEK_RETRIES, DeepSeekError } from "../api/_lib/deepseek.js";
 import { parseEstimate } from "../api/_lib/estimateSchema.js";
 import { runEstimateGeneration } from "../api/_lib/generationOrchestrator.js";
 import { fallbackProfile, parseProfile } from "../api/_lib/profile.js";
+import { createRequestBudget, GENERATION_FUNCTION_BUDGET_MS, RequestDeadlineError } from "../api/_lib/requestBudget.js";
 
 const validProfile = () => JSON.stringify({ projectTypes: ["3D"], deliverables: [], disciplines: ["CG"], pipelineStages: [], taskTerms: ["Моделинг"], roleTerms: [], styleTerms: [], formats: [], platforms: [], constraints: [], keywords: ["продукт"], complexity: "medium", uncertainty: [], language: "ru" });
 const validEstimate = () => JSON.stringify({ projectName: "Проект", stages: [{ name: "CG", tasks: [{ name: "Моделинг", cost: 100000 }] }], warnings: [] });
@@ -98,9 +99,10 @@ test("analysis failure uses deterministic fallback without blocking final genera
 test("invalid final JSON receives exactly one repair attempt", async () => {
   const responses = [validProfile(), "not-json", validEstimate()];
   const calls = [];
-  const result = await runEstimateGeneration({ brief: "Brief", systemPrompt: "ORIGINAL", requestModel: async (messages) => { calls.push(messages); return responses.shift(); } });
+  const result = await runEstimateGeneration({ brief: "Brief", systemPrompt: "ORIGINAL", requestModel: async (messages, options) => { calls.push({ messages, options }); return responses.shift(); } });
   assert.equal(calls.length, 3);
-  assert.equal(calls[2].at(-2).role, "assistant");
+  assert.equal(calls[2].messages.at(-2).role, "assistant");
+  assert.equal(calls[2].options.retries, 0);
   assert.ok(result.estimate);
 });
 
@@ -121,6 +123,27 @@ test("DeepSeek transport maps timeout after bounded retry", async () => {
   const client = createDeepSeekClient({ apiKey: "key", retries: 1, fetchImpl: async () => { calls += 1; const error = new Error("aborted"); error.name = "AbortError"; throw error; } });
   await assert.rejects(() => client([]), (error) => error instanceof DeepSeekError && error.code === "timeout");
   assert.equal(calls, 2);
+});
+
+test("DeepSeek timeout budget fits two sequential calls with one bounded retry each", () => {
+  assert.equal(DEEPSEEK_ATTEMPT_TIMEOUT_MS, 60_000);
+  assert.equal(DEEPSEEK_RETRIES, 1);
+  assert.equal(DEEPSEEK_ATTEMPT_TIMEOUT_MS * (DEEPSEEK_RETRIES + 1) * 2, 240_000);
+});
+
+test("DeepSeek does not start an attempt when the request budget is exhausted", async () => {
+  let calls = 0;
+  const client = createDeepSeekClient({ apiKey: "key", budget: { remainingMs: () => 999 }, fetchImpl: async () => { calls += 1; } });
+  await assert.rejects(() => client([]), (error) => error instanceof DeepSeekError && error.code === "request_deadline");
+  assert.equal(calls, 0);
+});
+
+test("generation function has one hard budget below frontend and Vercel limits", async () => {
+  assert.equal(GENERATION_FUNCTION_BUDGET_MS, 260_000);
+  assert.ok(GENERATION_FUNCTION_BUDGET_MS < 270_000);
+  assert.ok(GENERATION_FUNCTION_BUDGET_MS < 300_000);
+  const budget = createRequestBudget({ timeoutMs: 5 });
+  await assert.rejects(() => budget.run(new Promise(() => {})), RequestDeadlineError);
 });
 
 test("professional SYSTEM_PROMPT remains byte-for-byte unchanged", () => {

@@ -7,6 +7,7 @@ import { projectKnowledge } from "./_lib/knowledgeProjection.js";
 import { buildShortlist } from "./_lib/retrieval.js";
 import { loadOwnAiSettings, normalizeServerAiSettings } from "./_lib/aiSettings.js";
 import { buildGenerationMetadata, serializeGenerationMetadata } from "./_lib/generationMetadata.js";
+import { createRequestBudget, RequestDeadlineError } from "./_lib/requestBudget.js";
 
 /* ============================================================
    Vercel serverless: POST /api/generate-estimate
@@ -538,18 +539,32 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
+  const budget = createRequestBudget();
+  try {
+    const response = await budget.run(executeGeneration(req, budget));
+    if (response.metadata) res.setHeader("X-Kubiki-Generation-Metadata", response.metadata);
+    return res.status(response.status).json(response.body);
+  } catch (e) {
+    console.error("generate-estimate error", { name: e?.name || "Error", code: e?.code || "unknown" });
+    const isDeadline = e instanceof RequestDeadlineError || e?.code === "request_deadline";
+    const status = isDeadline ? 504 : e instanceof DeepSeekError ? e.status : 500;
+    const error = isDeadline ? "Генерация не успела завершиться. Попробуйте снова." : e instanceof DeepSeekError ? e.message : "Не удалось обработать ответ. Попробуйте снова";
+    return res.status(status).json({ error });
+  }
+}
+
+async function executeGeneration(req, budget) {
   const auth = await authenticateRequest(req);
-  if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
+  if (!auth.ok) return { status: auth.status, body: { error: auth.error } };
 
   const input = validateGenerationInput(req.body);
-  if (!input.ok) return res.status(input.status).json({ error: input.error });
+  if (!input.ok) return { status: input.status, body: { error: input.error } };
 
   const key = process.env.DEEPSEEK_API_KEY;
-  if (!key) return res.status(500).json({ error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" });
-  const requestModel = createDeepSeekClient({ apiKey: key, url: DEEPSEEK_URL, model: MODEL });
+  if (!key) return { status: 500, body: { error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" } };
+  const requestModel = createDeepSeekClient({ apiKey: key, url: DEEPSEEK_URL, model: MODEL, budget });
 
-  try {
-    const result = await runEstimateGeneration({
+  const result = await runEstimateGeneration({
       brief: input.brief,
       instruction: input.instruction,
       systemPrompt: SYSTEM_PROMPT,
@@ -567,14 +582,9 @@ export default async function handler(req, res) {
         }
       },
     });
-    if (!result.estimate) {
-      console.error("generate-estimate: модель дважды вернула ответ, не соответствующий JSON-схеме");
-      return res.status(502).json({ error: "Не удалось обработать ответ. Попробуйте снова" });
-    }
-    res.setHeader("X-Kubiki-Generation-Metadata", serializeGenerationMetadata(buildGenerationMetadata(result)));
-    return res.status(200).json(result.estimate);
-  } catch (e) {
-    console.error("generate-estimate error", { name: e?.name || "Error", code: e?.code || "unknown" });
-    return res.status(e instanceof DeepSeekError ? e.status : 500).json({ error: e instanceof DeepSeekError ? e.message : "Не удалось обработать ответ. Попробуйте снова" });
+  if (!result.estimate) {
+    console.error("generate-estimate: модель дважды вернула ответ, не соответствующий JSON-схеме");
+    return { status: 502, body: { error: "Не удалось обработать ответ. Попробуйте снова" } };
   }
+  return { status: 200, body: result.estimate, metadata: serializeGenerationMetadata(buildGenerationMetadata(result)) };
 }

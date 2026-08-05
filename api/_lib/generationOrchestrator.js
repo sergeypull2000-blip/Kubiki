@@ -45,7 +45,7 @@ export async function runEstimateGeneration({ brief, instruction = "", systemPro
       ...messages,
       { role: "assistant", content: raw || "{}" },
       { role: "user", content: ESTIMATE_REPAIR_PROMPT },
-    ], { maxTokens: 4000 });
+    ], { maxTokens: 4000, retries: 0 });
     estimate = parseEstimate(repairedRaw);
   }
   return { estimate, profile, profileFallbackUsed, shortlist };
