@@ -24,6 +24,38 @@ function scopeEntity(scope, kind) {
   const id = scope?.[`${kind}Id`]; return id ? { kind, id } : null;
 }
 
+function trustedScopeEntity(project, scope, kind) {
+  if (!scope || scope.kind === "project") return null;
+  const index = indexProject(project), stage = index.stages.get(scope.stageId)?.stage;
+  if (!stage) return null;
+  if (kind === "stage") return { kind, id: stage.id };
+  const task = index.tasks.get(scope.taskId);
+  if (!task || task.stage.id !== stage.id) return null;
+  if (kind === "task") return { kind, id: task.task.id };
+  const executor = index.executors.get(scope.executorId);
+  return executor && executor.stage.id === stage.id && executor.task.id === task.task.id ? { kind: "executor", id: executor.executor.id } : null;
+}
+
+function contextualCreationParent(project, scope, kind) {
+  if (kind === "task" && ["stage", "task", "executor"].includes(scope?.kind)) return trustedScopeEntity(project, scope, "stage");
+  if (kind === "executor" && ["task", "executor"].includes(scope?.kind)) return trustedScopeEntity(project, scope, "task");
+  return null;
+}
+
+function contextualTaskCandidates(project, scope, command = {}) {
+  const candidates = entities(project, "task", command);
+  return scope?.kind === "stage" ? candidates.filter((item) => indexProject(project).tasks.get(item.id)?.stage.id === scope.stageId) : candidates;
+}
+
+function scopeContains(project, scope, kind, id) {
+  if (!scope || scope.kind === "project") return true;
+  const located = indexProject(project)[`${kind}s`]?.get(id);
+  if (!located) return false;
+  if (scope.kind === "stage") return located.stage?.id === scope.stageId;
+  if (scope.kind === "task") return located.task?.id === scope.taskId;
+  return located.executor?.id === scope.executorId;
+}
+
 export function resolveAiEditSemanticDraft({ semantic, project, scope, performers = [], instruction = "", prior = null, answer = "", selectedSource = null }) {
   if (semantic.kind !== "commands") return { semantic, confirmedTargets: {}, unresolvedSlots: [] };
   const draft = semantic, confirmedTargets = structuredClone(prior?.confirmedTargets || {}), slotValues = { ...(prior?.slotValues || {}) };
@@ -45,7 +77,7 @@ export function resolveAiEditSemanticDraft({ semantic, project, scope, performer
       if (!name) addSlot(index, "name", "text", "Как назвать создаваемую Task?");
       if (!command.stageRef) {
         const selected = slotValues[`slot-${index}-stage`] || command.stageName;
-        const resolved = selectedSourceFor(slotValues[`slot-${index}-stage`], project, "stage") || selected && resolveNamed(project, "stage", selected, command) || scopeEntity(scope, "stage");
+        const resolved = contextualCreationParent(project, scope, "task") || selectedSourceFor(slotValues[`slot-${index}-stage`], project, "stage") || selected && resolveNamed(project, "stage", selected, command);
         if (resolved) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), stage: { kind: "stage", id: resolved.id } };
         else addSlot(index, "stage", "stage", "В какой Stage создать Task?", entities(project, "stage"));
       }
@@ -53,16 +85,20 @@ export function resolveAiEditSemanticDraft({ semantic, project, scope, performer
       if (!command.taskRef) {
         const selected = slotValues[`slot-${index}-task`] || command.taskId || command.taskName;
         const restored = selectedSourceFor(confirmedTargets[index]?.task?.id, project, "task");
-        const resolved = restored || selectedSourceFor(selected, project, "task") || selected && resolveNamed(project, "task", selected, command) || scopeEntity(scope, "task") || soleStageTask(project, scope);
+        const candidates = contextualTaskCandidates(project, scope, command);
+        const selectedTask = candidates.find((item) => item.id === selected) || selected && candidates.filter((item) => same(item.name, selected)).length === 1 && candidates.find((item) => same(item.name, selected));
+        const resolved = contextualCreationParent(project, scope, "executor") || restored || selectedTask || soleStageTask(project, scope);
         if (resolved) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), task: { kind: "task", id: resolved.id } };
-        else addSlot(index, "task", "task", "В какую Task добавить Executor?", entities(project, "task", command));
+        else addSlot(index, "task", "task", candidates.length ? "В какую Task добавить Executor?" : "В выбранном Stage нет Task. Создать Task или выбрать другую?", candidates);
       }
     } else if (command.type === "executor.createFromPerformer") {
       const selectedTask = slotValues[`slot-${index}-task`] || command.taskId || command.taskName;
       const restoredTask = selectedSourceFor(confirmedTargets[index]?.task?.id, project, "task");
-      const task = restoredTask || selectedSourceFor(selectedTask, project, "task") || selectedTask && resolveNamed(project, "task", selectedTask, command) || scopeEntity(scope, "task") || soleStageTask(project, scope);
+      const taskCandidates = contextualTaskCandidates(project, scope, command);
+      const selectedCandidate = taskCandidates.find((item) => item.id === selectedTask) || selectedTask && taskCandidates.filter((item) => same(item.name, selectedTask)).length === 1 && taskCandidates.find((item) => same(item.name, selectedTask));
+      const task = contextualCreationParent(project, scope, "executor") || restoredTask || selectedCandidate || soleStageTask(project, scope);
       if (task) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), task: { kind: "task", id: task.id } };
-      else addSlot(index, "task", "task", "В какую Task добавить Performer?", entities(project, "task", command));
+      else addSlot(index, "task", "task", taskCandidates.length ? "В какую Task добавить Performer?" : "В выбранном Stage нет Task. Создать Task или выбрать другую?", taskCandidates);
       const performerSlot = `slot-${index}-performer`, selectedPerformer = slotValues[performerSlot] || command.performerId;
       const explicitSlot = `slot-${index}-performerExplicit`;
       const namedPerformer = command.performerName || performers.find((item) => item.id === command.performerId)?.firstName;
@@ -74,7 +110,8 @@ export function resolveAiEditSemanticDraft({ semantic, project, scope, performer
     } else if (!["stage.create", "executor.createFromPerformer", "executor.setTaxBulk"].includes(command.type) && !command.targetRef) {
       const kind = command.type.startsWith("stage.") ? "stage" : command.type.startsWith("task.") ? "task" : "executor";
       const selected = slotValues[`slot-${index}-target`] || command.targetName;
-      const resolved = selectedSourceFor(slotValues[`slot-${index}-target`], project, kind) || selected && resolveNamed(project, kind, selected, command) || scopeEntity(scope, kind);
+      const scopedMatches = selected ? entities(project, kind, command).filter((item) => scopeContains(project, scope, kind, item.id) && same(item.name, selected)) : [];
+      const resolved = selectedSourceFor(slotValues[`slot-${index}-target`], project, kind) || scopedMatches.length === 1 && scopedMatches[0] || !selected && trustedScopeEntity(project, scope, kind) || !selected && scopeEntity(scope, kind);
       if (resolved) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), target: { kind, id: resolved.id } };
       else addSlot(index, "target", kind, `Какой ${kind} изменить?`, entities(project, kind, command));
     }

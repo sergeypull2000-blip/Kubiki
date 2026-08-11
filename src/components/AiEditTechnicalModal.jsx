@@ -105,7 +105,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
   if (variant === "inline") {
     const feedbackVisible = state !== "idle" || !!result || !!error;
     return createPortal(<div className="kb-ai-inline-anchor" style={inlinePosition}>
-      <div ref={panelRef} className="kb-ai-inline-panel">
+      <div ref={panelRef} className="kb-ai-inline-panel kb-ai-inline-surface">
         {feedbackVisible && <div className="kb-ai-launcher-feedback kb-ai-inline-feedback">
           {state === "loading" && <div className="kb-modal-note">Готовим предложение…</div>}
           {error && <div className="kb-server-error">{error}{errorCode ? <> · <code>{errorCode}</code></> : null}</div>}
@@ -128,7 +128,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
             {result && !["diff", "clarification"].includes(result.kind) && <button type="button" className="kb-btn kb-btn-primary" onClick={() => { setResult(null); setError(""); setErrorCode(""); setConfirmed({}); }}>Новый запрос</button>}
           </div>
         </div>}
-        <div className="kb-import-panel kb-import-panel-unified kb-ai-launcher-prompt kb-ai-inline-prompt">
+        <div className="kb-import-panel kb-import-panel-unified kb-ai-launcher-prompt kb-ai-inline-prompt kb-ai-inline-input-section">
           <div className="kb-unified-input">
             <textarea autoFocus className="kb-generate-textarea" rows={4} value={instruction} maxLength={4000} disabled={busy || result?.kind === "diff"}
               onChange={(event) => setInstruction(event.target.value)}

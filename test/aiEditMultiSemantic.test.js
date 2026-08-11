@@ -192,3 +192,52 @@ test("multi-command plan can add a confirmed Performer from the library", () => 
   const next = applyAiEditOperations(project, diff, { performers: [performer], idPool, instruction: libraryRequest.instruction, selectedSources: libraryRequest.knowledge.selectedSources });
   assert.equal(next.stages[0].tasks[0].executors.at(-1).performerId, performer.id);
 });
+
+test("local contextual creation resolves parents only from trusted anchor ancestry", () => {
+  const current = { id: "project", stages: [
+    { id: "stage-a", name: "A", tasks: [{ id: "task-a", name: "Раскадровка", executors: [{ id: "executor-a", tags: [{ id: "name-a", key: "name", value: "Свет" }], amount: "0" }] }] },
+    { id: "stage-b", name: "B", tasks: [{ id: "task-b", name: "Раскадровка", executors: [{ id: "executor-b", tags: [{ id: "name-b", key: "name", value: "Свет" }], amount: "0" }] }] },
+  ] };
+  const commands = (command) => parseAiEditSemanticResponse({ kind: "commands", summary: "create", warnings: [], commands: [command] });
+  const cases = [
+    [{ kind: "executor", projectId: "project", stageId: "stage-a", taskId: "task-a", executorId: "executor-a" }, { type: "executor.createAnonymous", name: "Новый", taskName: "Раскадровка" }, "task", "task-a"],
+    [{ kind: "task", projectId: "project", stageId: "stage-a", taskId: "task-a" }, { type: "executor.createAnonymous", name: "Новый" }, "task", "task-a"],
+    [{ kind: "task", projectId: "project", stageId: "stage-a", taskId: "task-a" }, { type: "task.create", name: "Новая" }, "stage", "stage-a"],
+    [{ kind: "stage", projectId: "project", stageId: "stage-a" }, { type: "task.create", name: "Новая" }, "stage", "stage-a"],
+  ];
+  for (const [scope, command, parentKind, parentId] of cases) {
+    const semantic = commands(command);
+    const resolved = resolveAiEditSemanticDraft({ semantic, project: current, scope });
+    assert.deepEqual(resolved.unresolvedSlots, []);
+    assert.equal(resolved.confirmedTargets[0][parentKind].id, parentId);
+    const diff = compileAiEditSemanticPlan({ semantic, request: { ...request, scope, instruction: "Создай локально" }, project: current, confirmedTargets: resolved.confirmedTargets });
+    assert.equal(diff.operations[0].targetId, parentId);
+  }
+
+  const stageCreateScope = { kind: "stage", projectId: "project", stageId: "stage-a" };
+  const stageDiff = compileAiEditSemanticPlan({ semantic: commands({ type: "stage.create", name: "C" }), request: { ...request, scope: stageCreateScope, instruction: "Создай Stage C" }, project: current });
+  assert.equal(stageDiff.operations[0].targetId, "project");
+});
+
+test("Stage contextual Executor creation uses sole Task and clarifies zero or many Tasks", () => {
+  const semantic = parseAiEditSemanticResponse({ kind: "commands", summary: "create", warnings: [], commands: [{ type: "executor.createAnonymous", name: "Новый" }] });
+  const scoped = (tasks) => ({ id: "project", stages: [{ id: "stage", name: "Stage", tasks }] });
+  const scope = { kind: "stage", projectId: "project", stageId: "stage" };
+  const sole = resolveAiEditSemanticDraft({ semantic, project: scoped([{ id: "only", name: "Only", executors: [] }]), scope });
+  assert.equal(sole.confirmedTargets[0].task.id, "only");
+  const many = resolveAiEditSemanticDraft({ semantic, project: scoped([{ id: "one", name: "One", executors: [] }, { id: "two", name: "Two", executors: [] }]), scope });
+  assert.deepEqual(many.unresolvedSlots[0].choices.map((item) => item.source.id), ["one", "two"]);
+  const none = resolveAiEditSemanticDraft({ semantic, project: scoped([]), scope });
+  assert.match(none.unresolvedSlots[0].question, /нет Task/);
+});
+
+test("explicit named edits outside local scope stay out of scope", () => {
+  const current = { id: "project", stages: [
+    { id: "stage-a", name: "A", tasks: [{ id: "task-a", name: "Раскадровка", executors: [] }] },
+    { id: "stage-b", name: "B", tasks: [{ id: "task-b", name: "Свет", executors: [] }] },
+  ] };
+  const semantic = parseAiEditSemanticResponse({ kind: "commands", summary: "edit", warnings: [], commands: [{ type: "task.rename", targetName: "Свет", name: "Свет 2" }] });
+  const resolved = resolveAiEditSemanticDraft({ semantic, project: current, scope: { kind: "task", projectId: "project", stageId: "stage-a", taskId: "task-a" } });
+  assert.equal(resolved.confirmedTargets[0], undefined);
+  assert.equal(resolved.unresolvedSlots[0].kind, "task");
+});

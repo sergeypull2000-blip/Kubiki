@@ -75,6 +75,24 @@ function requireNewId(idPool, poolName, value, used, index, operation) {
   used.add(value);
 }
 
+function contextualCreationAllows(index, scope, operation) {
+  if (scope.kind === "project") return true;
+  if (operation.type === "stage.add") return scope.kind === "stage" && operation.targetId === scope.projectId && index.stages.has(scope.stageId);
+  if (operation.type === "task.add") {
+    if (!scope.stageId || operation.targetId !== scope.stageId || !index.stages.has(scope.stageId)) return false;
+    if (scope.kind === "task") return index.tasks.get(scope.taskId)?.stage.id === scope.stageId;
+    return scope.kind === "stage";
+  }
+  if (["executor.addAnonymous", "executor.addFromPerformer"].includes(operation.type)) {
+    if (!scope.taskId || operation.targetId !== scope.taskId) return false;
+    const located = index.tasks.get(scope.taskId);
+    if (!located || located.stage.id !== scope.stageId) return false;
+    if (scope.kind === "executor") return index.executors.get(scope.executorId)?.task.id === scope.taskId;
+    return scope.kind === "task";
+  }
+  return false;
+}
+
 function performerById(performers, id, operation) {
   const performer = (performers || []).find((item) => item.id === id);
   if (!performer) fail("performer_not_found", "Performer не найден или не принадлежит пользователю", operation);
@@ -121,10 +139,13 @@ function validateTagValue(key, value, operation) {
 }
 
 function applyOne(project, operation, context) {
-  const index = indexProject(project), { scope, idPool, usedIds, performers, instruction, selectedSources } = context;
+  const index = indexProject(project), { scope: requestedScope, idPool, usedIds, performers, instruction, selectedSources } = context;
+  // Follow-up fields of an entity created earlier in this same validated diff belong
+  // to the contextual creation transaction, not to the pre-existing edit scope.
+  const scope = usedIds.has(operation.targetId) ? { kind: "project", projectId: requestedScope.projectId } : requestedScope;
   switch (operation.type) {
     case "stage.add": {
-      if (scope.kind !== "project" || operation.targetId !== scope.projectId) fail("target_out_of_scope", "Stage можно добавить только в контексте всей сметы", operation);
+      if (!contextualCreationAllows(index, scope, operation)) fail("target_out_of_scope", "Stage можно добавить только в контексте всей сметы или выбранного Stage", operation);
       requireNewId(idPool, "stages", operation.value.stageId, usedIds, index, operation);
       if (!PRESET_KEYS.has(operation.value.presetKey)) fail("invalid_preset", "Неизвестный preset Stage", operation);
       if (operation.value.beforeStageId !== null && !index.stages.has(operation.value.beforeStageId)) fail("target_not_found", "Позиция Stage не найдена", operation);
@@ -135,7 +156,8 @@ function applyOne(project, operation, context) {
     case "stage.rename": { const { stage } = requireTarget(index, "stage", operation.targetId, scope, operation); return { ...project, stages: replaceAt(project.stages, stage.id, (item) => ({ ...item, name: operation.value.name.trim() })) }; }
     case "stage.delete": { requireTarget(index, "stage", operation.targetId, scope, operation); return { ...project, stages: removeAt(project.stages, operation.targetId) }; }
     case "task.add": {
-      const { stage } = requireTarget(index, "stage", operation.targetId, scope, operation);
+      if (!contextualCreationAllows(index, scope, operation)) fail("target_out_of_scope", "Task нельзя добавить вне доверенного parent Stage", operation);
+      const { stage } = index.stages.get(operation.targetId) || {};
       requireNewId(idPool, "tasks", operation.value.taskId, usedIds, index, operation);
       if (operation.value.beforeTaskId !== null && !stage.tasks.some((item) => item.id === operation.value.beforeTaskId)) fail("target_not_found", "Позиция Task не найдена в целевом Stage", operation);
       const task = { ...makeTask(), id: operation.value.taskId, name: operation.value.name.trim() };
@@ -144,7 +166,8 @@ function applyOne(project, operation, context) {
     case "task.rename": { const { stage, task } = requireTarget(index, "task", operation.targetId, scope, operation); return { ...project, stages: replaceAt(project.stages, stage.id, (item) => ({ ...item, tasks: replaceAt(item.tasks, task.id, (entry) => ({ ...entry, name: operation.value.name.trim() })) })) }; }
     case "task.delete": { const { stage } = requireTarget(index, "task", operation.targetId, scope, operation); return { ...project, stages: replaceAt(project.stages, stage.id, (item) => ({ ...item, tasks: removeAt(item.tasks, operation.targetId) })) }; }
     case "executor.addAnonymous": {
-      const { stage, task } = requireTarget(index, "task", operation.targetId, scope, operation);
+      if (!contextualCreationAllows(index, scope, operation)) fail("target_out_of_scope", "Executor нельзя добавить вне доверенного parent Task", operation);
+      const { stage, task } = index.tasks.get(operation.targetId) || {};
       requireNewId(idPool, "executors", operation.value.executorId, usedIds, index, operation);
       requireNewId(idPool, "tags", operation.value.roleTagId, usedIds, index, operation);
       const executor = { ...makeExecutor(), id: operation.value.executorId };
@@ -152,7 +175,8 @@ function applyOne(project, operation, context) {
       return { ...project, stages: replaceAt(project.stages, stage.id, (item) => ({ ...item, tasks: replaceAt(item.tasks, task.id, (entry) => ({ ...entry, executors: [...entry.executors, executor] })) })) };
     }
     case "executor.addFromPerformer": {
-      const { stage, task } = requireTarget(index, "task", operation.targetId, scope, operation), performer = performerById(performers, operation.value.performerId, operation);
+      if (!contextualCreationAllows(index, scope, operation)) fail("target_out_of_scope", "Executor нельзя добавить вне доверенного parent Task", operation);
+      const { stage, task } = index.tasks.get(operation.targetId) || {}, performer = performerById(performers, operation.value.performerId, operation);
       if (!performerWasExplicitlyRequested(performer, instruction, selectedSources, operation.source)) fail("performer_not_explicit", "Performer не был прямо указан пользователем", operation);
       if (operation.source.kind !== "performer" || operation.source.id !== performer.id) fail("invalid_source", "Операция Performer должна ссылаться на подтверждённый источник", operation);
       requireNewId(idPool, "executors", operation.value.executorId, usedIds, index, operation);

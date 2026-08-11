@@ -43,7 +43,7 @@ body {
 .kb-ai-launcher.is-open:disabled { opacity: .55; cursor: default; }
 .kb-ai-undo-chip { position: absolute; right: 55px; bottom: 8px; width: max-content; padding: 7px 10px; border: 1px solid #d9e2f5; border-radius: 999px; background: rgba(255,255,255,.94); color: #315185; font-size: 11px; box-shadow: 0 5px 16px rgba(29, 44, 73, .12); cursor: pointer; }
 .kb-ai-global-overlay .kb-ai-edit-dialog { transform-origin: calc(100% - 28px) calc(100% - 28px); animation: kb-ai-expand .2s cubic-bezier(.2,.75,.25,1); }
-.kb-ai-inline-anchor { position: fixed; z-index: 1400; width: min(360px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain; }
+.kb-ai-inline-anchor { position: fixed; z-index: 1450; width: min(360px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: visible; overscroll-behavior: contain; }
 .kb-ai-edit-inline { width: 100%; max-height: min(410px, calc(100vh - 24px)); overflow: auto; border-radius: 13px; box-shadow: 0 18px 50px rgba(24, 31, 48, .24); animation: kb-menu-in .14s ease-out; }
 .kb-ai-edit-inline .kb-modal-body { padding: 12px; }
 .kb-ai-edit-inline .kb-modal-head { padding: 11px 12px; }
@@ -60,7 +60,9 @@ body {
 .kb-ai-inline-prompt { min-height: 128px; animation: kb-menu-in .14s ease-out; transform-origin: top left; }
 .kb-ai-inline-prompt .kb-generate-textarea { padding-right: 42px; }
 .kb-ai-inline-panel { position: relative; width: 100%; }
-.kb-ai-inline-feedback { position: static; width: 100%; max-height: min(360px, calc(100vh - 190px)); margin: 0 0 10px; border-radius: 13px; }
+.kb-ai-inline-surface { display: grid; gap: 12px; background: transparent; }
+.kb-ai-inline-feedback { position: static; width: 100%; max-height: min(360px, calc(100vh - 190px)); margin: 0; border: 0; outline: 0; border-radius: 13px; background:#fff; box-shadow:0 14px 38px rgba(24,31,48,.09),0 0 24px rgba(74,103,155,.04); }
+.kb-ai-inline-input-section { border: 0; outline: 0; border-radius: 13px; background:#fff; box-shadow:0 14px 38px rgba(24,31,48,.09),0 0 24px rgba(74,103,155,.04); }
 .kb-ai-inline-feedback .kb-ai-launcher-answer { align-items: stretch; }
 .kb-ai-inline-feedback .kb-ai-launcher-answer .kb-btn { padding-inline: 10px; }
 .kb-ai-inline-feedback .kb-ai-launcher-metrics { grid-template-columns: 1fr; }
