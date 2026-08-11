@@ -82,11 +82,13 @@ function performerById(performers, id, operation) {
   return performer;
 }
 
-function performerWasExplicitlyRequested(performer, instruction, selectedSources) {
+function performerWasExplicitlyRequested(performer, instruction, selectedSources, source = null) {
   if ((selectedSources || []).some((item) => item.kind === "performer" && item.id === performer.id)) return true;
-  if (!/(?:назнач\p{L}*|добав\p{L}*|постав\p{L}*|замен\p{L}*|исполнител\p{L}*)/iu.test(instruction || "")) return false;
   const normalize = (value) => String(value || "").normalize("NFKC").toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
-  const query = normalize(instruction), fullName = normalize([performer.firstName, performer.lastName].filter(Boolean).join(" ")), firstName = normalize(performer.firstName), firstStem = firstName.slice(0, Math.max(3, firstName.length - 1));
+  const query = normalize(instruction), provenanceName = normalize(source?.kind === "performer" && source.id === performer.id ? source.name : ""), provenanceStem = provenanceName.split(/\s+/)[0]?.slice(0, Math.max(3, provenanceName.split(/\s+/)[0]?.length - 1));
+  if (/(?:из\s+базы|performer|библиотек\p{L}*)/iu.test(instruction || "") && provenanceStem?.length >= 3 && query.split(/\s+/).some((word) => word.startsWith(provenanceStem))) return true;
+  if (!/(?:назнач\p{L}*|добав\p{L}*|постав\p{L}*|замен\p{L}*|исполнител\p{L}*)/iu.test(instruction || "")) return false;
+  const fullName = normalize([performer.firstName, performer.lastName].filter(Boolean).join(" ")), firstName = normalize(performer.firstName), firstStem = firstName.slice(0, Math.max(3, firstName.length - 1));
   return Boolean(fullName && query.includes(fullName) || firstStem.length >= 3 && query.split(/\s+/).some((word) => word.startsWith(firstStem)));
 }
 
@@ -151,7 +153,7 @@ function applyOne(project, operation, context) {
     }
     case "executor.addFromPerformer": {
       const { stage, task } = requireTarget(index, "task", operation.targetId, scope, operation), performer = performerById(performers, operation.value.performerId, operation);
-      if (!performerWasExplicitlyRequested(performer, instruction, selectedSources)) fail("performer_not_explicit", "Performer не был прямо указан пользователем", operation);
+      if (!performerWasExplicitlyRequested(performer, instruction, selectedSources, operation.source)) fail("performer_not_explicit", "Performer не был прямо указан пользователем", operation);
       if (operation.source.kind !== "performer" || operation.source.id !== performer.id) fail("invalid_source", "Операция Performer должна ссылаться на подтверждённый источник", operation);
       requireNewId(idPool, "executors", operation.value.executorId, usedIds, index, operation);
       const executor = buildExecutorFromPerformer(performer); executor.id = operation.value.executorId;

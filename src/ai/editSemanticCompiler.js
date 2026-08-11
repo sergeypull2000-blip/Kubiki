@@ -33,7 +33,7 @@ function take(pool, used, kind) {
   used.add(value); return value;
 }
 
-export function compileAiEditSemanticCommand({ semantic, request, project, resolvedTarget, resolvedTask, performer, performers = [] }) {
+export function compileAiEditSemanticCommand({ semantic, request, project, resolvedTarget, resolvedTask, performer, performers = [], performerExplicit = false }) {
   const command = semantic.command, used = new Set(), operations = [], projectIndex = indexProject(project);
   const add = (type, targetId, value, reason) => operations.push(operation(`semantic-${operations.length + 1}`, type, targetId, value, reason));
   switch (command.type) {
@@ -64,9 +64,9 @@ export function compileAiEditSemanticCommand({ semantic, request, project, resol
     case "executor.createFromPerformer": {
       const trustedTaskId = resolvedTask?.id || command.taskId, task = projectIndex.tasks.get(trustedTaskId)?.task;
       const confirmedPerformer = performer?.id === command.performerId ? performers.find((item) => item.id === performer.id) : null;
-      if (!task || !confirmedPerformer || command.taskId && command.taskId !== trustedTaskId) throw new AiEditSemanticCompileError("ai_semantic_missing_target", "Не подтверждены Task и Performer");
+      if (!task || !confirmedPerformer || command.taskId && command.taskId !== trustedTaskId || !(performerExplicit || command.performerExplicit === true)) throw new AiEditSemanticCompileError("ai_semantic_missing_target", "Не подтверждены Task, Performer и explicit intent");
       add("executor.addFromPerformer", task.id, { executorId: take(request.idPool, used, "executors"), performerId: confirmedPerformer.id }, "Добавить подтверждённого Performer из библиотеки");
-      operations[operations.length - 1].source = { kind: "performer", id: confirmedPerformer.id };
+      operations[operations.length - 1].source = { kind: "performer", id: confirmedPerformer.id, name: command.performerName || confirmedPerformer.firstName || confirmedPerformer.id };
       break;
     }
     case "executor.setCompensation": { const executor = projectIndex.executors.get(resolvedTarget?.id)?.executor;
@@ -144,7 +144,8 @@ export function compileAiEditSemanticPlan({ semantic, request, project, confirme
     const diff = compileAiEditSemanticCommand({ semantic: one, request: availableRequest(), project: projected,
       resolvedTarget: command.type === "task.create" ? { kind: "stage", id: stageId } : resolvedTarget,
       resolvedTask: ["executor.createAnonymous", "executor.createFromPerformer"].includes(command.type) ? { id: taskId } : null,
-      performer: command.type === "executor.createFromPerformer" ? performers.find((item) => item.id === command.performerId) : performer, performers });
+      performer: command.type === "executor.createFromPerformer" ? performers.find((item) => item.id === command.performerId) : performer,
+      performers, performerExplicit: command.performerExplicit === true });
     const offset = operations.length;
     operations.push(...diff.operations.map((operation, operationIndex) => ({ ...operation, id: `semantic-${offset + operationIndex + 1}` })));
     for (const operation of diff.operations) {

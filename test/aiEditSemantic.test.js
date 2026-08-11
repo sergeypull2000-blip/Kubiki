@@ -147,7 +147,7 @@ test("Task scope plus one confirmed Performer compiles to addFromPerformer only"
   const resolvedTask = resolveExecutorCreationTask(localRequest.instruction, current, null, localRequest.scope).task;
   assert.equal(resolvedTask.id, "t");
   const parsed = semantic({ type: "executor.createFromPerformer", taskId: "t", performerId: performer.id });
-  const diff = compileAiEditSemanticCommand({ semantic: parsed, request: localRequest, project: current, resolvedTask, performer, performers: [performer] });
+  const diff = compileAiEditSemanticCommand({ semantic: parsed, request: localRequest, project: current, resolvedTask, performer, performers: [performer], performerExplicit: true });
   assert.deepEqual(diff.operations.map((item) => item.type), ["executor.addFromPerformer"]);
   assert.deepEqual(diff.operations[0].value, { executorId: "new-executor", performerId: performer.id });
   assert.deepEqual(Object.keys(parsed.command).sort(), ["performerId", "taskId", "type"]);

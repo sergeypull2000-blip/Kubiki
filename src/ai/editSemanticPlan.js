@@ -24,7 +24,7 @@ function scopeEntity(scope, kind) {
   const id = scope?.[`${kind}Id`]; return id ? { kind, id } : null;
 }
 
-export function resolveAiEditSemanticDraft({ semantic, project, scope, performers = [], prior = null, answer = "", selectedSource = null }) {
+export function resolveAiEditSemanticDraft({ semantic, project, scope, performers = [], instruction = "", prior = null, answer = "", selectedSource = null }) {
   if (semantic.kind !== "commands") return { semantic, confirmedTargets: {}, unresolvedSlots: [] };
   const draft = semantic, confirmedTargets = structuredClone(prior?.confirmedTargets || {}), slotValues = { ...(prior?.slotValues || {}) };
   if (prior?.unresolvedSlots?.length && (answer || selectedSource)) {
@@ -32,6 +32,7 @@ export function resolveAiEditSemanticDraft({ semantic, project, scope, performer
     slotValues[slot.id] = selectedSource?.id || String(answer).trim();
   }
   const unresolvedSlots = [];
+  const performerNames = draft.commands.filter((command) => command.type === "executor.createFromPerformer").map((command) => command.performerName || performers.find((item) => item.id === command.performerId)?.firstName).filter(Boolean);
   const addSlot = (index, field, kind, question, candidates = []) => unresolvedSlots.push({ id: `slot-${index}-${field}`, commandIndex: index, field, kind, question, choices: candidates.slice(0, 10).map((item) => choice(kind, item.id, item.label)) });
   const refs = new Map();
   draft.commands.forEach((command, index) => { if (command.ref) { if (refs.has(command.ref)) throw new AiEditSemanticPlanError("ai_semantic_duplicate_ref", `Повторный local ref ${command.ref}`); refs.set(command.ref, { type: command.type, index }); } });
@@ -63,6 +64,9 @@ export function resolveAiEditSemanticDraft({ semantic, project, scope, performer
       if (task) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), task: { kind: "task", id: task.id } };
       else addSlot(index, "task", "task", "В какую Task добавить Performer?", entities(project, "task", command));
       const performerSlot = `slot-${index}-performer`, selectedPerformer = slotValues[performerSlot] || command.performerId;
+      const explicitSlot = `slot-${index}-performerExplicit`;
+      const namedPerformer = command.performerName || performers.find((item) => item.id === command.performerId)?.firstName;
+      if (slotValues[explicitSlot] === undefined) slotValues[explicitSlot] = explicitDatabaseRequest(instruction, namedPerformer, performerNames);
       const matches = selectedPerformer ? performers.filter((item) => item.id === selectedPerformer) : performerMatches(command.performerName, performers);
       if (selectedPerformer) slotValues[performerSlot] = selectedPerformer;
       else if (matches.length === 1) slotValues[performerSlot] = matches[0].id;
@@ -99,6 +103,15 @@ function performerMatches(name, performers) {
   }).map((item) => [item.id, { ...item, label: [[item.firstName, item.lastName].filter(Boolean).join(" "), item.primaryRole].filter(Boolean).join(" — ") }])).values()];
 }
 
+function explicitDatabaseRequest(instruction, performerName, performerNames) {
+  const query = normalized(instruction), stemFor = (value) => { const first = normalized(value).split(" ")[0]; return first.slice(0, Math.max(3, first.length - 1)); };
+  const requestedStem = stemFor(performerName);
+  if (requestedStem.length < 3) return false;
+  const mentions = performerNames.flatMap((name) => { const stem = stemFor(name); return [...query.matchAll(new RegExp(`${stem}\\p{L}*`, "giu"))].map((match) => ({ stem, index: match.index })); });
+  const markers = [...query.matchAll(/из\s+базы|performer|библиотек\p{L}*/giu)];
+  return markers.some((marker) => mentions.reduce((nearest, mention) => Math.abs(mention.index - marker.index) < Math.abs(nearest.index - marker.index) ? mention : nearest, { stem: "", index: Number.POSITIVE_INFINITY }).stem === requestedStem);
+}
+
 export function materializeResolvedSemanticPlan(resolved) {
   const semantic = structuredClone(resolved.semantic);
   for (const [slotId, value] of Object.entries(resolved.slotValues || {})) {
@@ -106,6 +119,7 @@ export function materializeResolvedSemanticPlan(resolved) {
     const command = semantic.commands[Number(match[1])], field = match[2];
     if (field === "name") command.name = value;
     if (field === "performer") command.performerId = value;
+    if (field === "performerExplicit") command.performerExplicit = value === true;
     if (field === "task") command.taskId = value;
   }
   return semantic;

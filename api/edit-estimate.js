@@ -88,7 +88,7 @@ async function executeEdit(req, budget) {
   if (!semantic) return { status: 502, body: { error: "Модель вернула некорректную semantic command", code: diagnoseAiEditSemanticResponse(raw) } };
   if (semantic.kind === "commands") {
     try {
-      const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, performers: ownPerformers });
+      const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, performers: ownPerformers, instruction: request.instruction });
       if (resolvedPlan.unresolvedSlots.length) return clarificationResponse(request, resolvedPlan);
       const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project, confirmedTargets: resolvedPlan.confirmedTargets, performer: resolved.performers.length === 1 ? resolved.performers[0] : null, performers: ownPerformers });
       return { status: 200, body: diff };
@@ -100,7 +100,7 @@ async function executeEdit(req, budget) {
   if (semantic.kind !== "command") return { status: 200, body: attachTrustedAiEditMetadata(semantic, request) };
   const performer = request.confirmed.performerId ? ownPerformers.find((item) => item.id === request.confirmed.performerId) : resolved.performers.length === 1 ? resolved.performers[0] : null;
   try {
-    const diff = compileAiEditSemanticCommand({ semantic, request, project, resolvedTarget: taskCreationStage.stage || projectTarget.target, resolvedTask: creationTask.task, performer, performers: ownPerformers });
+    const diff = compileAiEditSemanticCommand({ semantic, request, project, resolvedTarget: taskCreationStage.stage || projectTarget.target, resolvedTask: creationTask.task, performer, performers: ownPerformers, performerExplicit: explicitPerformerIntent });
     return { status: 200, body: diff };
   } catch (error) {
     if (error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code } };
@@ -134,7 +134,7 @@ async function continueSemanticPlan({ request, project, auth }) {
   try {
     const needsPerformers = semantic.commands.some((command) => command.type === "executor.createFromPerformer");
     const performers = needsPerformers ? await loadOwnPerformersForEdit(auth.client, auth.user.id) : [];
-    const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, performers, prior: pending,
+    const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, performers, instruction: request.instruction, prior: pending,
       answer: request.continuation.answer, selectedSource: request.continuation.source });
     if (resolvedPlan.unresolvedSlots.length) return clarificationResponse(request, resolvedPlan);
     const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project, confirmedTargets: resolvedPlan.confirmedTargets, performers });
