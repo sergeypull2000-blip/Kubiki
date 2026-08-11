@@ -39,7 +39,22 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
   const globalAiSubmitRef = useRef(null);
+  const canvasInnerRef = useRef(null);
+  const [aiAnchor, setAiAnchor] = useState({ right: 12, width: 430 });
   useOutsideClose(profileRef, profileOpen ? () => setProfileOpen(false) : null);
+  useEffect(() => {
+    const canvasInner = canvasInnerRef.current;
+    if (!canvasInner) return;
+    const update = () => {
+      const rect = canvasInner.getBoundingClientRect();
+      setAiAnchor({ right: Math.max(0, window.innerWidth - rect.right), width: Math.max(320, rect.width) });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(canvasInner);
+    window.addEventListener("resize", update);
+    return () => { observer.disconnect(); window.removeEventListener("resize", update); };
+  }, []);
   const clipboardRef = useRef(null); // скопированный исполнитель (Ctrl+C/Ctrl+V)
   const dispatch = (fn) => onChange(fn);
   const total = projectSum(project);
@@ -391,7 +406,7 @@ const toggleAllCollapsed = () =>
           <main className="kb-canvas"
             onMouseDown={clearSelection}
             onScroll={(event) => setCollapseButtonCompact(event.currentTarget.scrollTop > 12)}>
-            <div className="kb-canvas-inner">
+            <div ref={canvasInnerRef} className="kb-canvas-inner">
               {project.metadata?.aiGeneration?.knowledgeNames?.length > 0 && <div className="kb-generation-knowledge">Использованы знания студии: {project.metadata.aiGeneration.knowledgeNames.join(", ")}</div>}
               {!isEmpty && <button type="button" className={`kb-collapse-all-btn${collapseButtonCompact ? " is-compact" : ""}`}
                 onMouseDown={(event) => event.stopPropagation()}
@@ -446,7 +461,7 @@ const toggleAllCollapsed = () =>
                 </>
               )}
             </div>
-            {!editingTemplate && onRequestAiEdit && project.stages.length > 0 && <div className="kb-ai-launcher-wrap">
+            {!editingTemplate && onRequestAiEdit && project.stages.length > 0 && <div className="kb-ai-launcher-wrap" style={{ right: aiAnchor.right, "--kb-ai-panel-width": `${aiAnchor.width}px` }}>
               {globalAiOpen && <AiEditTechnicalModal variant="launcher" closing={globalAiClosing} submitRef={globalAiSubmitRef} scope={globalScope} contextLabel="Вся смета" onRequest={onRequestAiEdit} onCancelRequest={onCancelAiEdit} onApply={onApplyAiEdit} onUndo={onUndoAiEdit} canUndo={canUndoAiEdit} onClose={closeGlobalAi} />}
               {canUndoAiEdit && !globalAiOpen && <button type="button" className="kb-ai-undo-chip" onClick={onUndoAiEdit}>Undo AI</button>}
               <button type="button" className={`kb-ai-launcher${globalAiOpen && !globalAiClosing ? " is-open" : ""}`} aria-label={globalAiOpen ? "Предпросмотр изменений" : "Открыть AI-ассистента"} onClick={() => { setLocalAiPopover(null); if (globalAiOpen) globalAiSubmitRef.current?.(); else setGlobalAiOpen(true); }}><ArrowUp size={18} strokeWidth={1.8} /></button>
