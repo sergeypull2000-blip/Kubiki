@@ -83,17 +83,43 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
       </div>
     </div>;
   }
-  if (variant === "inline" && state === "idle" && !result && !error) {
-    const prompt = <div ref={panelRef} className="kb-import-panel kb-import-panel-unified kb-ai-launcher-prompt kb-ai-inline-prompt">
-      <div className="kb-unified-input">
-        <textarea autoFocus className="kb-generate-textarea" rows={4} value={instruction} maxLength={4000}
-          onChange={(event) => setInstruction(event.target.value)}
-          onKeyDown={(event) => { if (event.key === "Escape") onClose(); if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); request(); } }}
-          placeholder="Опишите, что нужно изменить в смете" />
-        <button type="button" className="kb-send-btn" onClick={() => request()} disabled={!instruction.trim()} title="Предпросмотр изменений" aria-label="Предпросмотр изменений"><ArrowUp size={15} strokeWidth={1.8} /></button>
+  if (variant === "inline") {
+    const feedbackVisible = state !== "idle" || !!result || !!error;
+    return <div className="kb-ai-inline-anchor" style={{ left: position?.x || 16, top: position?.y || 16 }}>
+      <div ref={panelRef} className="kb-ai-inline-panel">
+        {feedbackVisible && <div className="kb-ai-launcher-feedback kb-ai-inline-feedback">
+          {state === "loading" && <div className="kb-modal-note">Готовим предложение…</div>}
+          {error && <div className="kb-server-error">{error}{errorCode ? <> · <code>{errorCode}</code></> : null}</div>}
+          {result?.kind === "clarification" && <div className="kb-ai-launcher-feedback-content"><strong>Нужно уточнение</strong><div className="kb-modal-note">{result.question}</div>
+            <div className="kb-ai-launcher-choices">{result.choices?.map((choice) => <button type="button" className="kb-btn kb-btn-ghost" key={choice.id} onClick={() => request({ source: choice.source, label: choice.label })}>{choice.label}</button>)}</div>
+            <div className="kb-ai-launcher-answer"><input autoFocus className="kb-input" value={clarificationAnswer} onChange={(event) => setClarificationAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && clarificationAnswer.trim()) request({ answer: clarificationAnswer.trim() }); }} placeholder="Короткий ответ" /><button type="button" className="kb-btn kb-btn-primary" disabled={!clarificationAnswer.trim()} onClick={() => request({ answer: clarificationAnswer.trim() })}>Продолжить</button></div>
+          </div>}
+          {result?.kind === "out_of_scope" && <div className="kb-modal-note">{result.message}</div>}
+          {result?.kind === "error" && <div className="kb-server-error">{result.message}</div>}
+          {result?.kind === "diff" && <div className="kb-ai-launcher-feedback-content"><strong>{result.summary}</strong>
+            <div>{planLines(result.plan).map((line) => <div key={line} className="kb-modal-note">{line}</div>)}</div>
+            <div>{result.operations.map((operation) => <div key={operation.id} className="kb-modal-note">• {operation.reason}</div>)}</div>
+            <div className="kb-ai-launcher-metrics">{METRICS.map(([key, label, unit]) => <div key={key} className="kb-modal-note">{label}: {fmt(result.before[key])}{unit} → {fmt(result.after[key])}{unit}</div>)}</div>
+            {result.warnings.map((warning) => <div key={warning} className="kb-server-error">{warning}</div>)}
+          </div>}
+          <div className="kb-ai-launcher-feedback-actions">
+            {state === "loading" && <button type="button" className="kb-btn kb-btn-ghost" onClick={() => { requestVersion.current += 1; onCancelRequest(); setState("idle"); }}>Отменить запрос</button>}
+            {result?.kind === "diff" && <button type="button" className="kb-btn kb-btn-primary" onClick={apply} disabled={busy}>{state === "applying" ? "Применяем…" : "Применить"}</button>}
+            {error && <button type="button" className="kb-btn kb-btn-ghost" onClick={() => { setError(""); setErrorCode(""); }}>Закрыть</button>}
+            {result && !["diff", "clarification"].includes(result.kind) && <button type="button" className="kb-btn kb-btn-primary" onClick={() => { setResult(null); setError(""); setErrorCode(""); setConfirmed({}); }}>Новый запрос</button>}
+          </div>
+        </div>}
+        <div className="kb-import-panel kb-import-panel-unified kb-ai-launcher-prompt kb-ai-inline-prompt">
+          <div className="kb-unified-input">
+            <textarea autoFocus className="kb-generate-textarea" rows={4} value={instruction} maxLength={4000} disabled={busy || result?.kind === "diff"}
+              onChange={(event) => setInstruction(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Escape") onClose(); if (event.key === "Enter" && !event.shiftKey && !busy && !result) { event.preventDefault(); request(); } }}
+              placeholder="Опишите, что нужно изменить в смете" />
+            <button type="button" className="kb-send-btn" onClick={() => request()} disabled={!instruction.trim() || busy || !!result} title="Предпросмотр изменений" aria-label="Предпросмотр изменений"><ArrowUp size={15} strokeWidth={1.8} /></button>
+          </div>
+        </div>
       </div>
     </div>;
-    return <div className="kb-ai-inline-anchor" style={{ left: position?.x || 16, top: position?.y || 16 }}>{prompt}</div>;
   }
   const panel = <div ref={panelRef} className={`kb-modal kb-ai-settings-modal kb-ai-edit-${variant}`} role="dialog" aria-modal={variant === "dialog" ? "true" : undefined} aria-labelledby="ai-edit-title" onMouseDown={(event) => event.stopPropagation()}>
       <div className="kb-modal-head"><span className="kb-modal-title" id="ai-edit-title">Изменить смету с AI</span><button type="button" className="kb-icon-btn" onClick={onClose} disabled={busy}><X size={16} /></button></div>
@@ -124,7 +150,6 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
         </div>
       </div>
     </div>;
-  if (variant === "inline") return <div className="kb-ai-inline-anchor" style={{ left: position?.x || 16, top: position?.y || 16 }}>{panel}</div>;
   if (variant === "launcher") return <div className={`kb-ai-launcher-panel${closing ? " is-closing" : ""}`}>{panel}</div>;
   return <div className="kb-modal-overlay kb-ai-global-overlay" onMouseDown={busy ? undefined : onClose}>{panel}</div>;
 }

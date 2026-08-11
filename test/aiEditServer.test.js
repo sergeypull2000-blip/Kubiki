@@ -193,7 +193,8 @@ test("Workspace exposes profile dropdown, floating global launcher and direct lo
   assert.match(workspace, /submitRef=\{globalAiSubmitRef\}/); assert.match(workspace, /globalAiSubmitRef\.current\?\.\(\)/);
   assert.doesNotMatch(modal, /kb-attach-btn|Paperclip/);
   assert.match(modal, /if \(variant === "launcher"\)/);
-  assert.match(modal, /if \(variant === "inline" && state === "idle" && !result && !error\)/);
+  assert.match(modal, /if \(variant === "inline"\)/);
+  assert.match(modal, /kb-ai-inline-feedback/); assert.match(modal, /kb-ai-inline-panel/);
   assert.match(workspace, /globalAiClosing/); assert.match(workspace, /setTimeout\(\(\) => \{ setGlobalAiOpen\(false\)/);
   assert.equal((localRows.match(/onContextMenu/g) || []).length, 3); assert.match(workspace, /setLocalAiPopover\(/);
   assert.doesNotMatch(workspace, /kb-ai-context-menu|>Изменить с AI…<\/button>/);

@@ -59,6 +59,11 @@ body {
 .kb-ai-launcher-feedback-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .kb-ai-inline-prompt { min-height: 128px; animation: kb-menu-in .14s ease-out; transform-origin: top left; }
 .kb-ai-inline-prompt .kb-generate-textarea { padding-right: 42px; }
+.kb-ai-inline-panel { position: relative; width: 100%; }
+.kb-ai-inline-feedback { position: absolute; right: 0; bottom: calc(100% + 10px); width: 100%; max-height: min(360px, calc(100vh - 190px)); margin: 0; border-radius: 13px; }
+.kb-ai-inline-feedback .kb-ai-launcher-answer { align-items: stretch; }
+.kb-ai-inline-feedback .kb-ai-launcher-answer .kb-btn { padding-inline: 10px; }
+.kb-ai-inline-feedback .kb-ai-launcher-metrics { grid-template-columns: 1fr; }
 .kb-ai-edit-launcher { width: 100%; max-height: min(560px, calc(100vh - 155px)); overflow: auto; border: 1px solid #dce2ec; border-radius: 15px; box-shadow: 0 20px 55px rgba(24, 38, 67, .22); animation: kb-ai-launcher-open .2s cubic-bezier(.2,.75,.25,1); }
 .kb-ai-edit-launcher .kb-modal-body { padding: 14px; }
 .kb-ai-edit-launcher .kb-ai-settings-text { min-height: 96px; border: 1px solid #dce1e9; border-radius: 12px; background: #fff; }
