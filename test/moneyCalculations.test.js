@@ -26,6 +26,14 @@ test("налог исполнителя считается делением и �
   assert.equal(executorSum(fixedExecutor("1000,25", "6")), 1064.1);
 });
 
+test("ставка за единицу умножается на количество единиц", () => {
+  const executor = {
+    amount: "999999",
+    tags: [{ key: "payment", payment: { type: "fix_task", rate: "1250,50", units: "4" } }],
+  };
+  assert.equal(executorSum(executor), 5002);
+});
+
 test("маркап, налог проекта и НДС сохраняют копейки", () => {
   const project = {
     globalMarkup: "12,5",

@@ -2,7 +2,8 @@ import { fmt, numVal, roundMoney } from "./utils.js";
 
 /* ---------- calculations ----------
    Сумма исполнителя определяется тегом оплаты:
-   - фикс (fix_total / fix_task): значение поля executor.amount
+   - фиксированная ставка: значение поля executor.amount
+   - ставка за единицу: rate × units
    - почасовая: rate × hours
    - посменная: rate × shifts
    Нет тега оплаты → 0. */
@@ -12,8 +13,8 @@ export const executorPaymentBase = (e) => {
   if (payTag) {
     const p = payTag.payment || {};
     switch (p.type) {
-      case "fix_total":
-      case "fix_task": base = numVal(e.amount); break;
+      case "fix_total": base = numVal(e.amount); break;
+      case "fix_task": base = numVal(p.rate) * numVal(p.units); break;
       case "hourly": base = numVal(p.rate) * numVal(p.hours); break;
       case "shift": base = numVal(p.rate) * numVal(p.shifts); break;
     }
@@ -164,12 +165,12 @@ export const projectAnalytics = (p) => {
 export const readExecutor = (e) => {
   const tag = (k) => (e.tags || []).find((t) => t.key === k);
   const pay = tag("payment")?.payment || {};
-  const payLabel = { fix_total: "Фикс за всё", fix_task: "Фикс за задачу", hourly: "Почасовая", shift: "Посменная" }[pay.type] || "—";
+  const payLabel = { fix_total: "Фиксированная ставка", fix_task: "Ставка за единицу", hourly: "Почасовая", shift: "Посменная" }[pay.type] || "—";
   return {
     name: tag("name")?.value || "Без имени",
     role: tag("role")?.value || "", grade: tag("grade")?.value || "",
     payType: pay.type || "", payLabel,
-    rate: numVal(pay.rate), qty: pay.type === "hourly" ? numVal(pay.hours) : pay.type === "shift" ? numVal(pay.shifts) : 0,
+    rate: numVal(pay.rate), qty: pay.type === "fix_task" ? numVal(pay.units) : pay.type === "hourly" ? numVal(pay.hours) : pay.type === "shift" ? numVal(pay.shifts) : 0,
     sum: executorSum(e),
   };
 };

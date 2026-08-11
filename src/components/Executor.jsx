@@ -169,7 +169,7 @@ function ExecutorTag({ tag, onSetValue, onSetPayment, onRemove, isOpen, onOpenCh
             return (
               <div key={value} className="kb-suggest-item"
                 onClick={() => {
-                  if (def.kind === "payment") onSetPayment({ type: value, rate: "", hours: "", shifts: "" });
+                  if (def.kind === "payment") onSetPayment({ type: value, rate: "", units: "", hours: "", shifts: "" });
                   else onSetValue(value);
                   setOpen(false);
                 }}>
@@ -183,17 +183,19 @@ function ExecutorTag({ tag, onSetValue, onSetPayment, onRemove, isOpen, onOpenCh
   );
 }
 
-/* ---------- поля расчёта тега оплаты (почасовая/посменная) ----------
+/* ---------- поля расчёта ставки (за единицу/почасовая/посменная) ----------
    Рендерятся справа от тегов, на той же строке. Компактно: без длинных
    лейблов, единицы — в плейсхолдере/подписи. Клик не сбрасывает выделение. */
 function PaymentInlineFields({ payment, onSetPayment }) {
   if (!payment || !payment.type) return null;
   const stop = (e) => e.stopPropagation();
-  const cfg = payment.type === "hourly"
-    ? { rateUnit: "₽/час", qtyKey: "hours", qtyUnit: "ч" }
-    : payment.type === "shift"
-      ? { rateUnit: "₽/смену", qtyKey: "shifts", qtyUnit: "смен" }
-      : null;
+  const cfg = payment.type === "fix_task"
+    ? { rateUnit: "₽/ед.", qtyKey: "units", qtyUnit: "ед." }
+    : payment.type === "hourly"
+      ? { rateUnit: "₽/час", qtyKey: "hours", qtyUnit: "ч" }
+      : payment.type === "shift"
+        ? { rateUnit: "₽/смену", qtyKey: "shifts", qtyUnit: "смен" }
+        : null;
   if (!cfg) return null;
   return (
     <span className="kb-payinline" onMouseDown={stop}>
@@ -249,8 +251,8 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
   const sum = executorSum(executor);
   const payTag = executor.tags.find((t) => t.key === "payment");
   const payType = payTag?.payment?.type;
-  const isFix = payType === "fix_total" || payType === "fix_task";
-  const isRateBased = payType === "hourly" || payType === "shift";
+  const isFix = payType === "fix_total";
+  const isRateBased = payType === "fix_task" || payType === "hourly" || payType === "shift";
   const hasPay = !!payType;
   const taxTag = executor.tags.find((t) => t.key === "tax");
   const taxPct = taxTag ? numVal(taxTag.value) : 0;
@@ -360,7 +362,7 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
               onRemove={() => removeTag(t.id)} />
           ))}
 
-          {/* поля почасовой/посменной — сразу справа от тегов, на той же строке (п.4) */}
+          {/* поля ставки и количества — сразу справа от тегов, на той же строке */}
           {isRateBased && payTag && (
             <PaymentInlineFields payment={payTag.payment}
               onSetPayment={(patch) => setTagPayment(payTag.id, patch)} />

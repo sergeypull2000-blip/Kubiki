@@ -7,7 +7,7 @@ const nullableText = (value) => text(value) || null;
 const nullableNumber = (value) => value === "" || value == null || !Number.isFinite(Number(value)) ? null : Number(value);
 const list = (value) => (Array.isArray(value) ? value : []).map(text).filter(Boolean);
 const getTag = (executor, key) => executor?.tags?.find((tag) => tag.key === key);
-const paymentUnit = (type) => type === "hourly" ? "hour" : type === "shift" ? "shift" : type ? "total" : null;
+const paymentUnit = (type) => type === "fix_task" ? "unit" : type === "hourly" ? "hour" : type === "shift" ? "shift" : type ? "total" : null;
 const cloneObject = (value) => { try { return structuredClone(value); } catch { try { return JSON.parse(JSON.stringify(value)); } catch { return {}; } } };
 
 export const performerDisplayName = (performer) => [performer?.firstName, performer?.lastName].map(text).filter(Boolean).join(" ");
@@ -51,7 +51,7 @@ export function buildPerformerFromExecutor(executor) {
   return normalizePerformer({ id: "", firstName: names.shift() || "", lastName: names.join(" "), primaryRole: getTag(executor, "role")?.value,
     specializations: [getTag(executor, "spec")?.value].filter(Boolean), grade: getTag(executor, "grade")?.value,
     software: [getTag(executor, "soft")?.value].filter(Boolean), defaultPaymentType: payment.type,
-    defaultRate: ["fix_total", "fix_task"].includes(payment.type) ? executor?.amount : payment.rate,
+    defaultRate: payment.type === "fix_total" ? executor?.amount : payment.rate,
     defaultUnit: paymentUnit(payment.type), defaultTaxRate: getTag(executor, "tax")?.value });
 }
 export const performerSnapshot = (performer) => ({ name: performerDisplayName(performer), primaryRole: performer.primaryRole, paymentType: performer.defaultPaymentType, rate: performer.defaultRate, unit: performer.defaultUnit, taxRate: performer.defaultTaxRate, commission: performer.defaultCommission, legalStatus: performer.legalStatus });
@@ -59,12 +59,12 @@ export function buildExecutorFromPerformer(input) {
   const performer = normalizePerformer(input), name = performerDisplayName(performer), tags = [];
   if (performer.primaryRole) tags.push(makeTag("role", performer.primaryRole));
   if (name) tags.push(makeTag("name", name));
-  if (performer.defaultPaymentType) { const payment = makeTag("payment", performer.defaultPaymentType); if (["hourly", "shift"].includes(performer.defaultPaymentType)) payment.payment.rate = String(performer.defaultRate ?? ""); tags.push(payment); }
+  if (performer.defaultPaymentType) { const payment = makeTag("payment", performer.defaultPaymentType); if (["fix_task", "hourly", "shift"].includes(performer.defaultPaymentType)) payment.payment.rate = String(performer.defaultRate ?? ""); tags.push(payment); }
   if (performer.defaultTaxRate != null) tags.push(makeTag("tax", String(performer.defaultTaxRate)));
   if (performer.specializations[0]) tags.push(makeTag("spec", performer.specializations[0]));
   if (performer.grade) tags.push(makeTag("grade", performer.grade));
   if (performer.software[0]) tags.push(makeTag("soft", performer.software[0]));
-  return { id: uid(), tags, amount: ["fix_total", "fix_task"].includes(performer.defaultPaymentType) ? String(performer.defaultRate ?? "") : "", performerId: performer.id, performerSnapshot: performerSnapshot(performer) };
+  return { id: uid(), tags, amount: performer.defaultPaymentType === "fix_total" ? String(performer.defaultRate ?? "") : "", performerId: performer.id, performerSnapshot: performerSnapshot(performer) };
 }
 export function addPerformerToTask(project, stageId, taskId, performer) {
   if (!performer || !project?.stages?.some((stage) => stage.id === stageId && stage.tasks?.some((task) => task.id === taskId))) return project;

@@ -12,11 +12,11 @@ function normalizeProjectDataVersion(value) {
 /* ---------- factories ----------
    Тег на исполнителе: { id, key, value, payment? }
    - value: строка-состояние (для text/combo/select). "" = пустой тег.
-   - payment: { type, rate, hours, shifts } — только для tag.key === "payment".
-     Сумма фикса вводится напрямую в общее поле «Сумма» → executor.amount. */
+   - payment: { type, rate, units, hours, shifts } — только для tag.key === "payment".
+     Сумма фиксированной ставки вводится напрямую в поле executor.amount. */
 export const makeTag = (key, value = "") => {
   const tag = { id: uid(), key, value };
-  if (key === "payment") tag.payment = { type: value || "", rate: "", hours: "", shifts: "" };
+  if (key === "payment") tag.payment = { type: value || "", rate: "", units: "", hours: "", shifts: "" };
   return tag;
 };
 export const makeExecutor = () => ({ id: uid(), tags: [makeTag("role")], amount: "", performerId: null, performerSnapshot: null });

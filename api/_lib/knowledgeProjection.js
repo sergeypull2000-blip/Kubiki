@@ -16,13 +16,13 @@ function projectExecutor(executor) {
   const payment = object(tag(executor, "payment")?.payment);
   const paymentTypeValue = text(payment.type);
   const paymentType = ["fix_total", "fix_task", "hourly", "shift"].includes(paymentTypeValue) ? paymentTypeValue : "";
-  const fixedRate = ["fix_total", "fix_task"].includes(paymentType) ? finitePositive(executor?.amount) : null;
-  const variableRate = ["hourly", "shift"].includes(paymentType) ? finitePositive(payment.rate) : null;
+  const fixedRate = paymentType === "fix_total" ? finitePositive(executor?.amount) : null;
+  const variableRate = ["fix_task", "hourly", "shift"].includes(paymentType) ? finitePositive(payment.rate) : null;
   return {
     role: text(tag(executor, "role")?.value),
     specialization: text(tag(executor, "spec")?.value),
     grade: text(tag(executor, "grade")?.value),
-    ...(paymentType && (fixedRate || variableRate) ? { rateHint: { paymentType, rate: fixedRate || variableRate, unit: paymentType === "hourly" ? "hour" : paymentType === "shift" ? "shift" : "total", basis: "template-executor-rate" } } : {}),
+    ...(paymentType && (fixedRate || variableRate) ? { rateHint: { paymentType, rate: fixedRate || variableRate, unit: paymentType === "fix_task" ? "unit" : paymentType === "hourly" ? "hour" : paymentType === "shift" ? "shift" : "total", basis: "template-executor-rate" } } : {}),
   };
 }
 
@@ -71,7 +71,7 @@ export function projectPerformer(value) {
   const paymentType = ["fix_total", "fix_task", "hourly", "shift"].includes(paymentTypeValue) ? paymentTypeValue : "";
   const rate = finitePositive(source.defaultRate);
   const declaredUnit = text(source.defaultUnit);
-  const unit = ["hour", "shift", "total"].includes(declaredUnit) ? declaredUnit : paymentType === "hourly" ? "hour" : paymentType === "shift" ? "shift" : "total";
+  const unit = ["unit", "hour", "shift", "total"].includes(declaredUnit) ? declaredUnit : paymentType === "fix_task" ? "unit" : paymentType === "hourly" ? "hour" : paymentType === "shift" ? "shift" : "total";
   return {
     id: idText(source.id),
     displayName: list([source.firstName, source.lastName], 2).join(" "),

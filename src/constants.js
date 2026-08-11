@@ -76,13 +76,13 @@ export const SOFTWARE_OPTIONS = [
 ];
 
 export const PAYMENT_OPTIONS = [
-  { key: "fix_total", label: "Фикс за всё" },
-  { key: "fix_task", label: "Фикс за задачу" },
+  { key: "fix_total", label: "Фиксированная ставка" },
+  { key: "fix_task", label: "Ставка за единицу" },
   { key: "hourly", label: "Почасовая ставка" },
   { key: "shift", label: "Посменная ставка" },
 ];
 export const PAYMENT_LABEL = Object.fromEntries(PAYMENT_OPTIONS.map((p) => [p.key, p.label]));
-export const PAY_SHORT = { fix_total: "Фикс за всё", fix_task: "Фикс за задачу", hourly: "Почасовая", shift: "Посменная" };
+export const PAY_SHORT = { fix_total: "Фиксированная ставка", fix_task: "Ставка за единицу", hourly: "Почасовая", shift: "Посменная" };
 
 /* ---------- определения тегов («кубиков исполнителя») ----------
    kind:

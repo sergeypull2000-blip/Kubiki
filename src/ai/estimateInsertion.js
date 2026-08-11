@@ -11,7 +11,7 @@ export function stagesFromGeneratedEstimate(parsed) {
       executors: [{
         id: uid(),
         amount: String(numVal(task.cost)),
-        tags: [{ id: uid(), key: "payment", payment: { type: "fix_total", rate: "", hours: "", shifts: "" } }],
+        tags: [{ id: uid(), key: "payment", payment: { type: "fix_total", rate: "", units: "", hours: "", shifts: "" } }],
       }],
     })),
   }));

@@ -20,6 +20,10 @@ import { aiSettingsRepository } from "./repositories/aiSettingsRepository.js";
 import { loadLocalAiSettings, normalizeAiSettings, saveLocalAiSettings } from "./aiSettings.js";
 import { AIPersonalizationModal } from "./components/AIPersonalizationModal.jsx";
 import { isAiHydrationReady } from "./ai/hydrationGate.js";
+import { createAiEditIdPool, createAiEditRequest, requestAiEdit } from "./ai/editClient.js";
+import { buildAiEditPreview } from "./ai/editPreview.js";
+import { projectRevision } from "./ai/projectRevision.js";
+import { createAiEditUndoStore } from "./ai/editUndo.js";
 
 /* ============================================================
    п.7.1: автосохранение в localStorage браузера — заменяет бэкенд
@@ -75,6 +79,9 @@ export default function KubikiApp({ userId, onSignOut }) {
   const syncEnabledRef = useRef(false);
   const timersRef = useRef(new Map());
   const pendingRef = useRef(new Map());
+  const activeAiEditRequestsRef = useRef(new Map());
+  const aiUndoRef = useRef(createAiEditUndoStore());
+  const [aiUndoVersion, setAiUndoVersion] = useState(0);
   const [editingTemplateId, setEditingTemplateId] = useState(null);
   const [projectSource, setProjectSource] = useState(null);
   const [activeSection, setActiveSection] = useState(APP_SECTIONS.PROJECTS);
@@ -390,14 +397,19 @@ export default function KubikiApp({ userId, onSignOut }) {
   const handleTaskTemplatesChange = useCallback((updated) => replaceTemplateLibrary((library) => ({ ...library, taskTemplates: updated })), [replaceTemplateLibrary]);
   const handleStageTemplatesChange = useCallback((updated) => replaceTemplateLibrary((library) => ({ ...library, stageTemplates: updated })), [replaceTemplateLibrary]);
 
+  const invalidateAiUndo = useCallback((projectId) => {
+    if (aiUndoRef.current.invalidate(projectId)) setAiUndoVersion((value) => value + 1);
+  }, []);
+
   const commitProject = useCallback((id, updater, delay = 800) => {
     const existing = projectsRef.current.find((project) => project.id === id);
     if (!existing) return null;
     const next = normalizeProject(updater(normalizeProject(existing)));
+    invalidateAiUndo(id);
     replaceProjects(projectsRef.current.map((project) => project.id === id ? next : project));
     scheduleProjectSave(next, delay);
     return next;
-  }, [replaceProjects, scheduleProjectSave]);
+  }, [invalidateAiUndo, replaceProjects, scheduleProjectSave]);
 
   const createProject = (template) => {
     const p = normalizeProject(template ? cloneProjectTemplate(template) : makeProject());
@@ -434,12 +446,53 @@ export default function KubikiApp({ userId, onSignOut }) {
     const timer = timersRef.current.get(id);
     if (timer) clearTimeout(timer);
     timersRef.current.delete(id);
+    invalidateAiUndo(id);
     replaceProjects(projectsRef.current.filter((project) => project.id !== id));
     if (currentId === id) setCurrentId(null);
   };
   const toggleFavorite = (id) => commitProject(id, (project) => ({ ...project, favorite: !project.favorite }), 0);
   const renameProject = (id, name) => commitProject(id, (project) => ({ ...project, name }));
   const updateCurrent = (updater) => commitProject(currentId, updater);
+
+  const requestCurrentAiEdit = useCallback(async ({ scope, instruction }) => {
+    const projectId = scope?.projectId;
+    if (!projectId || activeAiEditRequestsRef.current.has(projectId)) throw new Error("Для этой сметы уже выполняется AI-запрос");
+    if (!await flushProject(projectId)) throw new Error("Сначала нужно успешно сохранить текущую смету");
+    const project = projectsRef.current.find((item) => item.id === projectId);
+    if (!project) throw new Error("Смета не найдена");
+    const baseRevision = await projectRevision(project), idPool = createAiEditIdPool(project);
+    const payload = createAiEditRequest({ projectId, baseRevision, scope, instruction, idPool });
+    const controller = new AbortController(); activeAiEditRequestsRef.current.set(projectId, controller);
+    try {
+      const response = await requestAiEdit(payload, { signal: controller.signal });
+      if (response.kind !== "diff") return response;
+      const current = projectsRef.current.find((item) => item.id === projectId);
+      return await buildAiEditPreview({ project: current, response, performers: performersRef.current, idPool, expectedRevision: baseRevision, instruction, selectedSources: payload.knowledge.selectedSources });
+    } finally { if (activeAiEditRequestsRef.current.get(projectId) === controller) activeAiEditRequestsRef.current.delete(projectId); }
+  }, [flushProject]);
+
+  const cancelCurrentAiEdit = useCallback(() => {
+    const controller = activeAiEditRequestsRef.current.get(currentId);
+    controller?.abort();
+  }, [currentId]);
+
+  const applyCurrentAiEdit = useCallback(async (preview) => {
+    const projectId = preview?.scope?.projectId, current = projectsRef.current.find((item) => item.id === projectId);
+    if (!current) throw new Error("Смета не найдена");
+    const verified = await buildAiEditPreview({ project: current, response: preview.response, performers: performersRef.current, idPool: preview.idPool, expectedRevision: preview.baseRevision, instruction: preview.instruction, selectedSources: preview.selectedSources });
+    const applied = commitProject(projectId, () => verified.afterProject, 0);
+    if (!applied) throw new Error("Не удалось применить AI-diff");
+    aiUndoRef.current.record(projectId, { beforeProject: verified.beforeProject, appliedRevision: verified.afterRevision, requestId: verified.requestId });
+    setAiUndoVersion((value) => value + 1);
+  }, [commitProject]);
+
+  const undoCurrentAiEdit = useCallback(async () => {
+    const entry = aiUndoRef.current.get(currentId), current = projectsRef.current.find((item) => item.id === currentId);
+    if (!entry || !current) return false;
+    if (await projectRevision(current) !== entry.appliedRevision) { invalidateAiUndo(currentId); throw new Error("Undo недоступен: после AI-изменения смета уже менялась"); }
+    commitProject(currentId, () => structuredClone(entry.beforeProject), 0);
+    return true;
+  }, [commitProject, currentId, invalidateAiUndo]);
 
   const handleMigration = async () => {
     setServerState("migrating");
@@ -660,7 +713,9 @@ export default function KubikiApp({ userId, onSignOut }) {
           onOpenAiSettings={() => setAiSettingsOpen(true)}
           aiGenerationReady={aiGenerationReady}
           taskTemplates={templateLibrary.taskTemplates} stageTemplates={templateLibrary.stageTemplates}
-          onTaskTemplatesChange={handleTaskTemplatesChange} onStageTemplatesChange={handleStageTemplatesChange} />
+          onTaskTemplatesChange={handleTaskTemplatesChange} onStageTemplatesChange={handleStageTemplatesChange}
+          onRequestAiEdit={requestCurrentAiEdit} onCancelAiEdit={cancelCurrentAiEdit} onApplyAiEdit={applyCurrentAiEdit}
+          onUndoAiEdit={undoCurrentAiEdit} canUndoAiEdit={aiUndoVersion >= 0 && aiUndoRef.current.has(currentProject.id)} />
       ) : activeSection === APP_SECTIONS.KNOWLEDGE_BASE ? (
         <KnowledgeBasePage performers={performers} performerState={performerState} performerMessage={performerMessage} onRetryPerformers={() => setPerformerRetry((value) => value + 1)} quickAccess={quickAccess} onSectionChange={setActiveSection}
           onSavePerformer={savePerformer} onToggleQuickAccess={togglePerformerQuickAccess} onDeletePerformer={deletePerformerCard}

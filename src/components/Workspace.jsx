@@ -13,6 +13,7 @@ import { PalettePanel } from "./LeftPanel.jsx";
 import { StageCard, CanvasDropZone } from "./Stage.jsx";
 import { RightPanel } from "./RightPanel.jsx";
 import { PerformerModal } from "./PerformerLibrary.jsx";
+import { AiEditTechnicalModal } from "./AiEditTechnicalModal.jsx";
 import { addPerformerToTask, buildPerformerFromExecutor, linkExecutorToPerformer, normalizePerformer } from "../performerLibrary.js";
 import { sortQuickAccessItems } from "../quickAccess.js";
 import { createTaskTemplate, createStageTemplate, cloneTaskTemplate, cloneStageTemplate } from "../templates.js";
@@ -20,7 +21,7 @@ import { createTaskTemplate, createStageTemplate, cloneTaskTemplate, cloneStageT
 /* ============================================================
    Рабочая зона
    ============================================================ */
-export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onOpenAiSettings, onSignOut, aiGenerationReady = false, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange }) {
+export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onOpenAiSettings, onSignOut, aiGenerationReady = false, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange, onRequestAiEdit, onCancelAiEdit, onApplyAiEdit, onUndoAiEdit, canUndoAiEdit = false }) {
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
   // в Клайне можно persist'ить в localStorage.
   const [importFile, setImportFile] = useState(null);
@@ -30,6 +31,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
   const [activeStageId, setActiveStageId] = useState(null);
   const [collapseButtonCompact, setCollapseButtonCompact] = useState(false);
   const [performerModal, setPerformerModal] = useState(null);
+  const [aiEditOpen, setAiEditOpen] = useState(false);
   const clipboardRef = useRef(null); // скопированный исполнитель (Ctrl+C/Ctrl+V)
   const dispatch = (fn) => onChange(fn);
   const total = projectSum(project);
@@ -49,6 +51,12 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
   const clearSelection = () => {
     setActiveExecutorId(null); setActiveTaskId(null); setActiveStageId(null);
   };
+
+  const aiEditScope = activeExecutorId
+    ? { kind: "executor", projectId: project.id, stageId: activeStageId, taskId: activeTaskId, executorId: activeExecutorId }
+    : activeTaskId ? { kind: "task", projectId: project.id, stageId: activeStageId, taskId: activeTaskId }
+      : activeStageId ? { kind: "stage", projectId: project.id, stageId: activeStageId }
+        : { kind: "project", projectId: project.id };
 
   // выбор с верхних уровней автоматически задаёт контекст ниже,
   // чтобы «клик по этапу → клик Задача» и «клик по задаче → клик Исполнитель» работали интуитивно
@@ -324,6 +332,8 @@ const toggleAllCollapsed = () =>
           </div>}
 
           {onOpenAiSettings && <button type="button" className="kb-ai-settings-open" onClick={onOpenAiSettings}>Персонализация ИИ</button>}
+          {!editingTemplate && onRequestAiEdit && <button type="button" className="kb-ai-settings-open" onClick={() => setAiEditOpen(true)}>AI-diff</button>}
+          {!editingTemplate && canUndoAiEdit && <button type="button" className="kb-ai-settings-open" onClick={onUndoAiEdit}>Undo AI</button>}
           <button type="button" className="kb-sign-out" onClick={onSignOut}>Выйти</button>
 
           <div className="kb-total-badge">
@@ -414,6 +424,7 @@ const toggleAllCollapsed = () =>
           </main>
           {rightPanel}
           {performerModal && <PerformerModal initial={performerModal.draft} isNew={!performerModal.existingId} initialAddToQuickAccess={performerModal.addToQuickAccess} onSave={savePerformerCard} onClose={() => setPerformerModal(null)} />}
+          {aiEditOpen && <AiEditTechnicalModal scope={aiEditScope} onRequest={onRequestAiEdit} onCancelRequest={onCancelAiEdit} onApply={onApplyAiEdit} onClose={() => setAiEditOpen(false)} />}
       </div>
     </div>
   );
