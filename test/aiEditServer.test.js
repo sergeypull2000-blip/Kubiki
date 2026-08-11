@@ -178,10 +178,12 @@ test("Workspace exposes profile dropdown, floating global launcher and direct lo
   assert.doesNotMatch(workspace, /className="kb-ai-settings-open"[^>]*>Изменить с AI/);
   assert.match(workspace, /project\.stages\.length > 0/); assert.match(workspace, /kb-ai-launcher/); assert.match(workspace, /variant="launcher"[^>]*scope=\{globalScope\}/);
   assert.match(modal, /kb-import-panel kb-import-panel-unified kb-ai-launcher-prompt/);
+  assert.match(modal, /kb-ai-launcher-feedback/); assert.match(modal, /feedbackVisible/);
   assert.match(workspace, /kb-ai-launcher\$\{globalAiOpen && !globalAiClosing \? " is-open"/);
   assert.match(workspace, /submitRef=\{globalAiSubmitRef\}/); assert.match(workspace, /globalAiSubmitRef\.current\?\.\(\)/);
   assert.doesNotMatch(modal, /kb-attach-btn|Paperclip/);
-  assert.match(modal, /variant === "inline" \|\| variant === "launcher"|variant === "launcher" \|\| variant === "inline"/);
+  assert.match(modal, /if \(variant === "launcher"\)/);
+  assert.match(modal, /if \(variant === "inline" && state === "idle" && !result && !error\)/);
   assert.match(workspace, /globalAiClosing/); assert.match(workspace, /setTimeout\(\(\) => \{ setGlobalAiOpen\(false\)/);
   assert.equal((localRows.match(/onContextMenu/g) || []).length, 3); assert.match(workspace, /setLocalAiPopover\(/);
   assert.doesNotMatch(workspace, /kb-ai-context-menu|>Изменить с AI…<\/button>/);
