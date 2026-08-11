@@ -29,7 +29,7 @@ test("request schema requires stable scope ids, id pool and no userId", () => {
 });
 
 test("global technical entry point always builds project scope", () => {
-  assert.deepEqual(globalAiEditScope("p"), { kind: "project", projectId: "p" });
+  assert.deepEqual(globalAiEditScope({ id: "p" }), { kind: "project", projectId: "p" });
 });
 
 test("content revision ignores collapsed but reacts to names and finance", async () => {

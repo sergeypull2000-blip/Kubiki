@@ -66,6 +66,11 @@ test("серверная строка преобразуется в нормал
   assert.equal(result.broken, true);
 });
 
+test("server client_id overrides a stale project_data id", () => {
+  const result = deserializeProjectFromServer({ client_id: "saved-client-id", project_data: { id: "stale-payload-id", stages: [] } });
+  assert.equal(result.id, "saved-client-id");
+});
+
 test("существующий id сохраняется и имя не используется как id", () => {
   assert.equal(getProjectClientId(project()), "abc123");
   assert.throws(() => getProjectClientId({ name: "abc123" }));

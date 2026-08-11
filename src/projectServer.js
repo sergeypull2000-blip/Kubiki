@@ -38,7 +38,9 @@ export function deserializeProjectFromServer(row) {
   const source = row?.project_data && typeof row.project_data === "object" && !Array.isArray(row.project_data)
     ? jsonSafeClone(row.project_data)
     : {};
-  if (!source.id && row?.client_id) source.id = row.client_id;
+  // The indexed server identity is authoritative. project_data may contain a
+  // stale legacy id, but runtime Project.id must always address client_id.
+  if (row?.client_id !== undefined && row?.client_id !== null) source.id = String(row.client_id).trim();
   if (source.name === undefined && typeof row?.name === "string") source.name = row.name;
   if (source.dataVersion === undefined && row?.data_version !== undefined && row?.data_version !== null) source.dataVersion = row.data_version;
   return normalizeProject(source);

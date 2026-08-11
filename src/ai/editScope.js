@@ -1,1 +1,1 @@
-export const globalAiEditScope = (projectId) => ({ kind: "project", projectId });
+export const globalAiEditScope = (project) => ({ kind: "project", projectId: project?.id });

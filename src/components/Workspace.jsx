@@ -55,7 +55,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
 
   // Эта кнопка — global entry point. Локальные hard scopes остаются в ядре
   // для будущего context-menu entry point и здесь намеренно не используются.
-  const aiEditScope = globalAiEditScope(project.id);
+  const aiEditScope = globalAiEditScope(project);
 
   // выбор с верхних уровней автоматически задаёт контекст ниже,
   // чтобы «клик по этапу → клик Задача» и «клик по задаче → клик Исполнитель» работали интуитивно

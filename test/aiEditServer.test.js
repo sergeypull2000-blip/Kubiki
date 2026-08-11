@@ -4,12 +4,37 @@ import { readFileSync } from "node:fs";
 import handler from "../api/edit-estimate.js";
 import { AI_EDIT_SYSTEM_PROMPT, buildAiEditMessages } from "../api/_lib/editPrompt.js";
 import { needsClarificationForBareInput, resolveExplicitPerformers } from "../api/_lib/performerResolver.js";
+import { loadOwnProjectForEdit } from "../api/_lib/editProject.js";
+import { createAiEditIdPool, createAiEditRequest } from "../src/ai/editClient.js";
+import { globalAiEditScope } from "../src/ai/editScope.js";
+import { deserializeProjectFromServer } from "../src/projectServer.js";
 
 function responseRecorder() { return { headers: {}, statusCode: 0, body: null, setHeader(key, value) { this.headers[key] = value; }, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; }, end() { return this; } }; }
 
 test("AI-edit endpoint without JWT returns 401 and performs no model request", async () => {
   const res = responseRecorder(); await handler({ method: "POST", headers: {}, body: {} }, res);
   assert.equal(res.statusCode, 401); assert.match(res.body.error, /авторизац/i);
+});
+
+test("global request keeps runtime Project id equal to scope and owner-scoped client_id lookup", async () => {
+  const row = { user_id: "owner", client_id: "saved-client-id", project_data: { id: "stale-payload-id", stages: [] } };
+  const filters = [];
+  const query = {
+    select() { return this; },
+    eq(column, value) { filters.push([column, value]); return this; },
+    async maybeSingle() { return { data: row, error: null }; },
+  };
+  const client = { from(table) { assert.equal(table, "projects"); return query; } };
+  const currentProject = deserializeProjectFromServer(row);
+  const scope = globalAiEditScope(currentProject);
+  const request = createAiEditRequest({ projectId: scope.projectId, baseRevision: "sha256:test", scope, instruction: "Добавь новый этап", idPool: createAiEditIdPool(currentProject, { stages: 1, tasks: 1, executors: 1, tags: 1 }) });
+  const loaded = await loadOwnProjectForEdit(client, "owner", request.projectId);
+
+  assert.equal(currentProject.id, "saved-client-id");
+  assert.equal(currentProject.id, request.projectId);
+  assert.equal(request.projectId, scope.projectId);
+  assert.deepEqual(filters, [["user_id", "owner"], ["client_id", "saved-client-id"]]);
+  assert.equal(loaded.id, "saved-client-id");
 });
 
 test("ambiguous explicit Performer returns one clarification candidate set", () => {
