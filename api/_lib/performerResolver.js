@@ -4,6 +4,10 @@ const ASSIGNMENT_INTENT = /(?:назнач\p{L}*|добав\p{L}*|постав\p
 const REPLACE_INTENT = /замен\p{L}*/iu;
 const DATABASE_INTENT = /(?:из\s+базы|performer|библиотек\p{L}*)/iu;
 
+export function hasExplicitPerformerLibraryIntent(instruction, selectedSources = [], confirmed = {}) {
+  return selectedSources.some((item) => item.kind === "performer") || Boolean(confirmed.performerId) || DATABASE_INTENT.test(instruction) || /замен\p{L}*.+\s+(?:на|с)\s+/iu.test(instruction);
+}
+
 const displayName = (performer) => [performer?.firstName, performer?.lastName].filter(Boolean).join(" ").trim();
 const executorName = (executor) => (executor?.tags || []).find((tag) => tag.key === "name")?.value?.trim() || "";
 const allExecutors = (project) => (project?.stages || []).flatMap((stage) => (stage.tasks || []).flatMap((task) => (task.executors || []).map((executor) => ({ executor, stage, task }))));
@@ -22,9 +26,6 @@ function performerMatches(query, performers) {
   return performers.filter((item) => mentioned(query, item.firstName));
 }
 
-function confirmedProjectId(instruction) {
-  return /\[confirmed_source\s+kind=project\s+id=([^\]\s]+)\]/iu.exec(instruction)?.[1] || null;
-}
 
 function replaceParts(instruction) {
   const match = /замен\p{L}*\s+(.+?)\s+(?:на|с)\s+(.+)/iu.exec(instruction);
@@ -58,7 +59,7 @@ export function resolveExplicitPerformers(instruction, performers, selectedSourc
   if (REPLACE_INTENT.test(instruction)) {
     const parts = replaceParts(instruction);
     if (!parts) return { performers: [], targetExecutorId: null, clarification: { question: "Кого в смете и на какого Performer нужно заменить?" } };
-    const executors = allExecutors(project), confirmedId = resolvedProjectTarget?.kind === "executor" ? resolvedProjectTarget.id : confirmedProjectId(instruction);
+    const executors = allExecutors(project), confirmedId = resolvedProjectTarget?.kind === "executor" ? resolvedProjectTarget.id : null;
     const targetMatches = confirmedId ? executors.filter(({ executor }) => executor.id === confirmedId) : executors.filter(({ executor }) => mentioned(normalizeSearchText(parts.target), executorName(executor)));
     if (targetMatches.length !== 1) return targetMatches.length > 1 ? executorAmbiguity(targetMatches) : { performers: [], targetExecutorId: null, clarification: { question: `Исполнитель «${parts.target}» не найден в текущей смете. Кого заменить?` } };
     const replacements = selected.length ? selected : performerMatches(normalizeSearchText(parts.replacement), performers);

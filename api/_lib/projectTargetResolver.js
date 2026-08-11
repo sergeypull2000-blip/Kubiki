@@ -1,6 +1,5 @@
 import { normalizeSearchText } from "./retrieval.js";
 
-const confirmedId = (instruction) => /\[confirmed_source\s+kind=project\s+id=([^\]\s]+)\]/iu.exec(instruction)?.[1] || null;
 const words = (value) => normalizeSearchText(value).split(/\s+/).filter((word) => word.length >= 3);
 const stem = (word) => word.slice(0, Math.max(3, word.length - 2));
 const nameMentioned = (instruction, name) => {
@@ -28,18 +27,18 @@ const choice = (entity) => ({
   source: { kind: "project", id: entity.id, name: entity.name || entity.kind },
 });
 
-export function resolveProjectTarget(instruction, project) {
-  const entities = projectEntities(project), confirmed = confirmedId(instruction);
+export function resolveProjectTarget(instruction, project, confirmed = null) {
+  const entities = projectEntities(project);
   if (confirmed) {
     const entity = entities.find((item) => item.id === confirmed);
     return entity ? { target: entity, clarification: null } : { target: null, clarification: { question: "Выбранная сущность больше не существует в смете. Что изменить?" } };
   }
 
-  const wantsStage = /\bэтап\p{L}*/iu.test(instruction);
-  const wantsTask = /\bзадач\p{L}*/iu.test(instruction);
-  const wantsExecutor = /(?:исполнител\p{L}*|оплат\p{L}*|ставк\p{L}*|замен\p{L}*)/iu.test(instruction);
+  const wantsStage = /этап\p{L}*/iu.test(instruction);
+  const wantsTask = /задач\p{L}*/iu.test(instruction);
+  const wantsExecutor = /(?:исполнител\p{L}*|оплат\p{L}*|ставк\p{L}*|налог\p{L}*|замен\p{L}*)/iu.test(instruction);
   const kind = wantsExecutor ? "executor" : wantsTask ? "task" : wantsStage ? "stage" : null;
-  if (/\b(?:добав|созда)\p{L}*/iu.test(instruction) && !/\bзамен\p{L}*/iu.test(instruction)) return { target: null, clarification: null };
+  if (/(?:добав|созда)\p{L}*/iu.test(instruction) && !/замен\p{L}*/iu.test(instruction)) return { target: null, clarification: null };
   if (!kind || /(?:\bвсем\b|\bвсех\b|\bкажд\p{L}*)/iu.test(instruction)) return { target: null, clarification: null };
   const matches = entities.filter((entity) => entity.kind === kind && entity.name && nameMentioned(instruction, entity.name));
   if (matches.length === 1) return { target: matches[0], clarification: null };
@@ -49,4 +48,24 @@ export function resolveProjectTarget(instruction, project) {
   };
   if (hasExplicitNameToken(instruction)) return { target: null, clarification: { question: "Названная сущность не найдена в текущей смете. Что именно нужно изменить?" } };
   return { target: null, clarification: null };
+}
+
+export function resolveExecutorCreationTask(instruction, project, confirmed = null) {
+  const entities = projectEntities(project);
+  if (confirmed) {
+    const entity = entities.find((item) => item.id === confirmed);
+    if (entity?.kind === "task") return { task: entity, clarification: null };
+  }
+  const creation = /(?:добав|созда)\p{L}*/iu.test(instruction) && /(?:исполнител\p{L}*|директор\p{L}*|артист\p{L}*|\s(?:в|на)\s+этап)/iu.test(instruction) && !/(?:нов\p{L}*\s+этап|созда\p{L}*\s+этап)/iu.test(instruction);
+  if (!creation) return { task: null, clarification: null };
+  const tasks = entities.filter((item) => item.kind === "task"), mentionedTasks = tasks.filter((item) => nameMentioned(instruction, item.name));
+  if (mentionedTasks.length === 1) return { task: mentionedTasks[0], clarification: null };
+  if (mentionedTasks.length > 1) return { task: null, clarification: { question: "В какую Task добавить Executor?", choices: mentionedTasks.slice(0, 10).map(choice) } };
+  const stages = entities.filter((item) => item.kind === "stage" && nameMentioned(instruction, item.name));
+  if (stages.length === 1) {
+    const stageTasks = tasks.filter((item) => item.stageId === stages[0].id);
+    if (stageTasks.length === 1) return { task: stageTasks[0], clarification: null };
+    if (stageTasks.length) return { task: null, clarification: { question: `В какую Task этапа «${stages[0].name}» добавить Executor?`, choices: stageTasks.slice(0, 10).map(choice) } };
+  }
+  return { task: null, clarification: { question: "В какую Task добавить Executor?" } };
 }

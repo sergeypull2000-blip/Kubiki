@@ -454,14 +454,14 @@ export default function KubikiApp({ userId, onSignOut }) {
   const renameProject = (id, name) => commitProject(id, (project) => ({ ...project, name }));
   const updateCurrent = (updater) => commitProject(currentId, updater);
 
-  const requestCurrentAiEdit = useCallback(async ({ scope, instruction, knowledge }) => {
+  const requestCurrentAiEdit = useCallback(async ({ scope, instruction, knowledge, confirmed }) => {
     const projectId = scope?.projectId;
     if (!projectId || activeAiEditRequestsRef.current.has(projectId)) throw new Error("Для этой сметы уже выполняется AI-запрос");
     if (!await flushProject(projectId)) throw new Error("Сначала нужно успешно сохранить текущую смету");
     const project = projectsRef.current.find((item) => item.id === projectId);
     if (!project) throw new Error("Смета не найдена");
     const baseRevision = await projectRevision(project), idPool = createAiEditIdPool(project);
-    const payload = createAiEditRequest({ projectId, baseRevision, scope, instruction, knowledge, idPool });
+    const payload = createAiEditRequest({ projectId, baseRevision, scope, instruction, knowledge, confirmed, idPool });
     const controller = new AbortController(); activeAiEditRequestsRef.current.set(projectId, controller);
     try {
       const response = await requestAiEdit(payload, { signal: controller.signal });

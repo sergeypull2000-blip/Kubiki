@@ -23,7 +23,7 @@ test("strict schema accepts allowlist and rejects unknown operations and fields"
 });
 
 test("request schema requires stable scope ids, id pool and no userId", () => {
-  const body = { schemaVersion: 1, requestId: "r", projectId: "p", baseRevision: "sha256:x", scope: scope(), instruction: "Добавь этап", knowledge: { useStudioKnowledge: false, selectedSources: [] }, idPool: pool() };
+  const body = { schemaVersion: 1, requestId: "r", projectId: "p", baseRevision: "sha256:x", scope: scope(), instruction: "Добавь этап", knowledge: { useStudioKnowledge: false, selectedSources: [] }, confirmed: {}, idPool: pool() };
   assert.equal(validateAiEditRequest(body).ok, true);
   assert.equal(validateAiEditRequest({ ...body, userId: "attacker" }).ok, false);
 });
@@ -148,7 +148,7 @@ test("global tax diff creates add/update operations, preserves amounts and expos
 
 test("clarification continuation preserves original request and confirms source id", () => {
   const continuation = buildAiEditContinuation({ instruction: "Добавь Мишу из базы", source: { kind: "performer", id: "pf" }, label: "Миша Иванов" });
-  assert.match(continuation.instruction, /^Добавь Мишу из базы/); assert.match(continuation.instruction, /kind=performer id=pf/);
+  assert.match(continuation.instruction, /^Добавь Мишу из базы/); assert.equal(continuation.confirmed.performerId, "pf");
   assert.deepEqual(continuation.knowledge.selectedSources, [{ kind: "performer", id: "pf" }]);
 });
 

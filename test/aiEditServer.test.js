@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import handler from "../api/edit-estimate.js";
 import { AI_EDIT_SYSTEM_PROMPT, buildAiEditMessages } from "../api/_lib/editPrompt.js";
-import { needsClarificationForBareInput, resolveExplicitPerformers } from "../api/_lib/performerResolver.js";
+import { hasExplicitPerformerLibraryIntent, needsClarificationForBareInput, resolveExplicitPerformers } from "../api/_lib/performerResolver.js";
 import { loadOwnProjectForEdit } from "../api/_lib/editProject.js";
 import { createAiEditIdPool, createAiEditRequest } from "../src/ai/editClient.js";
 import { globalAiEditScope } from "../src/ai/editScope.js";
@@ -93,7 +93,7 @@ test("replace clarification continuation pins Executor id and resolves Performer
   const first = resolveProjectTarget("Замени Петрова на Мишу из базы", project);
   assert.equal(first.clarification.choices.length, 2);
   const continuation = buildAiEditContinuation({ instruction: "Замени Петрова на Мишу из базы", source: first.clarification.choices[1].source, label: first.clarification.choices[1].label });
-  const confirmed = resolveProjectTarget(continuation.instruction, project);
+  const confirmed = resolveProjectTarget(continuation.instruction, project, continuation.confirmed.projectEntityId);
   const performers = resolveExplicitPerformers(continuation.instruction, [performer], [], project, confirmed.target);
   const request = { requestId: "r", baseRevision: "rev", scope: { kind: "project", projectId: "p" } };
   const raw = { schemaVersion: 1, kind: "diff", ...request, summary: "Замена", operations: [{ id: "op-1", type: "executor.replacePerformer", targetId: "e2", value: { performerId: "pf-misha" }, reason: "По запросу", source: { kind: "performer", id: "pf-misha" } }], warnings: [] };
@@ -117,12 +117,19 @@ test("bare name is clarification-worthy and database add never invents missing P
   assert.match(missing.clarification.question, /не найден/i); assert.deepEqual(missing.performers, []);
 });
 
+test("anonymous name does not load Performer Library without explicit database intent", () => {
+  assert.equal(hasExplicitPerformerLibraryIntent("Добавь арт-директора Иванова", [], {}), false);
+  assert.equal(hasExplicitPerformerLibraryIntent("Добавь Мишу из базы", [], {}), true);
+  assert.equal(hasExplicitPerformerLibraryIntent("Добавь Иванова", [{ kind: "performer", id: "pf" }], {}), true);
+  assert.equal(hasExplicitPerformerLibraryIntent("Замени Гришу на Мишу", [], {}), true);
+});
+
 test("editor prompt fixes priorities, strict JSON, no arbitrary patch and no implicit Performer", () => {
   assert.match(AI_EDIT_SYSTEM_PROMPT, /Текущий запрос всегда может отменить персонализацию/);
   assert.match(AI_EDIT_SYSTEM_PROMPT, /set\/path\/patch\/replaceProject/);
   assert.match(AI_EDIT_SYSTEM_PROMPT, /Не назначай и не заменяй Performer без прямого запроса/);
   assert.match(AI_EDIT_SYSTEM_PROMPT, /только один завершённый JSON/);
-  const messages = buildAiEditMessages({ request: { schemaVersion: 1, requestId: "r", baseRevision: "x", scope: { kind: "project", projectId: "p" }, instruction: "Переименуй", idPool: { stages: [], tasks: [], executors: [], tags: [] } }, project: { id: "p", stages: [], branding: { contacts: "secret" } }, personalization: "Всегда сториборд", performers: [], knowledge: [] });
+  const messages = buildAiEditMessages({ request: { schemaVersion: 1, requestId: "r", baseRevision: "x", scope: { kind: "project", projectId: "p" }, instruction: "Переименуй", confirmed: {}, idPool: { stages: [], tasks: [], executors: [], tags: [] } }, project: { id: "p", stages: [], branding: { contacts: "secret" } }, personalization: "Всегда сториборд", performers: [], knowledge: [] });
   assert.doesNotMatch(messages[1].content, /secret/); assert.match(messages[1].content, /<studio_knowledge>\[\]/);
 });
 
@@ -131,9 +138,16 @@ test("endpoint is read-only, owner-scoped and does not log Project content", () 
   assert.match(repository, /\.eq\("user_id", userId\)\.eq\("client_id", projectId\)/);
   assert.doesNotMatch(endpoint, /\.insert\(|\.update\(|\.upsert\(|\.delete\(/);
   assert.doesNotMatch(endpoint, /console\.(?:info|error|warn)\([^\n]*(?:project|instruction|raw)/i);
+  assert.match(endpoint, /parseAiEditSemanticResponse/); assert.doesNotMatch(endpoint, /parseAiEditResponse/);
 });
 
 test("DeepSeek ai_edit stage has thinking disabled", () => {
   const source = readFileSync(new URL("../api/_lib/deepseek.js", import.meta.url), "utf8");
   assert.match(source, /stage === "ai_edit"/);
+});
+
+test("technical modal renders only normalized error code beside generic message", () => {
+  const source = readFileSync(new URL("../src/components/AiEditTechnicalModal.jsx", import.meta.url), "utf8");
+  assert.match(source, /errorCode[^\n]*<code>\{errorCode\}<\/code>/);
+  assert.doesNotMatch(source, /raw model|stack trace|project_data/i);
 });

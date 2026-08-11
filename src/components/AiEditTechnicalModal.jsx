@@ -15,17 +15,20 @@ export function AiEditTechnicalModal({ scope, onRequest, onCancelRequest, onAppl
   const [state, setState] = useState("idle");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   const [clarificationAnswer, setClarificationAnswer] = useState("");
+  const [confirmed, setConfirmed] = useState({});
   const request = async ({ answer = "", source = null, label = "" } = {}) => {
     if (!instruction.trim()) return;
-    const continuation = buildAiEditContinuation({ instruction, answer, source, label });
-    setState("loading"); setError(""); setResult(null);
+    const continuation = buildAiEditContinuation({ instruction, answer, source, label, confirmed });
+    setConfirmed(continuation.confirmed);
+    setState("loading"); setError(""); setErrorCode(""); setResult(null);
     try { setResult(await onRequest({ scope, ...continuation })); setClarificationAnswer(""); setState("ready"); }
-    catch (failure) { if (failure?.code !== "cancelled") setError(failure.message); setState("idle"); }
+    catch (failure) { if (failure?.code !== "cancelled") { setError(failure.message); setErrorCode(failure.code || ""); } setState("idle"); }
   };
   const apply = async () => {
-    setState("applying"); setError("");
-    try { await onApply(result); onClose(); } catch (failure) { setError(failure.message); setState("ready"); }
+    setState("applying"); setError(""); setErrorCode("");
+    try { await onApply(result); onClose(); } catch (failure) { setError(failure.message); setErrorCode(failure.code || ""); setState("ready"); }
   };
   const busy = state === "loading" || state === "applying";
   return <div className="kb-modal-overlay" onMouseDown={busy ? undefined : onClose}>
@@ -35,7 +38,7 @@ export function AiEditTechnicalModal({ scope, onRequest, onCancelRequest, onAppl
         <div className="kb-modal-note">Контекст: {scope.kind}. AI только предложит операции; Project изменится после подтверждения.</div>
         <textarea className="kb-input kb-ai-settings-text" rows={5} maxLength={4000} value={instruction} disabled={busy || result?.kind === "diff"} onChange={(event) => setInstruction(event.target.value)} placeholder="Например: добавь задачу «Ретопология» в этот этап" />
         {state === "loading" && <div className="kb-modal-note">Готовим diff…</div>}
-        {error && <div className="kb-server-error">{error}</div>}
+        {error && <div className="kb-server-error">{error}{errorCode ? <> · <code>{errorCode}</code></> : null}</div>}
         {result && <div className="kb-modal-note">Ответ: <code>{result.kind}</code>{result.kind === "diff" ? ` · операций: ${result.operations.length}` : ""}</div>}
         {result?.kind === "clarification" && <div className="kb-modal-note"><strong>Нужно уточнение:</strong> {result.question}
           {result.choices?.map((choice) => <button type="button" className="kb-btn kb-btn-ghost" key={choice.id} onClick={() => request({ source: choice.source, label: choice.label })}>{choice.label}</button>)}
@@ -53,7 +56,7 @@ export function AiEditTechnicalModal({ scope, onRequest, onCancelRequest, onAppl
           {state === "loading" ? <button type="button" className="kb-btn kb-btn-ghost" onClick={() => { onCancelRequest(); setState("idle"); }}>Отменить запрос</button> : <button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Закрыть</button>}
           {!result?.kind && state !== "loading" && <button type="button" className="kb-btn kb-btn-primary" onClick={() => request()} disabled={!instruction.trim()}>Получить diff</button>}
           {result?.kind === "diff" && <button type="button" className="kb-btn kb-btn-primary" onClick={apply} disabled={busy}>{state === "applying" ? "Применяем…" : "Применить"}</button>}
-          {result && result.kind !== "diff" && result.kind !== "clarification" && <button type="button" className="kb-btn kb-btn-primary" onClick={() => { setResult(null); setError(""); }}>Новый запрос</button>}
+          {result && result.kind !== "diff" && result.kind !== "clarification" && <button type="button" className="kb-btn kb-btn-primary" onClick={() => { setResult(null); setError(""); setErrorCode(""); setConfirmed({}); }}>Новый запрос</button>}
         </div>
       </div>
     </div>

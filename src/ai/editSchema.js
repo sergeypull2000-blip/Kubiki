@@ -43,10 +43,15 @@ function isKnowledge(value) {
   return value.selectedSources.every((source) => exactKeys(source, ["kind", "id"])
     && ["performer", "project_template", "stage_template", "task_template"].includes(source.kind) && id(source.id));
 }
+function isConfirmed(value) {
+  return exactKeys(value, [], ["projectEntityId", "performerId"])
+    && (value.projectEntityId === undefined || id(value.projectEntityId))
+    && (value.performerId === undefined || id(value.performerId));
+}
 
 export function validateAiEditRequest(body) {
-  if (!exactKeys(body, ["schemaVersion", "requestId", "projectId", "baseRevision", "scope", "instruction", "knowledge", "idPool"])) return { ok: false, status: 400, error: "Некорректное тело AI-edit запроса" };
-  if (body.schemaVersion !== AI_EDIT_SCHEMA_VERSION || !id(body.requestId) || !id(body.projectId) || !id(body.baseRevision) || !isAiEditScope(body.scope) || body.scope.projectId !== body.projectId || !isKnowledge(body.knowledge) || !isIdPool(body.idPool)) return { ok: false, status: 400, error: "Некорректная схема AI-edit запроса" };
+  if (!exactKeys(body, ["schemaVersion", "requestId", "projectId", "baseRevision", "scope", "instruction", "knowledge", "confirmed", "idPool"])) return { ok: false, status: 400, error: "Некорректное тело AI-edit запроса" };
+  if (body.schemaVersion !== AI_EDIT_SCHEMA_VERSION || !id(body.requestId) || !id(body.projectId) || !id(body.baseRevision) || !isAiEditScope(body.scope) || body.scope.projectId !== body.projectId || !isKnowledge(body.knowledge) || !isConfirmed(body.confirmed) || !isIdPool(body.idPool)) return { ok: false, status: 400, error: "Некорректная схема AI-edit запроса" };
   const instruction = cleanPlainText(body.instruction);
   if (!instruction) return { ok: false, status: 400, error: "Введите запрос на изменение сметы" };
   if (instruction.length > MAX_AI_EDIT_INSTRUCTION_CHARS) return { ok: false, status: 413, error: `Запрос слишком большой. Максимум ${MAX_AI_EDIT_INSTRUCTION_CHARS} символов` };

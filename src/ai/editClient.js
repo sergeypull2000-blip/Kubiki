@@ -12,8 +12,8 @@ export function createAiEditIdPool(project, sizes = { stages: 6, tasks: 30, exec
   return { stages: make(sizes.stages), tasks: make(sizes.tasks), executors: make(sizes.executors), tags: make(sizes.tags) };
 }
 
-export function createAiEditRequest({ projectId, baseRevision, scope, instruction, knowledge = { useStudioKnowledge: false, selectedSources: [] }, idPool }) {
-  return { schemaVersion: 1, requestId: freshId(), projectId, baseRevision, scope, instruction, knowledge, idPool };
+export function createAiEditRequest({ projectId, baseRevision, scope, instruction, knowledge = { useStudioKnowledge: false, selectedSources: [] }, confirmed = {}, idPool }) {
+  return { schemaVersion: 1, requestId: freshId(), projectId, baseRevision, scope, instruction, knowledge, confirmed, idPool };
 }
 
 export async function requestAiEdit(payload, { fetchImpl = fetch, getAccessToken, signal } = {}) {
