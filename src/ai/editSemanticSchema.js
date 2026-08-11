@@ -1,6 +1,8 @@
 export const AI_EDIT_SEMANTIC_COMMAND_TYPES = Object.freeze([
-  "stage.create", "executor.createAnonymous", "executor.setCompensation",
-  "executor.setTax", "executor.setTaxBulk", "task.delete", "executor.replacePerformer",
+  "stage.create", "stage.rename", "stage.delete", "task.create", "task.rename", "task.delete",
+  "executor.createAnonymous", "executor.delete", "executor.setCompensation", "executor.setPaymentType",
+  "executor.setPaymentRate", "executor.setPaymentQuantity", "executor.setRole", "executor.setName",
+  "executor.setTax", "executor.setTaxBulk", "executor.replacePerformer",
 ]);
 
 const object = (value) => value && typeof value === "object" && !Array.isArray(value);
@@ -13,12 +15,22 @@ function validCommand(command) {
   if (!object(command) || !AI_EDIT_SEMANTIC_COMMAND_TYPES.includes(command.type)) return false;
   switch (command.type) {
     case "stage.create": return exact(command, ["type"], ["name"]) && (command.name === undefined || text(command.name, 160));
+    case "stage.rename":
+    case "task.create":
+    case "task.rename":
+    case "executor.setRole":
+    case "executor.setName": return exact(command, ["type", "name"]) && text(command.name, 160);
+    case "stage.delete":
+    case "task.delete":
+    case "executor.delete":
+    case "executor.replacePerformer": return exact(command, ["type"]);
     case "executor.createAnonymous": return exact(command, ["type", "name", "role"], ["compensation"]) && text(command.name, 160) && text(command.role, 160) && (command.compensation === undefined || numberValue(command.compensation));
     case "executor.setCompensation": return exact(command, ["type", "value"]) && numberValue(command.value);
+    case "executor.setPaymentType": return exact(command, ["type", "paymentType"]) && text(command.paymentType, 40);
+    case "executor.setPaymentRate":
+    case "executor.setPaymentQuantity": return exact(command, ["type", "value"]) && numberValue(command.value);
     case "executor.setTax":
     case "executor.setTaxBulk": return exact(command, ["type", "percent"]) && numberValue(command.percent);
-    case "task.delete": return exact(command, ["type"]);
-    case "executor.replacePerformer": return exact(command, ["type"]);
     default: return false;
   }
 }

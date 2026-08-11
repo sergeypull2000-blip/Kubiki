@@ -30,14 +30,14 @@ function QuickItem({ item, performer, onApply, onPin, onRemove }) {
   </div>;
 }
 
-export function PalettePanel({ taskTemplates = [], stageTemplates = [], quickAccessItems = [], onCreatePerformer, onApplyQuickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onApplyTaskTemplate, onApplyStageTemplate, onRemoveTaskTemplate, onRemoveStageTemplate }) {
+export function PalettePanel({ taskTemplates = [], stageTemplates = [], quickAccessItems = [], onCreatePerformer, onApplyQuickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onApplyTaskTemplate, onApplyStageTemplate, onRemoveTaskTemplate, onRemoveStageTemplate, accountControl }) {
   return <aside className="kb-palette">
     <PaletteSection title="Этапы" templates={stageTemplates} dndType={DND_TYPES.STAGE} payloadKey="templateStageId" fallback="Этап" onApply={onApplyStageTemplate} onRemove={onRemoveStageTemplate} />
     <PaletteSection title="Задачи" templates={taskTemplates} dndType={DND_TYPES.TASK} payloadKey="templateTaskId" fallback="Задача" onApply={onApplyTaskTemplate} onRemove={onRemoveTaskTemplate} />
     <div className="kb-palette-section kb-performer-quick"><div className="kb-palette-title"><span>Исполнители</span><button className="kb-icon-btn-small" onClick={onCreatePerformer} title="Создать карточку исполнителя"><Plus size={13} /></button></div>
       <div className="kb-palette-items">{quickAccessItems.map(({ item, performer }) => <QuickItem key={item.id} item={item} performer={performer} onApply={onApplyQuickAccess} onPin={onToggleQuickAccessPin} onRemove={onRemoveQuickAccess} />)}{!quickAccessItems.length && <div className="kb-template-empty">Здесь пока нет исполнителей</div>}</div>
     </div>
-    <div className="kb-palette-foot">Палитра этапов, задач и исполнителей</div>
+    <div className="kb-palette-foot">{accountControl || "Палитра этапов, задач и исполнителей"}</div>
   </aside>;
 }
 

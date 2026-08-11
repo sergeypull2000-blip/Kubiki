@@ -13,7 +13,7 @@ export function TaskBlock({ task, stageId, dispatch, taskDict, taskFeatured,
   activeTaskId, activeExecutorId, onActivateTask, onActivateExecutor,
   onPatch, onRemove,
   onSaveTaskTemplate, onSaveExecutorToPerformer,
-  taskTemplates, onApplyTaskTemplate, quickAccessItems = [], onApplyQuickAccess }) {
+  taskTemplates, onApplyTaskTemplate, quickAccessItems = [], onApplyQuickAccess, onAiContext }) {
   const total = taskSum(task);
   const isActive = activeTaskId === task.id && !activeExecutorId;
   const [justAddedId, setJustAddedId] = useState(null);
@@ -63,7 +63,7 @@ export function TaskBlock({ task, stageId, dispatch, taskDict, taskFeatured,
 
   return (
     <div className={"kb-task" + (isActive ? " kb-task-active" : "") + (isOver ? " kb-task-over" : "") + (isTaskOver ? " kb-task-reorder-over" : "") + (isDragging ? " kb-task-dragging" : "")}
-      onMouseDown={onTaskMouseDown} {...taskDropHandlers}>
+      onMouseDown={onTaskMouseDown} onContextMenu={(event) => { event.stopPropagation(); onAiContext?.(event, { kind: "task", stageId, taskId: task.id, label: task.name || "Задача" }); }} {...taskDropHandlers}>
       <div className="kb-task-head" {...dragHandlers} {...dropHandlers} title="Перетащите строку, чтобы переставить задачу"
         onMouseDownCapture={(event) => { event.currentTarget.draggable = !event.target.closest("input, textarea, button, select"); }}
         onMouseUp={(event) => { event.currentTarget.draggable = true; }}>
@@ -109,6 +109,7 @@ export function TaskBlock({ task, stageId, dispatch, taskDict, taskFeatured,
             onActivate={() => onActivateExecutor(stageId, task.id, e.id)}
             onPatch={(patch) => patchExecutor(e.id, patch)}
             onRemove={() => removeExecutor(e.id)}
+            onAiContext={onAiContext}
             onSaveToPerformer={() => onSaveExecutorToPerformer(e)} />
         ))}
         <button type="button" className="kb-add-btn" onClick={(e) => { e.stopPropagation(); addExecutor(); }} onMouseDown={(e) => e.stopPropagation()}>

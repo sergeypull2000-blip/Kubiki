@@ -569,8 +569,8 @@ export const CSS = `
 .kb-unified-input .kb-generate-textarea{height:100%; min-height:0; resize:none; overflow-y:auto; padding:4px 70px 36px 4px; border:none; border-radius:0; background:transparent; box-shadow:none}
 .kb-unified-input .kb-generate-textarea:focus{border:none; outline:none; box-shadow:none}
 .kb-attach-btn{position:absolute; right:46px; bottom:12px; color:var(--text-muted)}
-.kb-send-btn{position:absolute; right:12px; bottom:12px; width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; padding:0; border:1px solid var(--accent); border-radius:7px; background:var(--accent); color:#fff; cursor:pointer}
-.kb-send-btn:hover:not(:disabled){border-color:var(--accent); background:var(--accent); color:#fff}
+.kb-send-btn{position:absolute; right:12px; bottom:12px; width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; padding:0; border:1px solid #1553c6; border-radius:7px; background:linear-gradient(145deg,#2974f0,#1553c6); color:#fff; cursor:pointer}
+.kb-send-btn:hover:not(:disabled){border-color:#1553c6; background:linear-gradient(145deg,#347df3,#195bcf); color:#fff}
 .kb-send-btn:disabled{border-color:var(--line-strong); background:#fff; color:var(--text-muted); opacity:1; cursor:default}
 .kb-import-panel-unified .kb-attached-file{position:absolute; left:12px; bottom:12px; width:28px; height:28px; padding:0; justify-content:center; border-radius:6px; overflow:visible}
 .kb-import-panel-unified .kb-attached-file > span{display:none}

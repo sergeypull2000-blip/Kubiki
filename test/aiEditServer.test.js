@@ -152,3 +152,41 @@ test("technical modal renders only normalized error code beside generic message"
   assert.match(source, /errorCode[^\n]*<code>\{errorCode\}<\/code>/);
   assert.doesNotMatch(source, /raw model|stack trace|project_data/i);
 });
+
+test("product AI layer preserves autosave, cancel and stale guards", () => {
+  const workspace = readFileSync(new URL("../src/kubiki.jsx", import.meta.url), "utf8");
+  const modal = readFileSync(new URL("../src/components/AiEditTechnicalModal.jsx", import.meta.url), "utf8");
+  const revision = readFileSync(new URL("../src/ai/projectRevision.js", import.meta.url), "utf8");
+  const flushAt = workspace.indexOf("await flushProject(projectId)");
+  const requestAt = workspace.indexOf("requestAiEdit(payload");
+  assert.ok(flushAt >= 0 && requestAt > flushAt, "autosave flush must finish before the AI request");
+  assert.match(workspace, /if \(!await flushProject\(projectId\)\) throw new Error/);
+  assert.match(modal, /requestVersion\.current \+= 1; onCancelRequest\(\)/);
+  assert.match(modal, /version !== requestVersion\.current/);
+  assert.match(revision, /PRESENTATION_ONLY_KEYS = new Set\(\["collapsed"\]\)/);
+});
+
+test("Workspace exposes profile dropdown, floating global launcher and direct local AI popover", () => {
+  const workspace = readFileSync(new URL("../src/components/Workspace.jsx", import.meta.url), "utf8");
+  const modal = readFileSync(new URL("../src/components/AiEditTechnicalModal.jsx", import.meta.url), "utf8");
+  const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const localRows = ["Stage.jsx", "Task.jsx", "Executor.jsx"].map((name) => readFileSync(new URL(`../src/components/${name}`, import.meta.url), "utf8")).join("\n");
+  assert.match(app, /user=\{session\.user\}/);
+  assert.match(workspace, /kb-profile-trigger/); assert.match(workspace, /userAccount\?\.accountLabel/);
+  assert.match(workspace, /kb-profile-menu/); assert.match(workspace, /Персонализация ИИ/); assert.match(workspace, /Выйти/);
+  assert.match(workspace, /accountControl=\{accountControl\}/); assert.match(workspace, /kb-profile-sidebar/);
+  assert.doesNotMatch(workspace, /className="kb-ai-settings-open"[^>]*>Изменить с AI/);
+  assert.match(workspace, /project\.stages\.length > 0/); assert.match(workspace, /kb-ai-launcher/); assert.match(workspace, /variant="launcher"[^>]*scope=\{globalScope\}/);
+  assert.match(modal, /kb-import-panel kb-import-panel-unified kb-ai-launcher-prompt/);
+  assert.match(workspace, /kb-ai-launcher\$\{globalAiOpen && !globalAiClosing \? " is-open"/);
+  assert.match(workspace, /submitRef=\{globalAiSubmitRef\}/); assert.match(workspace, /globalAiSubmitRef\.current\?\.\(\)/);
+  assert.doesNotMatch(modal, /kb-attach-btn|Paperclip/);
+  assert.match(modal, /variant === "inline" \|\| variant === "launcher"|variant === "launcher" \|\| variant === "inline"/);
+  assert.match(workspace, /globalAiClosing/); assert.match(workspace, /setTimeout\(\(\) => \{ setGlobalAiOpen\(false\)/);
+  assert.equal((localRows.match(/onContextMenu/g) || []).length, 3); assert.match(workspace, /setLocalAiPopover\(/);
+  assert.doesNotMatch(workspace, /kb-ai-context-menu|>Изменить с AI…<\/button>/);
+  assert.match(workspace, /variant="inline"/); assert.match(workspace, /scope=\{localScope\(localAiPopover\.context\)\}/);
+  assert.match(modal, /event\.key === "Enter"/); assert.match(modal, /event\.key === "Escape"/);
+  assert.match(modal, /document\.addEventListener\("mousedown", close, true\)/);
+  assert.match(workspace, /canUndoAiEdit &&/); assert.match(modal, /canUndo && onUndo/);
+});

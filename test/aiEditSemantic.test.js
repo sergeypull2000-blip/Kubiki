@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { attachTrustedAiEditMetadata, parseAiEditSemanticResponse, diagnoseAiEditSemanticResponse } from "../src/ai/editSemanticSchema.js";
 import { compileAiEditSemanticCommand } from "../src/ai/editSemanticCompiler.js";
 import { applyAiEditOperations } from "../src/ai/editOperations.js";
-import { resolveExecutorCreationTask, resolveProjectTarget } from "../api/_lib/projectTargetResolver.js";
+import { resolveExecutorCreationTask, resolveProjectTarget, resolveTaskCreationStage } from "../api/_lib/projectTargetResolver.js";
 
 const ids = { stages: ["new-stage"], tasks: ["new-task"], executors: ["new-executor"], tags: ["tag-1", "tag-2", "tag-3", "tag-4", "tag-5", "tag-6", "tag-7", "tag-8"] };
 const request = (instruction = "Измени") => ({ schemaVersion: 1, requestId: "r", projectId: "p", baseRevision: "rev", scope: { kind: "project", projectId: "p" }, instruction, knowledge: { useStudioKnowledge: false, selectedSources: [] }, confirmed: {}, idPool: ids });
@@ -97,4 +97,46 @@ test("task.delete and replacePerformer compile only confirmed stable ids", () =>
   const replaceRequest = { ...request("Замени Гришу на Мишу из базы"), knowledge: { useStudioKnowledge: false, selectedSources: [{ kind: "performer", id: "pf" }] }, confirmed: { projectEntityId: "e1", performerId: "pf" } };
   const replacement = compileAiEditSemanticCommand({ semantic: semantic({ type: "executor.replacePerformer" }), request: replaceRequest, project: current, resolvedTarget: executorTarget, performer, performers: [performer] });
   assert.equal(replacement.operations[0].targetId, "e1"); assert.equal(replacement.operations[0].value.performerId, "pf");
+});
+
+test("basic Stage and Task CRUD compiles to existing low-level operations", () => {
+  const current = project(), stageTarget = { kind: "stage", id: "s" }, taskTarget = { kind: "task", id: "t" };
+  const cases = [
+    [{ type: "stage.rename", name: "Продакшн" }, stageTarget, "stage.rename"],
+    [{ type: "stage.delete" }, stageTarget, "stage.delete"],
+    [{ type: "task.create", name: "Аниматик" }, stageTarget, "task.add"],
+    [{ type: "task.rename", name: "Арт" }, taskTarget, "task.rename"],
+  ];
+  for (const [command, resolvedTarget, lowLevel] of cases) {
+    const diff = compileAiEditSemanticCommand({ semantic: semantic(command), request: request(), project: current, resolvedTarget });
+    assert.equal(diff.operations.length, 1); assert.equal(diff.operations[0].type, lowLevel);
+  }
+  assert.equal(resolveTaskCreationStage("Добавь задачу Аниматик в Препродакшн", current).stage.id, "s");
+});
+
+test("basic Executor CRUD derives payment quantity field from current payment type", () => {
+  const current = project(), fixed = { kind: "executor", id: "e1" }, hourly = { kind: "executor", id: "e2" };
+  const cases = [
+    [{ type: "executor.delete" }, fixed, "executor.delete"],
+    [{ type: "executor.setPaymentType", paymentType: "Почасовая ставка" }, fixed, "executor.payment.setType"],
+    [{ type: "executor.setPaymentRate", value: 900 }, hourly, "executor.payment.setRate"],
+    [{ type: "executor.setPaymentQuantity", value: 8 }, hourly, "executor.payment.setQuantity"],
+    [{ type: "executor.setRole", name: "Арт-директор" }, fixed, "executor.tag.add"],
+    [{ type: "executor.setName", name: "Иван" }, fixed, "executor.tag.update"],
+  ];
+  for (const [command, resolvedTarget, lowLevel] of cases) {
+    const parsed = semantic(command); assert.ok(parsed);
+    const diff = compileAiEditSemanticCommand({ semantic: parsed, request: request(), project: current, resolvedTarget });
+    assert.equal(diff.operations[0].type, lowLevel);
+    if (command.type === "executor.setPaymentQuantity") assert.deepEqual(diff.operations[0].value, { field: "hours", value: "8" });
+  }
+  assert.equal(semantic({ type: "executor.setPaymentQuantity", field: "hours", value: 2 }), null);
+});
+
+test("local hard scopes pin resolution and strict validation rejects outside targets", () => {
+  const current = project();
+  current.stages.push({ id: "s2", name: "Продакшн", presetKey: "custom", tasks: [{ id: "t2", name: "Концепт", executors: [executor("e3", "Анна", "hourly")] }] });
+  const scope = { kind: "executor", projectId: "p", stageId: "s2", taskId: "t2", executorId: "e3" };
+  assert.equal(resolveProjectTarget("Поставь Анне 10 часов", current, null, scope).target.id, "e3");
+  assert.throws(() => compileAiEditSemanticCommand({ semantic: semantic({ type: "executor.setPaymentQuantity", value: 10 }), request: { ...request(), scope }, project: current, resolvedTarget: { kind: "executor", id: "e2" } }), /контекст/i);
 });

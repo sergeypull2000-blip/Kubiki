@@ -66,7 +66,7 @@ function loadStoredState(userId = null) {
      components/            — Left/Right панели, Рабочая зона, Этап/Задача/Исполнитель
    ============================================================ */
 
-export default function KubikiApp({ userId, onSignOut }) {
+export default function KubikiApp({ userId, user, onSignOut }) {
   const initialLocalState = useRef(loadStoredState(userId) || { projects: [], currentId: null });
   const [projects, setProjects] = useState(() => initialLocalState.current.projects || []);
   const projectsRef = useRef(projects);
@@ -702,6 +702,7 @@ export default function KubikiApp({ userId, onSignOut }) {
           performers={performers} onSavePerformer={savePerformer}
           quickAccess={quickAccess} onToggleQuickAccessPin={toggleQuickAccessPin} onRemoveQuickAccess={removeQuickAccessByItem}
           onOpenAiSettings={() => setAiSettingsOpen(true)}
+          userAccount={{ displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }}
           aiGenerationReady={aiGenerationReady}
           onSignOut={handleSignOut}
         />
@@ -711,6 +712,7 @@ export default function KubikiApp({ userId, onSignOut }) {
           performers={performers} onSavePerformer={savePerformer}
           quickAccess={quickAccess} onToggleQuickAccessPin={toggleQuickAccessPin} onRemoveQuickAccess={removeQuickAccessByItem} onSignOut={handleSignOut}
           onOpenAiSettings={() => setAiSettingsOpen(true)}
+          userAccount={{ displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }}
           aiGenerationReady={aiGenerationReady}
           taskTemplates={templateLibrary.taskTemplates} stageTemplates={templateLibrary.stageTemplates}
           onTaskTemplatesChange={handleTaskTemplatesChange} onStageTemplatesChange={handleStageTemplatesChange}

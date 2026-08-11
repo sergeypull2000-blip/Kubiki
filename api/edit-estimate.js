@@ -4,7 +4,7 @@ import { createDeepSeekClient, DeepSeekError } from "./_lib/deepseek.js";
 import { buildAiEditMessages } from "./_lib/editPrompt.js";
 import { loadOwnPerformersForEdit, loadOwnProjectForEdit, loadOwnSelectedKnowledge } from "./_lib/editProject.js";
 import { hasExplicitPerformerLibraryIntent, needsClarificationForBareInput, resolveExplicitPerformers } from "./_lib/performerResolver.js";
-import { resolveExecutorCreationTask, resolveProjectTarget } from "./_lib/projectTargetResolver.js";
+import { resolveExecutorCreationTask, resolveProjectTarget, resolveTaskCreationStage } from "./_lib/projectTargetResolver.js";
 import { createRequestBudget, RequestDeadlineError } from "./_lib/requestBudget.js";
 import { validateAiEditRequest } from "../src/ai/editSchema.js";
 import { attachTrustedAiEditMetadata, diagnoseAiEditSemanticResponse, parseAiEditSemanticResponse } from "../src/ai/editSemanticSchema.js";
@@ -46,9 +46,11 @@ async function executeEdit(req, budget) {
   const serverRevision = await projectRevision(project);
   if (serverRevision !== request.baseRevision) return { status: 409, body: { error: "Смета изменилась. Сначала сохраните её и повторите запрос.", code: "stale_revision" } };
   if (needsClarificationForBareInput(request.instruction)) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, question: "Что именно нужно изменить в смете?" } };
-  const projectTarget = resolveProjectTarget(request.instruction, project, request.confirmed.projectEntityId);
+  const projectTarget = resolveProjectTarget(request.instruction, project, request.confirmed.projectEntityId, request.scope);
   if (projectTarget.clarification) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, ...projectTarget.clarification } };
-  const creationTask = resolveExecutorCreationTask(request.instruction, project, request.confirmed.projectEntityId);
+  const taskCreationStage = resolveTaskCreationStage(request.instruction, project, request.confirmed.projectEntityId, request.scope);
+  if (taskCreationStage.clarification) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, ...taskCreationStage.clarification } };
+  const creationTask = resolveExecutorCreationTask(request.instruction, project, request.confirmed.projectEntityId, request.scope);
   if (creationTask.clarification) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, ...creationTask.clarification } };
 
   let settings = normalizeServerAiSettings();
@@ -79,7 +81,7 @@ async function executeEdit(req, budget) {
   if (semantic.kind !== "command") return { status: 200, body: attachTrustedAiEditMetadata(semantic, request) };
   const performer = request.confirmed.performerId ? ownPerformers.find((item) => item.id === request.confirmed.performerId) : resolved.performers.length === 1 ? resolved.performers[0] : null;
   try {
-    const diff = compileAiEditSemanticCommand({ semantic, request, project, resolvedTarget: projectTarget.target, resolvedTask: creationTask.task, performer, performers: ownPerformers });
+    const diff = compileAiEditSemanticCommand({ semantic, request, project, resolvedTarget: taskCreationStage.stage || projectTarget.target, resolvedTask: creationTask.task, performer, performers: ownPerformers });
     return { status: 200, body: diff };
   } catch (error) {
     if (error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code } };

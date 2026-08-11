@@ -247,7 +247,7 @@ function AddCubeButton({ onAddCube, usedKeys = [] }) {
 /* ============================================================
    Строка исполнителя
    ============================================================ */
-export function ExecutorRow({ executor, active, flash, stageId, taskId, onActivate, onPatch, onRemove, onSaveToPerformer }) {
+export function ExecutorRow({ executor, active, flash, stageId, taskId, onActivate, onPatch, onRemove, onSaveToPerformer, onAiContext }) {
   const sum = executorSum(executor);
   const payTag = executor.tags.find((t) => t.key === "payment");
   const payType = payTag?.payment?.type;
@@ -350,6 +350,7 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
       onMouseUp={restoreRowDraggable}
       onMouseLeave={restoreRowDraggable}
       onMouseDown={(e) => { e.stopPropagation(); onActivate(); }}
+      onContextMenu={(event) => { event.stopPropagation(); onAiContext?.(event, { kind: "executor", stageId, taskId, executorId: executor.id, label: executor.tags.find((tag) => tag.key === "name")?.value || "Исполнитель" }); }}
       {...dropHandlers}>
       <div className="kb-erow">
         <div className="kb-erow-tags">

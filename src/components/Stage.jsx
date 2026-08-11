@@ -72,7 +72,7 @@ export function StageCard({ stage, dispatch, activeStageId, activeTaskId, active
   onActivateStage, onActivateTask, onActivateExecutor, onRemove,
   onSaveStageTemplate, onSaveTaskTemplate, onSaveExecutorToPerformer,
   stageTemplates, onApplyStageTemplate, taskTemplates, onApplyTaskTemplate,
-  quickAccessItems, onApplyQuickAccess }) {
+  quickAccessItems, onApplyQuickAccess, onAiContext }) {
   const StageIcon = (STAGE_PRESETS.find((p) => p.key === stage.presetKey) || CUSTOM_STAGE).icon;
   const total = stageSum(stage);
   const isActive = activeStageId === stage.id && !activeTaskId && !activeExecutorId;
@@ -115,7 +115,7 @@ export function StageCard({ stage, dispatch, activeStageId, activeTaskId, active
 
   return (
     <div className={"kb-stage" + (isActive ? " kb-stage-active" : "") + (isOverReorder ? " kb-stage-over" : "") + (isDragging ? " kb-stage-dragging" : "")}
-      {...reorderHandlers} onMouseDown={onStageMouseDown}>
+      {...reorderHandlers} onMouseDown={onStageMouseDown} onContextMenu={(event) => onAiContext?.(event, { kind: "stage", stageId: stage.id, label: stage.name || "Этап" })}>
       <div className="kb-stage-head" {...dragHandlers} title="Перетащите строку, чтобы переставить этап"
         onMouseDownCapture={(event) => { event.currentTarget.draggable = !event.target.closest("input, textarea, button, select"); }}
         onMouseUp={(event) => { event.currentTarget.draggable = true; }}>
@@ -158,7 +158,7 @@ export function StageCard({ stage, dispatch, activeStageId, activeTaskId, active
               onSaveExecutorToPerformer={onSaveExecutorToPerformer}
               taskTemplates={taskTemplates}
               onApplyTaskTemplate={onApplyTaskTemplate}
-              quickAccessItems={quickAccessItems} onApplyQuickAccess={onApplyQuickAccess} />
+              quickAccessItems={quickAccessItems} onApplyQuickAccess={onApplyQuickAccess} onAiContext={onAiContext} />
           ))}
           <button type="button" className="kb-add-btn" onClick={addTask} onMouseDown={(e) => e.stopPropagation()}>
             <Plus size={13} strokeWidth={1.75} /> Новая задача

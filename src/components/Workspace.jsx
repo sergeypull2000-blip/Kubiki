@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChevronsUp, ChevronsDown } from "lucide-react";
+import { ArrowUp, ChevronsUp, ChevronsDown, LogOut, Sparkles, ChevronDown } from "lucide-react";
 import { fmt } from "../utils.js";
 import { projectSum } from "../calculations.js";
 import { CUSTOM_STAGE } from "../constants.js";
@@ -18,11 +18,12 @@ import { globalAiEditScope } from "../ai/editScope.js";
 import { addPerformerToTask, buildPerformerFromExecutor, linkExecutorToPerformer, normalizePerformer } from "../performerLibrary.js";
 import { sortQuickAccessItems } from "../quickAccess.js";
 import { createTaskTemplate, createStageTemplate, cloneTaskTemplate, cloneStageTemplate } from "../templates.js";
+import { useOutsideClose } from "../hooks.js";
 
 /* ============================================================
    Рабочая зона
    ============================================================ */
-export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onOpenAiSettings, onSignOut, aiGenerationReady = false, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange, onRequestAiEdit, onCancelAiEdit, onApplyAiEdit, onUndoAiEdit, canUndoAiEdit = false }) {
+export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onOpenAiSettings, onSignOut, userAccount, aiGenerationReady = false, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange, onRequestAiEdit, onCancelAiEdit, onApplyAiEdit, onUndoAiEdit, canUndoAiEdit = false }) {
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
   // в Клайне можно persist'ить в localStorage.
   const [importFile, setImportFile] = useState(null);
@@ -32,7 +33,13 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
   const [activeStageId, setActiveStageId] = useState(null);
   const [collapseButtonCompact, setCollapseButtonCompact] = useState(false);
   const [performerModal, setPerformerModal] = useState(null);
-  const [aiEditOpen, setAiEditOpen] = useState(false);
+  const [globalAiOpen, setGlobalAiOpen] = useState(false);
+  const [globalAiClosing, setGlobalAiClosing] = useState(false);
+  const [localAiPopover, setLocalAiPopover] = useState(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef(null);
+  const globalAiSubmitRef = useRef(null);
+  useOutsideClose(profileRef, profileOpen ? () => setProfileOpen(false) : null);
   const clipboardRef = useRef(null); // скопированный исполнитель (Ctrl+C/Ctrl+V)
   const dispatch = (fn) => onChange(fn);
   const total = projectSum(project);
@@ -55,7 +62,19 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
 
   // Эта кнопка — global entry point. Локальные hard scopes остаются в ядре
   // для будущего context-menu entry point и здесь намеренно не используются.
-  const aiEditScope = globalAiEditScope(project);
+  const globalScope = globalAiEditScope(project);
+  const openAiContext = (event, context) => {
+    if (!onRequestAiEdit || editingTemplate) return;
+    event.preventDefault();
+    setGlobalAiOpen(false);
+    setLocalAiPopover({ x: Math.max(12, Math.min(event.clientX, window.innerWidth - 380)), y: Math.max(12, Math.min(event.clientY, window.innerHeight - 420)), context });
+  };
+  const localScope = (context) => ({ projectId: project.id, kind: context.kind, stageId: context.stageId, ...(context.taskId ? { taskId: context.taskId } : {}), ...(context.executorId ? { executorId: context.executorId } : {}) });
+  const closeGlobalAi = () => {
+    if (!globalAiOpen || globalAiClosing) return;
+    setGlobalAiClosing(true);
+    setTimeout(() => { setGlobalAiOpen(false); setGlobalAiClosing(false); }, 230);
+  };
 
   // выбор с верхних уровней автоматически задаёт контекст ниже,
   // чтобы «клик по этапу → клик Задача» и «клик по задаче → клик Исполнитель» работали интуитивно
@@ -302,6 +321,17 @@ const toggleAllCollapsed = () =>
     <RightPanel project={project} dispatch={dispatch}
       activeStageId={activeStageId} activeTaskId={activeTaskId} activeExecutorId={activeExecutorId} />
   );
+  const accountControl = <div className="kb-profile kb-profile-sidebar" ref={profileRef}>
+    <button type="button" className="kb-profile-trigger kb-profile-row" onClick={() => setProfileOpen((value) => !value)} aria-expanded={profileOpen} aria-haspopup="menu">
+      <span className="kb-profile-avatar">{(userAccount?.displayName || userAccount?.accountLabel || "K").trim().charAt(0).toUpperCase()}</span>
+      <span className="kb-profile-row-copy"><strong>{userAccount?.displayName || "Аккаунт Kubiki"}</strong><small>{userAccount?.accountLabel || "Авторизованный пользователь"}</small></span>
+      <ChevronDown size={13} />
+    </button>
+    {profileOpen && <div className="kb-profile-menu kb-profile-menu-up" role="menu">
+      {onOpenAiSettings && <button type="button" role="menuitem" onClick={() => { setProfileOpen(false); onOpenAiSettings(); }}><Sparkles size={15} />Персонализация ИИ</button>}
+      <button type="button" role="menuitem" onClick={onSignOut}><LogOut size={15} />Выйти</button>
+    </div>}
+  </div>;
 
   return (
     <div className="kb-root kb-root-workspace">
@@ -330,11 +360,6 @@ const toggleAllCollapsed = () =>
             {saveState === "error" && onRetrySave && <button type="button" onClick={onRetrySave}>Повторить</button>}
           </div>}
 
-          {onOpenAiSettings && <button type="button" className="kb-ai-settings-open" onClick={onOpenAiSettings}>Персонализация ИИ</button>}
-          {!editingTemplate && onRequestAiEdit && <button type="button" className="kb-ai-settings-open" onClick={() => setAiEditOpen(true)}>AI-diff</button>}
-          {!editingTemplate && canUndoAiEdit && <button type="button" className="kb-ai-settings-open" onClick={onUndoAiEdit}>Undo AI</button>}
-          <button type="button" className="kb-sign-out" onClick={onSignOut}>Выйти</button>
-
           <div className="kb-total-badge">
             <span className="kb-total-label">Итого</span>
             <span className="kb-total-figure">{fmt(total)} ₽</span>
@@ -360,6 +385,7 @@ const toggleAllCollapsed = () =>
             onApplyStageTemplate={handleApplyStageTemplate}
             onRemoveTaskTemplate={handleRemoveTaskTemplate}
             onRemoveStageTemplate={handleRemoveStageTemplate}
+            accountControl={accountControl}
           />
           {/* клик по нейтральной зоне листа снимает все выделения. */}
           <main className="kb-canvas"
@@ -405,7 +431,7 @@ const toggleAllCollapsed = () =>
                       onApplyStageTemplate={handleApplyStageTemplate}
                       taskTemplates={taskTemplates}
                       onApplyTaskTemplate={handleApplyTaskTemplate}
-                      quickAccessItems={visibleQuickAccess.map((entry) => entry.item)} onApplyQuickAccess={applyQuickAccess} />
+                      quickAccessItems={visibleQuickAccess.map((entry) => entry.item)} onApplyQuickAccess={applyQuickAccess} onAiContext={openAiContext} />
                   ))}
                   <CanvasDropZone isEmpty={false}
                     onDropStage={(payload) => {
@@ -420,10 +446,15 @@ const toggleAllCollapsed = () =>
                 </>
               )}
             </div>
+            {!editingTemplate && onRequestAiEdit && project.stages.length > 0 && <div className="kb-ai-launcher-wrap">
+              {globalAiOpen && <AiEditTechnicalModal variant="launcher" closing={globalAiClosing} submitRef={globalAiSubmitRef} scope={globalScope} contextLabel="Вся смета" onRequest={onRequestAiEdit} onCancelRequest={onCancelAiEdit} onApply={onApplyAiEdit} onUndo={onUndoAiEdit} canUndo={canUndoAiEdit} onClose={closeGlobalAi} />}
+              {canUndoAiEdit && !globalAiOpen && <button type="button" className="kb-ai-undo-chip" onClick={onUndoAiEdit}>Undo AI</button>}
+              <button type="button" className={`kb-ai-launcher${globalAiOpen && !globalAiClosing ? " is-open" : ""}`} aria-label={globalAiOpen ? "Предпросмотр изменений" : "Открыть AI-ассистента"} onClick={() => { setLocalAiPopover(null); if (globalAiOpen) globalAiSubmitRef.current?.(); else setGlobalAiOpen(true); }}><ArrowUp size={18} strokeWidth={1.8} /></button>
+            </div>}
           </main>
           {rightPanel}
           {performerModal && <PerformerModal initial={performerModal.draft} isNew={!performerModal.existingId} initialAddToQuickAccess={performerModal.addToQuickAccess} onSave={savePerformerCard} onClose={() => setPerformerModal(null)} />}
-          {aiEditOpen && <AiEditTechnicalModal scope={aiEditScope} onRequest={onRequestAiEdit} onCancelRequest={onCancelAiEdit} onApply={onApplyAiEdit} onClose={() => setAiEditOpen(false)} />}
+          {localAiPopover && <AiEditTechnicalModal variant="inline" position={{ x: localAiPopover.x, y: localAiPopover.y }} scope={localScope(localAiPopover.context)} contextLabel={localAiPopover.context.label} onRequest={onRequestAiEdit} onCancelRequest={onCancelAiEdit} onApply={onApplyAiEdit} onClose={() => setLocalAiPopover(null)} />}
       </div>
     </div>
   );

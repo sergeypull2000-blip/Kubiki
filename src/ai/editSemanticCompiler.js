@@ -1,5 +1,5 @@
 import { applyAiEditOperations, AiEditValidationError, indexProject } from "./editOperations.js";
-import { ROLE_OPTIONS } from "../constants.js";
+import { PAYMENT_OPTIONS, ROLE_OPTIONS } from "../constants.js";
 
 const source = { kind: "current_request" };
 const operation = (id, type, targetId, value, reason) => ({ id, type, targetId, ...(value === undefined ? {} : { value }), reason, source });
@@ -11,6 +11,16 @@ const roleValue = (value) => {
   const query = normalized(value), matches = ROLE_OPTIONS.filter((role) => { const candidate = normalized(role); return candidate === query || candidate.startsWith(query) || query.startsWith(candidate); });
   if (matches.length !== 1) throw new AiEditSemanticCompileError("ai_semantic_invalid_role", "Роль не поддерживается текущей моделью Executor");
   return matches[0];
+};
+const paymentTypeValue = (value) => {
+  const query = normalized(value), matches = PAYMENT_OPTIONS.filter((item) => normalized(item.key) === query || normalized(item.label) === query);
+  if (matches.length !== 1) throw new AiEditSemanticCompileError("ai_semantic_invalid_payment_type", "Тип оплаты не поддерживается текущей моделью Executor");
+  return matches[0].key;
+};
+const target = (projectIndex, resolvedTarget, kind) => {
+  const located = projectIndex[`${kind}s`]?.get(resolvedTarget?.id);
+  if (resolvedTarget?.kind !== kind || !located) throw new AiEditSemanticCompileError("ai_semantic_missing_target", `Не подтверждён ${kind}`);
+  return located;
 };
 
 export class AiEditSemanticCompileError extends Error {
@@ -30,6 +40,13 @@ export function compileAiEditSemanticCommand({ semantic, request, project, resol
     case "stage.create":
       add("stage.add", project.id, { stageId: take(request.idPool, used, "stages"), name: explicitStageName(command.name, request.instruction), presetKey: "custom", beforeStageId: null }, "Создать явно запрошенный этап");
       break;
+    case "stage.rename": add("stage.rename", target(projectIndex, resolvedTarget, "stage").stage.id, { name: command.name.trim() }, "Переименовать выбранный этап"); break;
+    case "stage.delete": add("stage.delete", target(projectIndex, resolvedTarget, "stage").stage.id, undefined, "Удалить выбранный этап"); break;
+    case "task.create": {
+      const stage = target(projectIndex, resolvedTarget, "stage").stage;
+      add("task.add", stage.id, { taskId: take(request.idPool, used, "tasks"), name: command.name.trim(), beforeTaskId: null }, "Создать задачу в выбранном этапе"); break;
+    }
+    case "task.rename": add("task.rename", target(projectIndex, resolvedTarget, "task").task.id, { name: command.name.trim() }, "Переименовать выбранную задачу"); break;
     case "executor.createAnonymous": { const executorId = take(request.idPool, used, "executors"), roleTagId = take(request.idPool, used, "tags"), nameTagId = take(request.idPool, used, "tags");
       if (!resolvedTask?.id) throw new AiEditSemanticCompileError("ai_semantic_missing_task", "Для нового Executor требуется Task");
       add("executor.addAnonymous", resolvedTask.id, { executorId, roleTagId }, "Создать анонимного Executor");
@@ -44,6 +61,21 @@ export function compileAiEditSemanticCommand({ semantic, request, project, resol
       if (type === "fix_total") add("executor.amount.set", executor.id, { value: money(command.value) }, "Изменить оплату Executor");
       else if (["fix_task", "hourly", "shift"].includes(type)) add("executor.payment.setRate", executor.id, { value: money(command.value) }, "Изменить ставку Executor");
       else throw new AiEditSemanticCompileError("ai_semantic_missing_payment_type", "Не определён тип оплаты Executor");
+      break;
+    }
+    case "executor.delete": add("executor.delete", target(projectIndex, resolvedTarget, "executor").executor.id, undefined, "Удалить выбранного исполнителя"); break;
+    case "executor.setPaymentType": add("executor.payment.setType", target(projectIndex, resolvedTarget, "executor").executor.id, { type: paymentTypeValue(command.paymentType) }, "Изменить тип оплаты исполнителя"); break;
+    case "executor.setPaymentRate": add("executor.payment.setRate", target(projectIndex, resolvedTarget, "executor").executor.id, { value: money(command.value) }, "Изменить ставку исполнителя"); break;
+    case "executor.setPaymentQuantity": { const executor = target(projectIndex, resolvedTarget, "executor").executor;
+      const type = executor.tags?.find((tag) => tag.key === "payment")?.payment?.type;
+      const field = { fix_task: "units", hourly: "hours", shift: "shifts" }[type];
+      if (!field) throw new AiEditSemanticCompileError("ai_semantic_quantity_not_applicable", "Количество доступно только для оплаты за единицу, по часам или сменам");
+      add("executor.payment.setQuantity", executor.id, { field, value: money(command.value) }, "Изменить количество по текущему типу оплаты"); break;
+    }
+    case "executor.setRole":
+    case "executor.setName": { const executor = target(projectIndex, resolvedTarget, "executor").executor, key = command.type === "executor.setRole" ? "role" : "name", value = key === "role" ? roleValue(command.name) : command.name.trim(), existing = executor.tags?.find((tag) => tag.key === key);
+      if (existing) add("executor.tag.update", existing.id, { executorId: executor.id, value }, `Изменить ${key === "role" ? "роль" : "имя"} исполнителя`);
+      else add("executor.tag.add", executor.id, { tagId: take(request.idPool, used, "tags"), key, value }, `Добавить ${key === "role" ? "роль" : "имя"} исполнителя`);
       break;
     }
     case "executor.setTax":
