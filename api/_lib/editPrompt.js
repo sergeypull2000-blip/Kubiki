@@ -52,6 +52,8 @@ export const AI_EDIT_SYSTEM_PROMPT = `
 - executor.tag.add: targetId=executor id, value={tagId,key,value}; payment здесь запрещён.
 - executor.tag.update: targetId=tag id, value={executorId,value}; payment здесь запрещён.
 - executor.tag.remove: targetId=tag id, value={executorId}; payment здесь запрещён.
+- После executor.addAnonymous role-тег с id=roleTagId уже существует. Устанавливай его через executor.tag.update с targetId=roleTagId, а не через executor.tag.add.
+- Если core-тег role/name/tax уже присутствует в Project, обновляй его через executor.tag.update. executor.tag.add разрешён только для отсутствующего key; исключение — материализация пустого core-тега с тем же существующим tagId.
 - executor.delete без value.
 
 clarification:
@@ -73,7 +75,7 @@ function performerData(performer) {
   return { id: performer.id, name: [performer.firstName, performer.lastName].filter(Boolean).join(" "), primaryRole: performer.primaryRole, specializations: performer.specializations, grade: performer.grade, software: performer.software, defaultPaymentType: performer.defaultPaymentType, defaultRate: performer.defaultRate, defaultUnit: performer.defaultUnit, defaultTaxRate: performer.defaultTaxRate, active: performer.active !== false };
 }
 
-export function buildAiEditMessages({ request, project, personalization, performers, knowledge }) {
+export function buildAiEditMessages({ request, project, personalization, performers, knowledge, targetExecutorId = null }) {
   const policy = { tagKeys: TAG_DEFS.map((item) => item.key), paymentTypes: PAYMENT_OPTIONS.map((item) => item.key), maxMoney: 1_000_000_000 };
   const content = [
     `<request_meta>${JSON.stringify({ schemaVersion: request.schemaVersion, requestId: request.requestId, baseRevision: request.baseRevision })}</request_meta>`,
@@ -82,6 +84,7 @@ export function buildAiEditMessages({ request, project, personalization, perform
     `<project_data>${JSON.stringify(projectData(project))}</project_data>`,
     `<ai_personalization>${personalization || "Персонализация не настроена."}</ai_personalization>`,
     `<performer_sources>${JSON.stringify((performers || []).map(performerData))}</performer_sources>`,
+    `<resolved_replace_target>${JSON.stringify(targetExecutorId ? { executorId: targetExecutorId } : null)}</resolved_replace_target>`,
     `<studio_knowledge>${JSON.stringify(knowledge || [])}</studio_knowledge>`,
     `<id_pool>${JSON.stringify(request.idPool)}</id_pool>`,
     `<domain_policy>${JSON.stringify(policy)}</domain_policy>`,

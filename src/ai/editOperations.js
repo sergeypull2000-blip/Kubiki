@@ -12,6 +12,7 @@ const TAG_RULES = {
   soft: new Set(SOFTWARE_OPTIONS),
   tax: "tax",
 };
+const CORE_TAG_KEYS = new Set(["role", "name", "payment", "tax"]);
 const PRESET_KEYS = new Set([...STAGE_PRESETS.map((item) => item.key), "custom"]);
 
 export class AiEditValidationError extends Error {
@@ -196,7 +197,13 @@ function applyOne(project, operation, context) {
     case "executor.tag.add": {
       const located = requireTarget(index, "executor", operation.targetId, scope, operation);
       if (operation.value.key === "payment") fail("unknown_tag", "Payment изменяется только специальными операциями", operation);
-      if (located.executor.tags.some((item) => item.key === operation.value.key)) fail("duplicate_tag", "Тег уже существует", operation);
+      const existing = located.executor.tags.find((item) => item.key === operation.value.key);
+      if (existing) {
+        const empty = !String(existing.value || "").trim();
+        if (!CORE_TAG_KEYS.has(existing.key) || !empty || operation.value.tagId !== existing.id) fail("duplicate_tag", "Тег уже существует", operation);
+        const value = validateTagValue(operation.value.key, operation.value.value, operation);
+        return updateExecutor(project, located, (executor) => ({ ...executor, tags: executor.tags.map((tag) => tag.id === existing.id ? { ...tag, value } : tag) }));
+      }
       requireNewId(idPool, "tags", operation.value.tagId, usedIds, index, operation);
       const value = validateTagValue(operation.value.key, operation.value.value, operation);
       return updateExecutor(project, located, (executor) => ({ ...executor, tags: [...executor.tags, { ...makeTag(operation.value.key, value), id: operation.value.tagId }] }));

@@ -5,6 +5,8 @@ import { AiEditValidationError, applyAiEditOperations } from "../src/ai/editOper
 import { buildAiEditPreview } from "../src/ai/editPreview.js";
 import { projectRevision } from "../src/ai/projectRevision.js";
 import { createAiEditUndoStore } from "../src/ai/editUndo.js";
+import { globalAiEditScope } from "../src/ai/editScope.js";
+import { buildAiEditContinuation } from "../src/ai/editContinuation.js";
 import { executorSum } from "../src/calculations.js";
 
 const pool = () => ({ stages: ["s-new"], tasks: ["t-new"], executors: ["e-new"], tags: ["tg-new-1", "tg-new-2", "tg-new-3", "tg-new-4", "tg-new-5", "tg-new-6"] });
@@ -24,6 +26,10 @@ test("request schema requires stable scope ids, id pool and no userId", () => {
   const body = { schemaVersion: 1, requestId: "r", projectId: "p", baseRevision: "sha256:x", scope: scope(), instruction: "Добавь этап", knowledge: { useStudioKnowledge: false, selectedSources: [] }, idPool: pool() };
   assert.equal(validateAiEditRequest(body).ok, true);
   assert.equal(validateAiEditRequest({ ...body, userId: "attacker" }).ok, false);
+});
+
+test("global technical entry point always builds project scope", () => {
+  assert.deepEqual(globalAiEditScope("p"), { kind: "project", projectId: "p" });
 });
 
 test("content revision ignores collapsed but reacts to names and finance", async () => {
@@ -72,6 +78,22 @@ test("anonymous Executor uses only explicitly preallocated Executor and role tag
   assert.equal(executor.id, "e-new"); assert.equal(executor.tags[0].id, "tg-new-1"); assert.equal(executor.tags[0].key, "role");
 });
 
+test("anonymous Executor can receive name, existing core role, payment and fixed rate without duplicate tags", () => {
+  const diff = response([
+    operation("executor.addAnonymous", "t", { executorId: "e-new", roleTagId: "tg-new-1" }, undefined, "op-1"),
+    operation("executor.tag.update", "tg-new-1", { executorId: "e-new", value: "Арт-директор" }, undefined, "op-2"),
+    operation("executor.tag.add", "e-new", { tagId: "tg-new-2", key: "name", value: "Иванов" }, undefined, "op-3"),
+    operation("executor.payment.setType", "e-new", { type: "fix_total" }, undefined, "op-4"),
+    operation("executor.amount.set", "e-new", { value: "80000" }, undefined, "op-5"),
+  ]);
+  const next = applyAiEditOperations(project(), diff, { idPool: pool() }), executor = next.stages[0].tasks[0].executors[1];
+  assert.equal(executor.tags.filter((tag) => tag.key === "role").length, 1);
+  assert.equal(executor.tags.find((tag) => tag.key === "role").value, "Арт-директор");
+  assert.equal(executor.tags.find((tag) => tag.key === "name").value, "Иванов");
+  assert.equal(executor.tags.find((tag) => tag.key === "payment").payment.type, "fix_total");
+  assert.equal(executor.amount, "80000");
+});
+
 test("payment type change exactly follows current UI and inactive amount is preserved", () => {
   const next = applyAiEditOperations(project(), response([operation("executor.payment.setType", "e", { type: "hourly" })], scope("executor")), { idPool: pool() });
   const executor = next.stages[0].tasks[0].executors[0], payment = executor.tags.find((tag) => tag.key === "payment").payment;
@@ -100,8 +122,28 @@ test("replace Performer is direct-only, replaces known data and preserves execut
 test("preview is immutable, computes before/after and rejects stale revisions", async () => {
   const original = project(), snapshot = structuredClone(original), revision = await projectRevision(original), diff = { ...response([operation("task.rename", "t", { name: "Скульптинг" })]), baseRevision: revision };
   const preview = await buildAiEditPreview({ project: original, response: diff, idPool: pool(), expectedRevision: revision });
-  assert.deepEqual(original, snapshot); assert.equal(preview.before.internalCost, 1000); assert.equal(preview.after.tasks, 1);
+  assert.deepEqual(original, snapshot); assert.equal(preview.kind, "diff"); assert.equal(preview.before.internalCost, 1000); assert.equal(preview.after.tasks, 1);
   await assert.rejects(() => buildAiEditPreview({ project: { ...original, name: "Changed" }, response: diff, idPool: pool(), expectedRevision: revision }), (error) => error.code === "stale_revision");
+});
+
+test("global tax diff creates add/update operations, preserves amounts and exposes financial preview", async () => {
+  const original = project(), task = original.stages[0].tasks[0];
+  task.executors.push({ id: "e2", amount: "2000", tags: [{ id: "pay2", key: "payment", value: "fix_total", payment: { type: "fix_total", rate: "", units: "", hours: "", shifts: "" } }, { id: "tax2", key: "tax", value: "3" }] });
+  const revision = await projectRevision(original), diff = { ...response([
+    operation("executor.tag.add", "e", { tagId: "tg-new-1", key: "tax", value: "6" }, undefined, "op-tax-1"),
+    operation("executor.tag.update", "tax2", { executorId: "e2", value: "6" }, undefined, "op-tax-2"),
+  ]), baseRevision: revision };
+  const preview = await buildAiEditPreview({ project: original, response: diff, idPool: pool(), expectedRevision: revision });
+  assert.equal(preview.kind, "diff"); assert.equal(preview.operations.length, 2);
+  assert.equal(preview.afterProject.stages[0].tasks[0].executors[0].amount, "1000");
+  assert.equal(preview.afterProject.stages[0].tasks[0].executors[1].amount, "2000");
+  assert.ok(preview.after.executorTaxes > preview.before.executorTaxes);
+});
+
+test("clarification continuation preserves original request and confirms source id", () => {
+  const continuation = buildAiEditContinuation({ instruction: "Добавь Мишу из базы", source: { kind: "performer", id: "pf" }, label: "Миша Иванов" });
+  assert.match(continuation.instruction, /^Добавь Мишу из базы/); assert.match(continuation.instruction, /kind=performer id=pf/);
+  assert.deepEqual(continuation.knowledge.selectedSources, [{ kind: "performer", id: "pf" }]);
 });
 
 test("one-level in-memory Undo is replaced and invalidated on the next mutation", () => {

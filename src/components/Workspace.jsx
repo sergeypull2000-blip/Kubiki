@@ -14,6 +14,7 @@ import { StageCard, CanvasDropZone } from "./Stage.jsx";
 import { RightPanel } from "./RightPanel.jsx";
 import { PerformerModal } from "./PerformerLibrary.jsx";
 import { AiEditTechnicalModal } from "./AiEditTechnicalModal.jsx";
+import { globalAiEditScope } from "../ai/editScope.js";
 import { addPerformerToTask, buildPerformerFromExecutor, linkExecutorToPerformer, normalizePerformer } from "../performerLibrary.js";
 import { sortQuickAccessItems } from "../quickAccess.js";
 import { createTaskTemplate, createStageTemplate, cloneTaskTemplate, cloneStageTemplate } from "../templates.js";
@@ -52,11 +53,9 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
     setActiveExecutorId(null); setActiveTaskId(null); setActiveStageId(null);
   };
 
-  const aiEditScope = activeExecutorId
-    ? { kind: "executor", projectId: project.id, stageId: activeStageId, taskId: activeTaskId, executorId: activeExecutorId }
-    : activeTaskId ? { kind: "task", projectId: project.id, stageId: activeStageId, taskId: activeTaskId }
-      : activeStageId ? { kind: "stage", projectId: project.id, stageId: activeStageId }
-        : { kind: "project", projectId: project.id };
+  // Эта кнопка — global entry point. Локальные hard scopes остаются в ядре
+  // для будущего context-menu entry point и здесь намеренно не используются.
+  const aiEditScope = globalAiEditScope(project.id);
 
   // выбор с верхних уровней автоматически задаёт контекст ниже,
   // чтобы «клик по этапу → клик Задача» и «клик по задаче → клик Исполнитель» работали интуитивно

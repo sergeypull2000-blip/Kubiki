@@ -28,6 +28,7 @@ export async function buildAiEditPreview({ project, response, performers, idPool
   }
   const afterProject = applyAiEditOperations(project, response, { performers, idPool, instruction, selectedSources });
   return {
+    kind: "diff",
     requestId: response.requestId,
     baseRevision: expectedRevision,
     scope: response.scope,
