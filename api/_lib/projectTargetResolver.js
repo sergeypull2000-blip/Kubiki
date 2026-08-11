@@ -85,11 +85,17 @@ export function resolveExecutorCreationTask(instruction, project, confirmed = nu
     const entity = entities.find((item) => item.id === confirmed);
     if (entity?.kind === "task") return { task: entity, clarification: null };
   }
-  const creation = /(?:добав|созда)\p{L}*/iu.test(instruction) && /(?:исполнител\p{L}*|директор\p{L}*|артист\p{L}*|\s(?:в|на)\s+этап)/iu.test(instruction) && !/(?:нов\p{L}*\s+этап|созда\p{L}*\s+этап)/iu.test(instruction);
+  const addAction = /(?:добав|созда)\p{L}*/iu.test(instruction);
+  const structuralCreation = /(?:добав|созда)\p{L}*\s+(?:нов\p{L}*\s+)?(?:задач|этап)\p{L}*/iu.test(instruction);
+  const creation = addAction && !structuralCreation && (hasExplicitNameToken(instruction) || /(?:исполнител\p{L}*|директор\p{L}*|артист\p{L}*|\s(?:в|на)\s+этап)/iu.test(instruction));
   if (!creation) return { task: null, clarification: null };
   const scoped = scope?.taskId && entities.find((item) => item.kind === "task" && item.id === scope.taskId);
   if (scoped) return { task: scoped, clarification: null };
   const tasks = entities.filter((item) => item.kind === "task"), mentionedTasks = tasks.filter((item) => nameMentioned(instruction, item.name));
+  if (scope?.kind === "stage") {
+    if (tasks.length === 1) return { task: tasks[0], clarification: null };
+    return { task: null, clarification: { question: tasks.length ? "В какую задачу добавить исполнителя?" : "В этом этапе нет задач. Создать задачу или выбрать другую?", ...(tasks.length ? { choices: tasks.slice(0, 10).map(choice) } : {}) } };
+  }
   if (mentionedTasks.length === 1) return { task: mentionedTasks[0], clarification: null };
   if (mentionedTasks.length > 1) return { task: null, clarification: { question: "В какую Task добавить Executor?", choices: mentionedTasks.slice(0, 10).map(choice) } };
   const stages = entities.filter((item) => item.kind === "stage" && nameMentioned(instruction, item.name));

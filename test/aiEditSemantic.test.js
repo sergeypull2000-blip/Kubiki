@@ -144,8 +144,10 @@ test("local hard scopes pin resolution and strict validation rejects outside tar
 test("Task scope plus one confirmed Performer compiles to addFromPerformer only", () => {
   const current = project(), performer = { id: "pf-ella", firstName: "Элла", primaryRole: "3D артист", defaultPaymentType: "hourly", defaultRate: "2500", defaultTaxRate: 6, active: true };
   const localRequest = { ...request("сюда добавь Эллу из базы"), scope: { kind: "task", projectId: "p", stageId: "s", taskId: "t" }, knowledge: { useStudioKnowledge: false, selectedSources: [{ kind: "performer", id: performer.id }] }, confirmed: { performerId: performer.id } };
+  const resolvedTask = resolveExecutorCreationTask(localRequest.instruction, current, null, localRequest.scope).task;
+  assert.equal(resolvedTask.id, "t");
   const parsed = semantic({ type: "executor.createFromPerformer", taskId: "t", performerId: performer.id });
-  const diff = compileAiEditSemanticCommand({ semantic: parsed, request: localRequest, project: current, resolvedTask: { id: "t" }, performer, performers: [performer] });
+  const diff = compileAiEditSemanticCommand({ semantic: parsed, request: localRequest, project: current, resolvedTask, performer, performers: [performer] });
   assert.deepEqual(diff.operations.map((item) => item.type), ["executor.addFromPerformer"]);
   assert.deepEqual(diff.operations[0].value, { executorId: "new-executor", performerId: performer.id });
   assert.deepEqual(Object.keys(parsed.command).sort(), ["performerId", "taskId", "type"]);
@@ -154,12 +156,27 @@ test("Task scope plus one confirmed Performer compiles to addFromPerformer only"
 test("Task scope short name intent creates an anonymous Executor without invented role", () => {
   const current = project();
   const localRequest = { ...request("добавь Мишу"), scope: { kind: "task", projectId: "p", stageId: "s", taskId: "t" } };
+  const resolvedTask = resolveExecutorCreationTask(localRequest.instruction, current, null, localRequest.scope).task;
+  assert.equal(resolvedTask.id, "t");
   const parsed = semantic({ type: "executor.createAnonymous", name: "Миша" });
   assert.ok(parsed);
-  const diff = compileAiEditSemanticCommand({ semantic: parsed, request: localRequest, project: current, resolvedTask: { id: "t" } });
+  const diff = compileAiEditSemanticCommand({ semantic: parsed, request: localRequest, project: current, resolvedTask });
   assert.deepEqual(diff.operations.map((item) => item.type), ["executor.addAnonymous", "executor.tag.add"]);
   assert.deepEqual(diff.operations[1].value, { tagId: "tag-2", key: "name", value: "Миша" });
   assert.equal(diff.operations.some((item) => item.type === "executor.tag.update"), false);
   assert.equal(semantic({ type: "executor.createAnonymous" }), null);
   assert.ok(parseAiEditSemanticResponse({ kind: "clarification", question: "Как назвать исполнителя?" }));
+});
+
+test("Stage scope task resolution stays deterministic and continuation pins the selected task", () => {
+  const current = project();
+  current.stages[0].tasks.push({ id: "t2", name: "Сториборд", executors: [] });
+  const stageScope = { kind: "stage", projectId: "p", stageId: "s" };
+  const ambiguous = resolveExecutorCreationTask("добавь Мишу", current, null, stageScope);
+  assert.equal(ambiguous.task, null);
+  assert.deepEqual(ambiguous.clarification.choices.map((item) => item.source.id), ["t", "t2"]);
+  const continued = resolveExecutorCreationTask("добавь Мишу", current, "t2", stageScope);
+  assert.equal(continued.clarification, null); assert.equal(continued.task.id, "t2");
+  current.stages[0].tasks = [current.stages[0].tasks[0]];
+  assert.equal(resolveExecutorCreationTask("добавь Мишу", current, null, stageScope).task.id, "t");
 });
