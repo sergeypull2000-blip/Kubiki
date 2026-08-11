@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowUp, X } from "lucide-react";
 import { fmt } from "../utils.js";
 import { buildAiEditContinuation } from "../ai/editContinuation.js";
@@ -26,6 +27,24 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
   const [confirmed, setConfirmed] = useState({});
   const requestVersion = useRef(0);
   const panelRef = useRef(null);
+  const [inlinePosition, setInlinePosition] = useState({ left: position?.x || 16, top: position?.y || 16 });
+  useLayoutEffect(() => {
+    if (variant !== "inline" || !panelRef.current) return;
+    const padding = 12, gap = 8;
+    const place = () => {
+      const rect = panelRef.current.getBoundingClientRect(), anchorX = position?.x || padding, anchorY = position?.y || padding;
+      let left = anchorX + gap, top = anchorY + gap;
+      if (left + rect.width > window.innerWidth - padding) left = anchorX - rect.width - gap;
+      if (top + rect.height > window.innerHeight - padding) top = anchorY - rect.height - gap;
+      left = Math.max(padding, Math.min(left, window.innerWidth - rect.width - padding));
+      top = Math.max(padding, Math.min(top, window.innerHeight - rect.height - padding));
+      setInlinePosition({ left, top });
+    };
+    place();
+    const observer = new ResizeObserver(place); observer.observe(panelRef.current);
+    window.addEventListener("resize", place); window.addEventListener("scroll", place, true);
+    return () => { observer.disconnect(); window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
+  }, [position?.x, position?.y, variant, result, state]);
   const request = async ({ answer = "", source = null, label = "" } = {}) => {
     if (!instruction.trim()) return;
     const continuation = buildAiEditContinuation({ instruction, answer, source, label, confirmed, continuationToken: result?.continuationToken });
@@ -85,7 +104,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
   }
   if (variant === "inline") {
     const feedbackVisible = state !== "idle" || !!result || !!error;
-    return <div className="kb-ai-inline-anchor" style={{ left: position?.x || 16, top: position?.y || 16 }}>
+    return createPortal(<div className="kb-ai-inline-anchor" style={inlinePosition}>
       <div ref={panelRef} className="kb-ai-inline-panel">
         {feedbackVisible && <div className="kb-ai-launcher-feedback kb-ai-inline-feedback">
           {state === "loading" && <div className="kb-modal-note">Готовим предложение…</div>}
@@ -119,7 +138,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
           </div>
         </div>
       </div>
-    </div>;
+    </div>, document.body);
   }
   const panel = <div ref={panelRef} className={`kb-modal kb-ai-settings-modal kb-ai-edit-${variant}`} role="dialog" aria-modal={variant === "dialog" ? "true" : undefined} aria-labelledby="ai-edit-title" onMouseDown={(event) => event.stopPropagation()}>
       <div className="kb-modal-head"><span className="kb-modal-title" id="ai-edit-title">Изменить смету с AI</span><button type="button" className="kb-icon-btn" onClick={onClose} disabled={busy}><X size={16} /></button></div>

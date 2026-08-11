@@ -52,7 +52,13 @@ export function compileAiEditSemanticCommand({ semantic, request, project, resol
       add("executor.addAnonymous", resolvedTask.id, { executorId, roleTagId }, "Создать анонимного Executor");
       if (command.role) add("executor.tag.update", roleTagId, { executorId, value: roleValue(command.role) }, "Установить роль");
       if (command.name) add("executor.tag.add", executorId, { tagId: nameTagId, key: "name", value: command.name }, "Установить имя");
-      if (command.compensation !== undefined) { add("executor.payment.setType", executorId, { type: "fix_total" }, "Установить тип оплаты"); add("executor.amount.set", executorId, { value: money(command.compensation) }, "Установить оплату"); }
+      if (command.tax !== undefined) add("executor.tag.add", executorId, { tagId: take(request.idPool, used, "tags"), key: "tax", value: taxValue(command.tax) }, "Установить налог");
+      if (command.paymentType !== undefined || command.compensation !== undefined || command.quantity !== undefined) {
+        const type = command.paymentType === undefined ? "fix_total" : paymentTypeValue(command.paymentType);
+        add("executor.payment.setType", executorId, { type }, "Установить тип оплаты");
+        if (command.compensation !== undefined) add(type === "fix_total" ? "executor.amount.set" : "executor.payment.setRate", executorId, { value: money(command.compensation) }, "Установить оплату");
+        if (command.quantity !== undefined) { const field = { fix_task: "units", hourly: "hours", shift: "shifts" }[type]; if (!field) throw new AiEditSemanticCompileError("ai_semantic_quantity_not_applicable", "Количество неприменимо к фиксированной общей оплате"); add("executor.payment.setQuantity", executorId, { field, value: money(command.quantity) }, "Установить количество"); }
+      }
       break;
     }
     case "executor.createFromPerformer": {
@@ -131,13 +137,14 @@ export function compileAiEditSemanticPlan({ semantic, request, project, confirme
   for (const { command, index } of ordered) {
     const located = command.targetRef ? allocated.get(command.targetRef) : null;
     const resolvedTarget = located ? { kind: located.kind, id: located.id } : confirmedTargets[index]?.target || null;
-    const taskId = command.taskRef ? allocated.get(command.taskRef)?.id : confirmedTargets[index]?.task?.id;
+    const taskId = command.taskRef ? allocated.get(command.taskRef)?.id : confirmedTargets[index]?.task?.id || command.taskId;
     const stageId = command.stageRef ? allocated.get(command.stageRef)?.id : confirmedTargets[index]?.stage?.id;
     const clean = withoutPlanFields(command);
     const one = { kind: "command", summary: semantic.summary, command: clean, warnings: [] };
     const diff = compileAiEditSemanticCommand({ semantic: one, request: availableRequest(), project: projected,
       resolvedTarget: command.type === "task.create" ? { kind: "stage", id: stageId } : resolvedTarget,
-      resolvedTask: command.type === "executor.createAnonymous" ? { id: taskId } : null, performer, performers });
+      resolvedTask: ["executor.createAnonymous", "executor.createFromPerformer"].includes(command.type) ? { id: taskId } : null,
+      performer: command.type === "executor.createFromPerformer" ? performers.find((item) => item.id === command.performerId) : performer, performers });
     const offset = operations.length;
     operations.push(...diff.operations.map((operation, operationIndex) => ({ ...operation, id: `semantic-${offset + operationIndex + 1}` })));
     for (const operation of diff.operations) {

@@ -43,18 +43,28 @@ export function isAiEditSemanticCommand(command, { multi = false } = {}) {
     case "executor.delete":
     case "executor.replacePerformer": return multi ? exact(command, ["type"], ["targetRef", "targetName", "taskName", "stageName"]) && validExecutorTarget(command) : exact(command, ["type"]);
     case "executor.createAnonymous": return multi
-      ? exact(command, ["type"], ["ref", "name", "role", "compensation", "taskRef", "taskName", "stageName"])
+      ? exact(command, ["type"], ["ref", "name", "role", "paymentType", "compensation", "quantity", "tax", "taskId", "taskRef", "taskName", "stageName"])
         && (command.ref === undefined || localRef(command.ref, "executor"))
         && (command.name === undefined || text(command.name, 160)) && (command.role === undefined || text(command.role, 160))
-        && (command.compensation === undefined || numberValue(command.compensation))
+        && Boolean(command.name || command.role)
+        && (command.paymentType === undefined || text(command.paymentType, 40)) && (command.compensation === undefined || numberValue(command.compensation))
+        && (command.quantity === undefined || numberValue(command.quantity)) && (command.tax === undefined || numberValue(command.tax))
+        && (command.taskId === undefined || id(command.taskId))
         && (command.taskRef === undefined || localRef(command.taskRef, "task"))
         && (command.taskName === undefined || text(command.taskName, 160))
         && (command.stageName === undefined || text(command.stageName, 160))
-        && !(command.taskRef && command.taskName)
-      : exact(command, ["type", "name"], ["role", "compensation"]) && text(command.name, 160)
-        && (command.role === undefined || text(command.role, 160)) && (command.compensation === undefined || numberValue(command.compensation));
-    case "executor.createFromPerformer": return exact(command, ["type", "taskId", "performerId"])
-      && id(command.taskId) && id(command.performerId);
+        && !(command.taskRef && (command.taskId || command.taskName))
+      : exact(command, ["type", "taskId"], ["name", "role", "paymentType", "compensation", "quantity", "tax"])
+        && id(command.taskId) && Boolean(command.name || command.role)
+        && (command.name === undefined || text(command.name, 160)) && (command.role === undefined || text(command.role, 160))
+        && (command.paymentType === undefined || text(command.paymentType, 40)) && (command.compensation === undefined || numberValue(command.compensation))
+        && (command.quantity === undefined || numberValue(command.quantity)) && (command.tax === undefined || numberValue(command.tax));
+    case "executor.createFromPerformer": return multi
+      ? exact(command, ["type"], ["taskId", "taskName", "stageName", "performerId", "performerName"])
+        && (command.taskId === undefined || id(command.taskId)) && (command.taskName === undefined || text(command.taskName, 160))
+        && (command.stageName === undefined || text(command.stageName, 160)) && (command.performerId === undefined || id(command.performerId))
+        && (command.performerName === undefined || text(command.performerName, 160)) && Boolean(command.performerId || command.performerName)
+      : exact(command, ["type", "taskId", "performerId"]) && id(command.taskId) && id(command.performerId);
     case "executor.setCompensation": return multi ? exact(command, ["type", "value"], ["targetRef", "targetName", "taskName", "stageName"]) && numberValue(command.value) && validExecutorTarget(command) : exact(command, ["type", "value"]) && numberValue(command.value);
     case "executor.setPaymentType": return multi ? exact(command, ["type", "paymentType"], ["targetRef", "targetName", "taskName", "stageName"]) && text(command.paymentType, 40) && validExecutorTarget(command) : exact(command, ["type", "paymentType"]) && text(command.paymentType, 40);
     case "executor.setPaymentRate":

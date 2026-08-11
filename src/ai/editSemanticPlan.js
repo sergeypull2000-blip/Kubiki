@@ -2,7 +2,7 @@ import { indexProject } from "./editOperations.js";
 
 const normalized = (value) => String(value || "").normalize("NFKC").toLocaleLowerCase("ru-RU").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const same = (a, b) => normalized(a) === normalized(b);
-const choice = (kind, id, label) => ({ id: `${kind}-${id}`, label, source: { kind: "project", id } });
+const choice = (kind, id, label) => ({ id: `${kind}-${id}`, label, source: { kind: kind === "performer" ? "performer" : "project", id } });
 
 export class AiEditSemanticPlanError extends Error {
   constructor(code, message) { super(message); this.name = "AiEditSemanticPlanError"; this.code = code; }
@@ -24,7 +24,7 @@ function scopeEntity(scope, kind) {
   const id = scope?.[`${kind}Id`]; return id ? { kind, id } : null;
 }
 
-export function resolveAiEditSemanticDraft({ semantic, project, scope, prior = null, answer = "", selectedSource = null }) {
+export function resolveAiEditSemanticDraft({ semantic, project, scope, performers = [], prior = null, answer = "", selectedSource = null }) {
   if (semantic.kind !== "commands") return { semantic, confirmedTargets: {}, unresolvedSlots: [] };
   const draft = semantic, confirmedTargets = structuredClone(prior?.confirmedTargets || {}), slotValues = { ...(prior?.slotValues || {}) };
   if (prior?.unresolvedSlots?.length && (answer || selectedSource)) {
@@ -50,11 +50,21 @@ export function resolveAiEditSemanticDraft({ semantic, project, scope, prior = n
       }
     } else if (command.type === "executor.createAnonymous") {
       if (!command.taskRef) {
-        const selected = slotValues[`slot-${index}-task`] || command.taskName;
-        const resolved = selectedSourceFor(slotValues[`slot-${index}-task`], project, "task") || selected && resolveNamed(project, "task", selected, command) || scopeEntity(scope, "task");
+        const selected = slotValues[`slot-${index}-task`] || command.taskId || command.taskName;
+        const resolved = selectedSourceFor(selected, project, "task") || selected && resolveNamed(project, "task", selected, command) || scopeEntity(scope, "task") || soleStageTask(project, scope);
         if (resolved) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), task: { kind: "task", id: resolved.id } };
         else addSlot(index, "task", "task", "В какую Task добавить Executor?", entities(project, "task", command));
       }
+    } else if (command.type === "executor.createFromPerformer") {
+      const selectedTask = slotValues[`slot-${index}-task`] || command.taskId || command.taskName;
+      const task = selectedSourceFor(selectedTask, project, "task") || selectedTask && resolveNamed(project, "task", selectedTask, command) || scopeEntity(scope, "task") || soleStageTask(project, scope);
+      if (task) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), task: { kind: "task", id: task.id } };
+      else addSlot(index, "task", "task", "В какую Task добавить Performer?", entities(project, "task", command));
+      const performerSlot = `slot-${index}-performer`, selectedPerformer = slotValues[performerSlot] || command.performerId;
+      const matches = selectedPerformer ? performers.filter((item) => item.id === selectedPerformer) : performerMatches(command.performerName, performers);
+      if (selectedPerformer) slotValues[performerSlot] = selectedPerformer;
+      else if (matches.length === 1) slotValues[performerSlot] = matches[0].id;
+      else addSlot(index, "performer", "performer", matches.length ? `Какого Performer «${command.performerName}» выбрать?` : `Performer «${command.performerName || ""}» не найден. Кого выбрать?`, matches);
     } else if (!["stage.create", "executor.createFromPerformer", "executor.setTaxBulk"].includes(command.type) && !command.targetRef) {
       const kind = command.type.startsWith("stage.") ? "stage" : command.type.startsWith("task.") ? "task" : "executor";
       const selected = slotValues[`slot-${index}-target`] || command.targetName;
@@ -71,12 +81,30 @@ function selectedSourceFor(value, project, kind) {
   return entities(project, kind).find((item) => item.id === value) || null;
 }
 
+function soleStageTask(project, scope) {
+  if (scope?.kind !== "stage") return null;
+  const matches = entities(project, "task").filter((item) => indexProject(project).tasks.get(item.id)?.stage.id === scope.stageId);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function performerMatches(name, performers) {
+  const query = normalized(name);
+  if (!query) return [];
+  return [...new Map((performers || []).filter((item) => {
+    const full = normalized([item.firstName, item.lastName].filter(Boolean).join(" "));
+    const first = normalized(item.firstName);
+    return full === query || first === query || full.startsWith(`${query} `) || query.startsWith(`${first} `);
+  }).map((item) => [item.id, { ...item, label: [[item.firstName, item.lastName].filter(Boolean).join(" "), item.primaryRole].filter(Boolean).join(" — ") }])).values()];
+}
+
 export function materializeResolvedSemanticPlan(resolved) {
   const semantic = structuredClone(resolved.semantic);
   for (const [slotId, value] of Object.entries(resolved.slotValues || {})) {
     const match = /^slot-(\d+)-(.+)$/.exec(slotId); if (!match) continue;
     const command = semantic.commands[Number(match[1])], field = match[2];
     if (field === "name") command.name = value;
+    if (field === "performer") command.performerId = value;
+    if (field === "task") command.taskId = value;
   }
   return semantic;
 }

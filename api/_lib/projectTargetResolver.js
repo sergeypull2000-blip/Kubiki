@@ -87,7 +87,7 @@ export function resolveExecutorCreationTask(instruction, project, confirmed = nu
   }
   const addAction = /(?:добав|созда)\p{L}*/iu.test(instruction);
   const structuralCreation = /(?:добав|созда)\p{L}*\s+(?:нов\p{L}*\s+)?(?:задач|этап)\p{L}*/iu.test(instruction);
-  const creation = addAction && !structuralCreation && (hasExplicitNameToken(instruction) || /(?:исполнител\p{L}*|директор\p{L}*|артист\p{L}*|\s(?:в|на)\s+этап)/iu.test(instruction));
+  const creation = addAction && !structuralCreation;
   if (!creation) return { task: null, clarification: null };
   const scoped = scope?.taskId && entities.find((item) => item.kind === "task" && item.id === scope.taskId);
   if (scoped) return { task: scoped, clarification: null };

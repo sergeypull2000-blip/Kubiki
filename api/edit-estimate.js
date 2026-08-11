@@ -48,7 +48,7 @@ async function executeEdit(req, budget) {
   if (!scopeExists(project, request.scope)) return { status: 400, body: { error: "Выбранный контекст не найден в смете" } };
   const serverRevision = await projectRevision(project);
   if (serverRevision !== request.baseRevision) return { status: 409, body: { error: "Смета изменилась. Сначала сохраните её и повторите запрос.", code: "stale_revision" } };
-  if (request.continuation) return continueSemanticPlan({ request, project, serverRevision });
+  if (request.continuation) return await continueSemanticPlan({ request, project, auth });
   if (needsClarificationForBareInput(request.instruction)) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, question: "Что именно нужно изменить в смете?" } };
   const multiIntent = looksLikeMultiIntent(request.instruction);
   const projectTarget = multiIntent ? { target: null, clarification: null } : resolveProjectTarget(request.instruction, project, request.confirmed.projectEntityId, request.scope);
@@ -65,7 +65,9 @@ async function executeEdit(req, budget) {
   const needsPerformers = explicitPerformerIntent;
   const ownPerformers = needsPerformers ? await loadOwnPerformersForEdit(auth.client, auth.user.id) : [];
   const selectedPerformerIds = [...new Set([...request.knowledge.selectedSources.filter((item) => item.kind === "performer").map((item) => item.id), ...(request.confirmed.performerId ? [request.confirmed.performerId] : [])])];
-  const resolved = resolveExplicitPerformers(request.instruction, ownPerformers, selectedPerformerIds.map((id) => ({ kind: "performer", id })), project, projectTarget.target);
+  const severalNamedPerformers = namedPerformerCount(request.instruction, ownPerformers) > 1;
+  const resolved = severalNamedPerformers ? { performers: ownPerformers, targetExecutorId: null, clarification: null }
+    : resolveExplicitPerformers(request.instruction, ownPerformers, selectedPerformerIds.map((id) => ({ kind: "performer", id })), project, projectTarget.target);
   if (selectedPerformerIds.some((id) => !ownPerformers.some((item) => item.id === id))) return { status: 404, body: { error: "Performer не найден или недоступен" } };
   if (resolved.clarification) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, ...resolved.clarification } };
 
@@ -81,11 +83,12 @@ async function executeEdit(req, budget) {
   if (!key) return { status: 500, body: { error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" } };
   const requestModel = createDeepSeekClient({ apiKey: key, url: DEEPSEEK_URL, model: MODEL, budget });
   const raw = await requestModel(buildAiEditMessages({ request, project, personalization: settings.personalization, performers: resolved.performers, knowledge, resolvedProjectTarget: projectTarget.target, resolvedTask: creationTask.task }), { maxTokens: 2500, retries: 1, stage: "ai_edit" });
-  const semantic = parseAiEditSemanticResponse(raw);
+  const trustedRaw = withTrustedCreationTask(raw, creationTask.task?.id);
+  const semantic = parseAiEditSemanticResponse(trustedRaw);
   if (!semantic) return { status: 502, body: { error: "Модель вернула некорректную semantic command", code: diagnoseAiEditSemanticResponse(raw) } };
   if (semantic.kind === "commands") {
     try {
-      const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope });
+      const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, performers: ownPerformers });
       if (resolvedPlan.unresolvedSlots.length) return clarificationResponse(request, resolvedPlan);
       const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project, confirmedTargets: resolvedPlan.confirmedTargets, performer: resolved.performers.length === 1 ? resolved.performers[0] : null, performers: ownPerformers });
       return { status: 200, body: diff };
@@ -123,21 +126,37 @@ function confirmedTargetsExist(project, confirmedTargets) {
   return Object.values(confirmedTargets || {}).every((entry) => Object.values(entry || {}).every((target) => target?.id && ids.has(target.id)));
 }
 
-function continueSemanticPlan({ request, project }) {
+async function continueSemanticPlan({ request, project, auth }) {
   const pending = verifyAiEditContinuation(request.continuation.token);
   if (!pending || pending.projectId !== request.projectId || pending.baseRevision !== request.baseRevision || JSON.stringify(pending.scope) !== JSON.stringify(request.scope)) return { status: 400, body: { error: "Уточнение недействительно или устарело", code: "ai_continuation_invalid" } };
   const semantic = parseAiEditSemanticResponse(pending.semantic);
   if (!semantic || semantic.kind !== "commands" || !confirmedTargetsExist(project, pending.confirmedTargets)) return { status: 409, body: { error: "Подтверждённые сущности больше не существуют", code: "stale_revision" } };
   try {
-    const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, prior: pending,
+    const needsPerformers = semantic.commands.some((command) => command.type === "executor.createFromPerformer");
+    const performers = needsPerformers ? await loadOwnPerformersForEdit(auth.client, auth.user.id) : [];
+    const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, performers, prior: pending,
       answer: request.continuation.answer, selectedSource: request.continuation.source });
     if (resolvedPlan.unresolvedSlots.length) return clarificationResponse(request, resolvedPlan);
-    const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project, confirmedTargets: resolvedPlan.confirmedTargets });
+    const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project, confirmedTargets: resolvedPlan.confirmedTargets, performers });
     return { status: 200, body: diff };
   } catch (error) {
     if (error instanceof AiEditSemanticPlanError || error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code } };
     throw error;
   }
+}
+
+function withTrustedCreationTask(raw, taskId) {
+  let value; try { value = typeof raw === "string" ? JSON.parse(raw.trim()) : structuredClone(raw); } catch { return raw; }
+  if (taskId && value?.kind === "command" && ["executor.createAnonymous", "executor.createFromPerformer"].includes(value.command?.type)) value.command.taskId = taskId;
+  return value;
+}
+
+function namedPerformerCount(instruction, performers) {
+  const query = String(instruction || "").normalize("NFKC").toLocaleLowerCase("ru-RU");
+  return new Set((performers || []).filter((item) => {
+    const first = String(item.firstName || "").normalize("NFKC").toLocaleLowerCase("ru-RU");
+    return first.length >= 2 && query.includes(first.slice(0, Math.max(2, first.length - 1)));
+  }).map((item) => String(item.firstName).toLocaleLowerCase("ru-RU"))).size;
 }
 
 function scopeExists(project, scope) {

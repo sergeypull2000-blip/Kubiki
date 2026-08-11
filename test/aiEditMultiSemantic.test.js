@@ -28,8 +28,8 @@ function scenario() {
     { type: "task.create", ref: "new-task-5", stageRef: "new-stage-2", name: "Визуализация" },
     { type: "executor.createAnonymous", taskRef: "new-task-5", name: "Элла" },
     { type: "task.create", ref: "new-task-6", stageName: "Постпродакшн", name: "Композитинг" },
-    { type: "executor.createAnonymous", taskRef: "new-task-6", compensation: "300к" },
-    { type: "executor.createAnonymous", taskRef: "new-task-6", compensation: "300к" },
+    { type: "executor.createAnonymous", taskRef: "new-task-6", role: "Композитор", compensation: "300к" },
+    { type: "executor.createAnonymous", taskRef: "new-task-6", role: "Композитор", compensation: "300к" },
     { type: "executor.setTaxBulk", percent: 6 },
   ] });
 }
@@ -61,8 +61,8 @@ test("real multi-step scenario compiles in fixed phases and bulk includes newly 
 test("clarification fills one slot while validated draft remains structurally unchanged", () => {
   const semantic = parseAiEditSemanticResponse({ kind: "commands", summary: "Добавить исполнителей", warnings: [], commands: [
     { type: "task.create", ref: "new-task-1", stageName: "Постпродакшн" },
-    { type: "executor.createAnonymous", taskRef: "new-task-1", compensation: 300000 },
-    { type: "executor.createAnonymous", taskRef: "new-task-1", compensation: 300000 },
+    { type: "executor.createAnonymous", taskRef: "new-task-1", role: "Композитор", compensation: 300000 },
+    { type: "executor.createAnonymous", taskRef: "new-task-1", role: "Композитор", compensation: 300000 },
   ] });
   const original = JSON.stringify(semantic);
   const pending = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope });
@@ -71,6 +71,32 @@ test("clarification fills one slot while validated draft remains structurally un
   assert.equal(resolved.unresolvedSlots.length, 0);
   assert.equal(JSON.stringify(semantic), original);
   assert.equal(materializeResolvedSemanticPlan(resolved).commands[0].name, "Композитинг");
+});
+
+test("arbitrary Task name clarification is materialized literally", () => {
+  const semantic = parseAiEditSemanticResponse({ kind: "commands", summary: "Создать задачу", warnings: [], commands: [{ type: "task.create", ref: "new-task-1", stageName: "Постпродакшн" }] });
+  const pending = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope });
+  const resolved = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, prior: pending, answer: "лох" });
+  assert.equal(materializeResolvedSemanticPlan(resolved).commands[0].name, "лох");
+});
+
+test("Performer confirmations are isolated per creation command", () => {
+  const performers = [
+    { id: "m1", firstName: "Миша", lastName: "Иванов", primaryRole: "Композитор" },
+    { id: "m2", firstName: "Миша", lastName: "Петров", primaryRole: "3D артист" },
+    { id: "ella", firstName: "Элла", lastName: "Смирнова", primaryRole: "Арт-директор" },
+  ];
+  const semantic = parseAiEditSemanticResponse({ kind: "commands", summary: "Добавить двух Performer", warnings: [], commands: [
+    { type: "executor.createFromPerformer", taskId: "old-task", performerName: "Миша" },
+    { type: "executor.createFromPerformer", taskId: "old-task", performerName: "Элла" },
+  ] });
+  const pending = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, performers });
+  assert.equal(pending.unresolvedSlots.length, 1); assert.equal(pending.unresolvedSlots[0].commandIndex, 0);
+  assert.deepEqual(pending.unresolvedSlots[0].choices.map((item) => item.source.id), ["m1", "m2"]);
+  const resolved = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, performers, prior: pending, selectedSource: { kind: "performer", id: "m2" } });
+  assert.deepEqual(resolved.unresolvedSlots, []);
+  const commands = materializeResolvedSemanticPlan(resolved).commands;
+  assert.equal(commands[0].performerId, "m2"); assert.equal(commands[1].performerId, "ella");
 });
 
 test("continuation token is versioned, signed and expires", () => {

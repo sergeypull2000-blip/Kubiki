@@ -31,7 +31,7 @@ test("model semantic payload has no transport metadata and server attaches trust
 test("semantic schema accepts exactly the first-MVP command allowlist", () => {
   const commands = [
     { type: "stage.create" },
-    { type: "executor.createAnonymous", name: "Иванов", role: "Арт-директор", compensation: 80000 },
+    { type: "executor.createAnonymous", taskId: "t", name: "Иванов", role: "Арт-директор", compensation: 80000 },
     { type: "executor.setCompensation", value: 120000 },
     { type: "executor.setTax", percent: 6 },
     { type: "executor.setTaxBulk", percent: 6 },
@@ -57,7 +57,7 @@ test("stage.create ignores a name invented outside the current instruction", () 
 
 test("executor.createAnonymous compiles role name and fixed compensation inside one Task", () => {
   const current = project(), task = resolveExecutorCreationTask("Добавь арт-директора Иванова в этап Препродакшн, ставка 80к", current).task;
-  const command = semantic({ type: "executor.createAnonymous", name: "Иванов", role: "Арт-директор", compensation: "80к" });
+  const command = semantic({ type: "executor.createAnonymous", taskId: "t", name: "Иванов", role: "Арт-директор", compensation: "80к" });
   const diff = compileAiEditSemanticCommand({ semantic: command, request: request("Добавь арт-директора Иванова в этап Препродакшн, ставка 80к"), project: current, resolvedTask: task });
   assert.deepEqual(diff.operations.map((item) => item.type), ["executor.addAnonymous", "executor.tag.update", "executor.tag.add", "executor.payment.setType", "executor.amount.set"]);
   const next = applyAiEditOperations(current, diff, { idPool: ids, instruction: "Добавь арт-директора Иванова" });
@@ -158,7 +158,7 @@ test("Task scope short name intent creates an anonymous Executor without invente
   const localRequest = { ...request("добавь Мишу"), scope: { kind: "task", projectId: "p", stageId: "s", taskId: "t" } };
   const resolvedTask = resolveExecutorCreationTask(localRequest.instruction, current, null, localRequest.scope).task;
   assert.equal(resolvedTask.id, "t");
-  const parsed = semantic({ type: "executor.createAnonymous", name: "Миша" });
+  const parsed = semantic({ type: "executor.createAnonymous", taskId: "t", name: "Миша" });
   assert.ok(parsed);
   const diff = compileAiEditSemanticCommand({ semantic: parsed, request: localRequest, project: current, resolvedTask });
   assert.deepEqual(diff.operations.map((item) => item.type), ["executor.addAnonymous", "executor.tag.add"]);
@@ -179,4 +179,26 @@ test("Stage scope task resolution stays deterministic and continuation pins the 
   assert.equal(continued.clarification, null); assert.equal(continued.task.id, "t2");
   current.stages[0].tasks = [current.stages[0].tasks[0]];
   assert.equal(resolveExecutorCreationTask("добавь Мишу", current, null, stageScope).task.id, "t");
+});
+
+test("anonymous creation compiles payment, quantity and tax business fields deterministically", () => {
+  const cases = [
+    [{ taskId: "t", name: "Миша", paymentType: "shift", compensation: "10к" }, ["executor.addAnonymous", "executor.tag.add", "executor.payment.setType", "executor.payment.setRate"]],
+    [{ taskId: "t", name: "Миша", paymentType: "fix_total", compensation: "10к" }, ["executor.addAnonymous", "executor.tag.add", "executor.payment.setType", "executor.amount.set"]],
+    [{ taskId: "t", name: "Миша", compensation: "10к" }, ["executor.addAnonymous", "executor.tag.add", "executor.payment.setType", "executor.amount.set"]],
+    [{ taskId: "t", name: "Миша", tax: 6 }, ["executor.addAnonymous", "executor.tag.add", "executor.tag.add"]],
+    [{ taskId: "t", role: "Композитор" }, ["executor.addAnonymous", "executor.tag.update"]],
+    [{ taskId: "t", name: "Миша", paymentType: "hourly", compensation: 10000, quantity: 8, tax: 6 }, ["executor.addAnonymous", "executor.tag.add", "executor.tag.add", "executor.payment.setType", "executor.payment.setRate", "executor.payment.setQuantity"]],
+  ];
+  for (const [fields, expected] of cases) {
+    const parsed = semantic({ type: "executor.createAnonymous", ...fields }); assert.ok(parsed);
+    const diff = compileAiEditSemanticCommand({ semantic: parsed, request: request("добавь исполнителя"), project: project(), resolvedTask: { id: "t" } });
+    assert.deepEqual(diff.operations.map((item) => item.type), expected);
+  }
+});
+
+test("empty Task name does not affect stable-id Executor destination", () => {
+  const current = project(); current.stages[0].tasks[0].name = "";
+  const scope = { kind: "task", projectId: "p", stageId: "s", taskId: "t" };
+  assert.equal(resolveExecutorCreationTask("добавь Мишу", current, null, scope).task.id, "t");
 });
