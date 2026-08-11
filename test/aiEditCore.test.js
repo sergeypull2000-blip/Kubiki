@@ -78,6 +78,12 @@ test("anonymous Executor uses only explicitly preallocated Executor and role tag
   assert.equal(executor.id, "e-new"); assert.equal(executor.tags[0].id, "tg-new-1"); assert.equal(executor.tags[0].key, "role");
 });
 
+test("custom Stage creation uses a preallocated id and explicit custom preset", () => {
+  const diff = response([operation("stage.add", "p", { stageId: "s-new", name: "Новый этап", presetKey: "custom", beforeStageId: null })]);
+  const next = applyAiEditOperations(project(), diff, { idPool: pool() });
+  assert.deepEqual(next.stages.at(-1), { id: "s-new", presetKey: "custom", name: "Новый этап", tasks: [], collapsed: false });
+});
+
 test("anonymous Executor can receive name, existing core role, payment and fixed rate without duplicate tags", () => {
   const diff = response([
     operation("executor.addAnonymous", "t", { executorId: "e-new", roleTagId: "tg-new-1" }, undefined, "op-1"),

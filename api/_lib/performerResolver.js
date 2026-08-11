@@ -51,14 +51,14 @@ function performerAmbiguity(items) {
   };
 }
 
-export function resolveExplicitPerformers(instruction, performers, selectedSources = [], project = null) {
+export function resolveExplicitPerformers(instruction, performers, selectedSources = [], project = null, resolvedProjectTarget = null) {
   const selectedIds = new Set(selectedSources.filter((item) => item.kind === "performer").map((item) => item.id));
   const selected = performers.filter((item) => selectedIds.has(item.id));
 
   if (REPLACE_INTENT.test(instruction)) {
     const parts = replaceParts(instruction);
     if (!parts) return { performers: [], targetExecutorId: null, clarification: { question: "Кого в смете и на какого Performer нужно заменить?" } };
-    const executors = allExecutors(project), confirmedId = confirmedProjectId(instruction);
+    const executors = allExecutors(project), confirmedId = resolvedProjectTarget?.kind === "executor" ? resolvedProjectTarget.id : confirmedProjectId(instruction);
     const targetMatches = confirmedId ? executors.filter(({ executor }) => executor.id === confirmedId) : executors.filter(({ executor }) => mentioned(normalizeSearchText(parts.target), executorName(executor)));
     if (targetMatches.length !== 1) return targetMatches.length > 1 ? executorAmbiguity(targetMatches) : { performers: [], targetExecutorId: null, clarification: { question: `Исполнитель «${parts.target}» не найден в текущей смете. Кого заменить?` } };
     const replacements = selected.length ? selected : performerMatches(normalizeSearchText(parts.replacement), performers);

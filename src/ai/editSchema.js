@@ -106,3 +106,13 @@ export function parseAiEditResponse(raw, expected = {}) {
   } else if (!exactKeys(value, ["schemaVersion", "kind", "requestId", "baseRevision", "scope", "code", "message"]) || !id(value.code) || !text(value.message, 500)) return null;
   return value;
 }
+
+export function diagnoseAiEditResponse(raw, expected = {}) {
+  let value;
+  try { value = typeof raw === "string" ? JSON.parse(raw.trim()) : raw; } catch { return "ai_diff_invalid_json"; }
+  if (!object(value)) return "ai_diff_invalid_envelope";
+  if (value.requestId !== expected.requestId || value.baseRevision !== expected.baseRevision || JSON.stringify(value.scope) !== JSON.stringify(expected.scope)) return "ai_diff_request_mismatch";
+  if (value.kind === "diff" && (!Array.isArray(value.operations) || !value.operations.length)) return "ai_diff_empty_operations";
+  if (value.kind === "diff" && !value.operations.every(isAiEditOperation)) return "ai_diff_invalid_operation";
+  return "ai_diff_invalid_schema";
+}

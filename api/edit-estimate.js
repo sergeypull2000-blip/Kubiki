@@ -4,8 +4,9 @@ import { createDeepSeekClient, DeepSeekError } from "./_lib/deepseek.js";
 import { buildAiEditMessages } from "./_lib/editPrompt.js";
 import { loadOwnPerformersForEdit, loadOwnProjectForEdit, loadOwnSelectedKnowledge } from "./_lib/editProject.js";
 import { needsClarificationForBareInput, resolveExplicitPerformers } from "./_lib/performerResolver.js";
+import { projectEntities, resolveProjectTarget } from "./_lib/projectTargetResolver.js";
 import { createRequestBudget, RequestDeadlineError } from "./_lib/requestBudget.js";
-import { parseAiEditResponse, validateAiEditRequest } from "../src/ai/editSchema.js";
+import { diagnoseAiEditResponse, parseAiEditResponse, validateAiEditRequest } from "../src/ai/editSchema.js";
 import { projectRevision } from "../src/ai/projectRevision.js";
 import { loadOwnKnowledge } from "./_lib/knowledgeRepository.js";
 import { projectKnowledge } from "./_lib/knowledgeProjection.js";
@@ -43,13 +44,15 @@ async function executeEdit(req, budget) {
   const serverRevision = await projectRevision(project);
   if (serverRevision !== request.baseRevision) return { status: 409, body: { error: "Смета изменилась. Сначала сохраните её и повторите запрос.", code: "stale_revision" } };
   if (needsClarificationForBareInput(request.instruction)) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, question: "Что именно нужно изменить в смете?" } };
+  const projectTarget = resolveProjectTarget(request.instruction, project);
+  if (projectTarget.clarification) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, ...projectTarget.clarification } };
 
   let settings = normalizeServerAiSettings();
   try { settings = await loadOwnAiSettings(auth.client, auth.user.id); } catch (error) { console.error("AI edit settings loading failed", { name: error?.name || "Error" }); }
 
   const needsPerformers = request.knowledge.selectedSources.some((item) => item.kind === "performer") || /(?:назнач\p{L}*|добав\p{L}*|постав\p{L}*|замен\p{L}*|исполнител\p{L}*)/iu.test(request.instruction);
   const ownPerformers = needsPerformers ? await loadOwnPerformersForEdit(auth.client, auth.user.id) : [];
-  const resolved = resolveExplicitPerformers(request.instruction, ownPerformers, request.knowledge.selectedSources, project);
+  const resolved = resolveExplicitPerformers(request.instruction, ownPerformers, request.knowledge.selectedSources, project, projectTarget.target);
   const selectedPerformerIds = request.knowledge.selectedSources.filter((item) => item.kind === "performer").map((item) => item.id);
   if (selectedPerformerIds.some((id) => !ownPerformers.some((item) => item.id === id))) return { status: 404, body: { error: "Performer не найден или недоступен" } };
   if (resolved.clarification) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, ...resolved.clarification } };
@@ -65,10 +68,11 @@ async function executeEdit(req, budget) {
   const key = process.env.DEEPSEEK_API_KEY;
   if (!key) return { status: 500, body: { error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" } };
   const requestModel = createDeepSeekClient({ apiKey: key, url: DEEPSEEK_URL, model: MODEL, budget });
-  const raw = await requestModel(buildAiEditMessages({ request, project, personalization: settings.personalization, performers: resolved.performers, knowledge, targetExecutorId: resolved.targetExecutorId }), { maxTokens: 5000, retries: 1, stage: "ai_edit" });
+  const raw = await requestModel(buildAiEditMessages({ request, project, personalization: settings.personalization, performers: resolved.performers, knowledge, resolvedProjectTarget: projectTarget.target }), { maxTokens: 5000, retries: 1, stage: "ai_edit" });
   const response = parseAiEditResponse(raw, request);
-  if (!response) return { status: 502, body: { error: "Модель вернула небезопасный или некорректный diff" } };
+  if (!response) return { status: 502, body: { error: "Модель вернула небезопасный или некорректный diff", code: diagnoseAiEditResponse(raw, request) } };
   if (response.kind === "diff") {
+    if (projectTarget.target && response.operations.some((operation) => !operationTargetsEntity(operation, projectTarget.target, project))) return { status: 502, body: { error: "Модель выбрала неподтверждённую сущность Project", code: "ai_diff_unconfirmed_target" } };
     const allowedPerformerIds = new Set(resolved.performers.map((item) => item.id));
     const unsafePerformer = response.operations.some((operation) => ["executor.addFromPerformer", "executor.replacePerformer"].includes(operation.type) && (!allowedPerformerIds.has(operation.value.performerId) || operation.source.kind !== "performer" || operation.source.id !== operation.value.performerId));
     if (unsafePerformer) return { status: 502, body: { error: "Модель сослалась на неподтверждённого Performer" } };
@@ -76,6 +80,18 @@ async function executeEdit(req, budget) {
     if (wrongReplaceTarget) return { status: 502, body: { error: "Модель выбрала неподтверждённого Executor для замены" } };
   }
   return { status: 200, body: response };
+}
+
+function operationTargetsEntity(operation, target, project) {
+  const entities = projectEntities(project);
+  const allowed = new Set([target.id]);
+  if (target.kind === "stage") for (const entity of entities) if (entity.stageId === target.id) allowed.add(entity.id);
+  if (target.kind === "task") for (const entity of entities) if (entity.taskId === target.id) allowed.add(entity.id);
+  if (target.kind === "executor") {
+    const executor = (project.stages || []).flatMap((stage) => stage.tasks || []).flatMap((task) => task.executors || []).find((item) => item.id === target.id);
+    for (const tag of executor?.tags || []) allowed.add(tag.id);
+  }
+  return allowed.has(operation.targetId);
 }
 
 function scopeExists(project, scope) {

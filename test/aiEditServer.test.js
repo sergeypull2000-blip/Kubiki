@@ -8,6 +8,10 @@ import { loadOwnProjectForEdit } from "../api/_lib/editProject.js";
 import { createAiEditIdPool, createAiEditRequest } from "../src/ai/editClient.js";
 import { globalAiEditScope } from "../src/ai/editScope.js";
 import { deserializeProjectFromServer } from "../src/projectServer.js";
+import { resolveProjectTarget } from "../api/_lib/projectTargetResolver.js";
+import { buildAiEditContinuation } from "../src/ai/editContinuation.js";
+import { applyAiEditOperations } from "../src/ai/editOperations.js";
+import { diagnoseAiEditResponse, parseAiEditResponse } from "../src/ai/editSchema.js";
 
 function responseRecorder() { return { headers: {}, statusCode: 0, body: null, setHeader(key, value) { this.headers[key] = value; }, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; }, end() { return this; } }; }
 
@@ -58,6 +62,53 @@ test("ambiguous replace target clarifies Executor before resolving replacement",
   const project = { stages: [{ id: "s", name: "S", tasks: [{ id: "t1", name: "T1", executors: [{ id: "e1", tags: [{ key: "name", value: "Аня" }] }] }, { id: "t2", name: "T2", executors: [{ id: "e2", tags: [{ key: "name", value: "Аня" }] }] }] }] };
   const result = resolveExplicitPerformers("Замени Аня на Миша", [{ id: "m", firstName: "Миша" }], [], project);
   assert.match(result.clarification.question, /в текущей смете/i); assert.deepEqual(result.clarification.choices.map((choice) => choice.source.id), ["e1", "e2"]);
+});
+
+test("ambiguous named Executor update requires contextual clarification", () => {
+  const project = { stages: [{ id: "s1", name: "Препродакшн", tasks: [{ id: "t1", name: "Концепт", executors: [{ id: "e1", tags: [{ id: "n1", key: "name", value: "Иван Петров" }] }] }] }, { id: "s2", name: "Продакшн", tasks: [{ id: "t2", name: "Моделинг", executors: [{ id: "e2", tags: [{ id: "n2", key: "name", value: "Гриша Петров" }] }] }] }] };
+  const result = resolveProjectTarget("Увеличь оплату Петрова до 130к", project);
+  assert.equal(result.target, null);
+  assert.deepEqual(result.clarification.choices.map((item) => item.source.id), ["e1", "e2"]);
+  assert.match(result.clarification.choices[0].label, /Препродакшн \/ Концепт/);
+  assert.match(result.clarification.choices[1].label, /Продакшн \/ Моделинг/);
+});
+
+test("missing explicitly named Executor is clarified before the model", () => {
+  const project = { stages: [{ id: "s", name: "Продакшн", tasks: [{ id: "t", name: "Моделинг", executors: [] }] }] };
+  const result = resolveProjectTarget("Увеличь оплату Сидорова до 130к", project);
+  assert.equal(result.target, null);
+  assert.match(result.clarification.question, /не найдена/i);
+});
+
+test("one named Executor resolves to one stable id", () => {
+  const project = { stages: [{ id: "s", name: "Продакшн", tasks: [{ id: "t", name: "Моделинг", executors: [{ id: "executor-stable", tags: [{ id: "name-tag", key: "name", value: "Гриша Петров" }] }] }] }] };
+  const result = resolveProjectTarget("Увеличь оплату Гриши до 130к", project);
+  assert.equal(result.clarification, null);
+  assert.equal(result.target.id, "executor-stable");
+});
+
+test("replace clarification continuation pins Executor id and resolves Performer separately", () => {
+  const project = { id: "p", stages: [{ id: "s1", name: "Препродакшн", tasks: [{ id: "t1", name: "Концепт", executors: [{ id: "e1", amount: "100", performerId: null, performerSnapshot: null, tags: [{ id: "n1", key: "name", value: "Иван Петров" }] }] }] }, { id: "s2", name: "Продакшн", tasks: [{ id: "t2", name: "Моделинг", executors: [{ id: "e2", amount: "200", performerId: null, performerSnapshot: null, tags: [{ id: "n2", key: "name", value: "Гриша Петров" }] }] }] }] };
+  const performer = { id: "pf-misha", firstName: "Миша", lastName: "Иванов", primaryRole: "Арт-директор", active: true };
+  const first = resolveProjectTarget("Замени Петрова на Мишу из базы", project);
+  assert.equal(first.clarification.choices.length, 2);
+  const continuation = buildAiEditContinuation({ instruction: "Замени Петрова на Мишу из базы", source: first.clarification.choices[1].source, label: first.clarification.choices[1].label });
+  const confirmed = resolveProjectTarget(continuation.instruction, project);
+  const performers = resolveExplicitPerformers(continuation.instruction, [performer], [], project, confirmed.target);
+  const request = { requestId: "r", baseRevision: "rev", scope: { kind: "project", projectId: "p" } };
+  const raw = { schemaVersion: 1, kind: "diff", ...request, summary: "Замена", operations: [{ id: "op-1", type: "executor.replacePerformer", targetId: "e2", value: { performerId: "pf-misha" }, reason: "По запросу", source: { kind: "performer", id: "pf-misha" } }], warnings: [] };
+  const response = parseAiEditResponse(raw, request);
+  const next = applyAiEditOperations(project, response, { performers: performers.performers, idPool: { stages: [], tasks: [], executors: [], tags: ["x1", "x2", "x3", "x4", "x5", "x6"] }, instruction: continuation.instruction });
+  assert.equal(confirmed.target.id, "e2");
+  assert.equal(performers.targetExecutorId, "e2");
+  assert.equal(next.stages[1].tasks[0].executors[0].performerId, "pf-misha");
+  assert.equal(next.stages[0].tasks[0].executors[0].id, "e1");
+});
+
+test("invalid model diff exposes only a safe diagnostic class", () => {
+  const expected = { requestId: "r", baseRevision: "rev", scope: { kind: "project", projectId: "p" } };
+  assert.equal(diagnoseAiEditResponse("not json", expected), "ai_diff_invalid_json");
+  assert.equal(diagnoseAiEditResponse({ schemaVersion: 1, kind: "diff", ...expected, summary: "X", operations: [{ unsafe: true }], warnings: [] }, expected), "ai_diff_invalid_operation");
 });
 
 test("bare name is clarification-worthy and database add never invents missing Performer", () => {
