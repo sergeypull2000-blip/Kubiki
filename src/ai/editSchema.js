@@ -48,10 +48,16 @@ function isConfirmed(value) {
     && (value.projectEntityId === undefined || id(value.projectEntityId))
     && (value.performerId === undefined || id(value.performerId));
 }
+function isContinuation(value) {
+  return value === undefined || exactKeys(value, ["token"], ["answer", "source"])
+    && text(value.token, 50_000)
+    && (value.answer === undefined || text(value.answer, 500))
+    && (value.source === undefined || exactKeys(value.source, ["kind", "id"]) && value.source.kind === "project" && id(value.source.id));
+}
 
 export function validateAiEditRequest(body) {
-  if (!exactKeys(body, ["schemaVersion", "requestId", "projectId", "baseRevision", "scope", "instruction", "knowledge", "confirmed", "idPool"])) return { ok: false, status: 400, error: "Некорректное тело AI-edit запроса" };
-  if (body.schemaVersion !== AI_EDIT_SCHEMA_VERSION || !id(body.requestId) || !id(body.projectId) || !id(body.baseRevision) || !isAiEditScope(body.scope) || body.scope.projectId !== body.projectId || !isKnowledge(body.knowledge) || !isConfirmed(body.confirmed) || !isIdPool(body.idPool)) return { ok: false, status: 400, error: "Некорректная схема AI-edit запроса" };
+  if (!exactKeys(body, ["schemaVersion", "requestId", "projectId", "baseRevision", "scope", "instruction", "knowledge", "confirmed", "idPool"], ["continuation"])) return { ok: false, status: 400, error: "Некорректное тело AI-edit запроса" };
+  if (body.schemaVersion !== AI_EDIT_SCHEMA_VERSION || !id(body.requestId) || !id(body.projectId) || !id(body.baseRevision) || !isAiEditScope(body.scope) || body.scope.projectId !== body.projectId || !isKnowledge(body.knowledge) || !isConfirmed(body.confirmed) || !isIdPool(body.idPool) || !isContinuation(body.continuation)) return { ok: false, status: 400, error: "Некорректная схема AI-edit запроса" };
   const instruction = cleanPlainText(body.instruction);
   if (!instruction) return { ok: false, status: 400, error: "Введите запрос на изменение сметы" };
   if (instruction.length > MAX_AI_EDIT_INSTRUCTION_CHARS) return { ok: false, status: 413, error: `Запрос слишком большой. Максимум ${MAX_AI_EDIT_INSTRUCTION_CHARS} символов` };
@@ -105,7 +111,7 @@ export function parseAiEditResponse(raw, expected = {}) {
   if (value.kind === "diff") {
     if (!exactKeys(value, ["schemaVersion", "kind", "requestId", "baseRevision", "scope", "summary", "operations", "warnings"]) || !text(value.summary, 500) || !Array.isArray(value.operations) || !value.operations.length || value.operations.length > MAX_AI_EDIT_OPERATIONS || !value.operations.every(isAiEditOperation) || new Set(value.operations.map((item) => item.id)).size !== value.operations.length || !Array.isArray(value.warnings) || value.warnings.length > 20 || !value.warnings.every((item) => typeof item === "string" && item.length <= 500)) return null;
   } else if (value.kind === "clarification") {
-    if (!exactKeys(value, ["schemaVersion", "kind", "requestId", "baseRevision", "scope", "question"], ["choices"]) || !text(value.question, 500) || value.question.includes("?") === false || value.choices !== undefined && (!Array.isArray(value.choices) || value.choices.length > 10 || !value.choices.every((choice) => exactKeys(choice, ["id", "label", "source"]) && id(choice.id) && text(choice.label, 200) && isSource(choice.source)))) return null;
+    if (!exactKeys(value, ["schemaVersion", "kind", "requestId", "baseRevision", "scope", "question"], ["choices", "continuationToken"]) || !text(value.question, 500) || value.question.includes("?") === false || value.continuationToken !== undefined && !text(value.continuationToken, 50_000) || value.choices !== undefined && (!Array.isArray(value.choices) || value.choices.length > 10 || !value.choices.every((choice) => exactKeys(choice, ["id", "label", "source"]) && id(choice.id) && text(choice.label, 200) && isSource(choice.source)))) return null;
   } else if (value.kind === "out_of_scope") {
     if (!exactKeys(value, ["schemaVersion", "kind", "requestId", "baseRevision", "scope", "message"]) || !text(value.message, 500)) return null;
   } else if (!exactKeys(value, ["schemaVersion", "kind", "requestId", "baseRevision", "scope", "code", "message"]) || !id(value.code) || !text(value.message, 500)) return null;

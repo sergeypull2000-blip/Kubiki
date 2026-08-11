@@ -8,7 +8,10 @@ import { resolveExecutorCreationTask, resolveProjectTarget, resolveTaskCreationS
 import { createRequestBudget, RequestDeadlineError } from "./_lib/requestBudget.js";
 import { validateAiEditRequest } from "../src/ai/editSchema.js";
 import { attachTrustedAiEditMetadata, diagnoseAiEditSemanticResponse, parseAiEditSemanticResponse } from "../src/ai/editSemanticSchema.js";
-import { AiEditSemanticCompileError, compileAiEditSemanticCommand } from "../src/ai/editSemanticCompiler.js";
+import { AiEditSemanticCompileError, compileAiEditSemanticCommand, compileAiEditSemanticPlan } from "../src/ai/editSemanticCompiler.js";
+import { AiEditSemanticPlanError, materializeResolvedSemanticPlan, resolveAiEditSemanticDraft } from "../src/ai/editSemanticPlan.js";
+import { signAiEditContinuation, verifyAiEditContinuation } from "./_lib/semanticContinuation.js";
+import { indexProject } from "../src/ai/editOperations.js";
 import { projectRevision } from "../src/ai/projectRevision.js";
 import { loadOwnKnowledge } from "./_lib/knowledgeRepository.js";
 import { projectKnowledge } from "./_lib/knowledgeProjection.js";
@@ -45,12 +48,14 @@ async function executeEdit(req, budget) {
   if (!scopeExists(project, request.scope)) return { status: 400, body: { error: "Выбранный контекст не найден в смете" } };
   const serverRevision = await projectRevision(project);
   if (serverRevision !== request.baseRevision) return { status: 409, body: { error: "Смета изменилась. Сначала сохраните её и повторите запрос.", code: "stale_revision" } };
+  if (request.continuation) return continueSemanticPlan({ request, project, serverRevision });
   if (needsClarificationForBareInput(request.instruction)) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, question: "Что именно нужно изменить в смете?" } };
-  const projectTarget = resolveProjectTarget(request.instruction, project, request.confirmed.projectEntityId, request.scope);
+  const multiIntent = looksLikeMultiIntent(request.instruction);
+  const projectTarget = multiIntent ? { target: null, clarification: null } : resolveProjectTarget(request.instruction, project, request.confirmed.projectEntityId, request.scope);
   if (projectTarget.clarification) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, ...projectTarget.clarification } };
-  const taskCreationStage = resolveTaskCreationStage(request.instruction, project, request.confirmed.projectEntityId, request.scope);
+  const taskCreationStage = multiIntent ? { stage: null, clarification: null } : resolveTaskCreationStage(request.instruction, project, request.confirmed.projectEntityId, request.scope);
   if (taskCreationStage.clarification) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, ...taskCreationStage.clarification } };
-  const creationTask = resolveExecutorCreationTask(request.instruction, project, request.confirmed.projectEntityId, request.scope);
+  const creationTask = multiIntent ? { task: null, clarification: null } : resolveExecutorCreationTask(request.instruction, project, request.confirmed.projectEntityId, request.scope);
   if (creationTask.clarification) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, ...creationTask.clarification } };
 
   let settings = normalizeServerAiSettings();
@@ -78,6 +83,17 @@ async function executeEdit(req, budget) {
   const raw = await requestModel(buildAiEditMessages({ request, project, personalization: settings.personalization, performers: resolved.performers, knowledge, resolvedProjectTarget: projectTarget.target, resolvedTask: creationTask.task }), { maxTokens: 2500, retries: 1, stage: "ai_edit" });
   const semantic = parseAiEditSemanticResponse(raw);
   if (!semantic) return { status: 502, body: { error: "Модель вернула некорректную semantic command", code: diagnoseAiEditSemanticResponse(raw) } };
+  if (semantic.kind === "commands") {
+    try {
+      const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope });
+      if (resolvedPlan.unresolvedSlots.length) return clarificationResponse(request, resolvedPlan);
+      const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project, confirmedTargets: resolvedPlan.confirmedTargets, performers: ownPerformers });
+      return { status: 200, body: diff };
+    } catch (error) {
+      if (error instanceof AiEditSemanticPlanError || error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code } };
+      throw error;
+    }
+  }
   if (semantic.kind !== "command") return { status: 200, body: attachTrustedAiEditMetadata(semantic, request) };
   const performer = request.confirmed.performerId ? ownPerformers.find((item) => item.id === request.confirmed.performerId) : resolved.performers.length === 1 ? resolved.performers[0] : null;
   try {
@@ -85,6 +101,41 @@ async function executeEdit(req, budget) {
     return { status: 200, body: diff };
   } catch (error) {
     if (error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code } };
+    throw error;
+  }
+}
+
+function looksLikeMultiIntent(instruction) {
+  const actions = instruction.match(/(?:добав|созда|переимен|удал|замен|установ|измен|дела|модел|визуализ|налог)\p{L}*/giu) || [];
+  return actions.length > 1;
+}
+
+function clarificationResponse(request, resolvedPlan) {
+  const slot = resolvedPlan.unresolvedSlots[0];
+  const continuationToken = signAiEditContinuation({ projectId: request.projectId, baseRevision: request.baseRevision, scope: request.scope,
+    semantic: resolvedPlan.semantic, unresolvedSlots: resolvedPlan.unresolvedSlots, confirmedTargets: resolvedPlan.confirmedTargets, slotValues: resolvedPlan.slotValues });
+  return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope,
+    question: slot.question, ...(slot.choices?.length ? { choices: slot.choices } : {}), continuationToken } };
+}
+
+function confirmedTargetsExist(project, confirmedTargets) {
+  const ids = indexProject(project).allIds;
+  return Object.values(confirmedTargets || {}).every((entry) => Object.values(entry || {}).every((target) => target?.id && ids.has(target.id)));
+}
+
+function continueSemanticPlan({ request, project }) {
+  const pending = verifyAiEditContinuation(request.continuation.token);
+  if (!pending || pending.projectId !== request.projectId || pending.baseRevision !== request.baseRevision || JSON.stringify(pending.scope) !== JSON.stringify(request.scope)) return { status: 400, body: { error: "Уточнение недействительно или устарело", code: "ai_continuation_invalid" } };
+  const semantic = parseAiEditSemanticResponse(pending.semantic);
+  if (!semantic || semantic.kind !== "commands" || !confirmedTargetsExist(project, pending.confirmedTargets)) return { status: 409, body: { error: "Подтверждённые сущности больше не существуют", code: "stale_revision" } };
+  try {
+    const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, prior: pending,
+      answer: request.continuation.answer, selectedSource: request.continuation.source });
+    if (resolvedPlan.unresolvedSlots.length) return clarificationResponse(request, resolvedPlan);
+    const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project, confirmedTargets: resolvedPlan.confirmedTargets });
+    return { status: 200, body: diff };
+  } catch (error) {
+    if (error instanceof AiEditSemanticPlanError || error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code } };
     throw error;
   }
 }

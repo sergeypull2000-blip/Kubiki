@@ -47,11 +47,11 @@ export function compileAiEditSemanticCommand({ semantic, request, project, resol
       add("task.add", stage.id, { taskId: take(request.idPool, used, "tasks"), name: command.name.trim(), beforeTaskId: null }, "Создать задачу в выбранном этапе"); break;
     }
     case "task.rename": add("task.rename", target(projectIndex, resolvedTarget, "task").task.id, { name: command.name.trim() }, "Переименовать выбранную задачу"); break;
-    case "executor.createAnonymous": { const executorId = take(request.idPool, used, "executors"), roleTagId = take(request.idPool, used, "tags"), nameTagId = take(request.idPool, used, "tags");
+    case "executor.createAnonymous": { const executorId = take(request.idPool, used, "executors"), roleTagId = take(request.idPool, used, "tags"), nameTagId = command.name ? take(request.idPool, used, "tags") : null;
       if (!resolvedTask?.id) throw new AiEditSemanticCompileError("ai_semantic_missing_task", "Для нового Executor требуется Task");
       add("executor.addAnonymous", resolvedTask.id, { executorId, roleTagId }, "Создать анонимного Executor");
-      add("executor.tag.update", roleTagId, { executorId, value: roleValue(command.role) }, "Установить роль");
-      add("executor.tag.add", executorId, { tagId: nameTagId, key: "name", value: command.name }, "Установить имя");
+      if (command.role) add("executor.tag.update", roleTagId, { executorId, value: roleValue(command.role) }, "Установить роль");
+      if (command.name) add("executor.tag.add", executorId, { tagId: nameTagId, key: "name", value: command.name }, "Установить имя");
       if (command.compensation !== undefined) { add("executor.payment.setType", executorId, { type: "fix_total" }, "Установить тип оплаты"); add("executor.amount.set", executorId, { value: money(command.compensation) }, "Установить оплату"); }
       break;
     }
@@ -98,4 +98,54 @@ export function compileAiEditSemanticCommand({ semantic, request, project, resol
   try { applyAiEditOperations(project, diff, { performers, idPool: request.idPool, instruction: request.instruction, selectedSources: request.knowledge.selectedSources }); }
   catch (error) { if (error instanceof AiEditValidationError) throw new AiEditSemanticCompileError(`ai_compile_${error.code}`, error.message); throw error; }
   return diff;
+}
+
+const creationPhase = (type) => type === "stage.create" ? 1 : type === "task.create" ? 2 : type === "executor.createAnonymous" ? 3 : type === "executor.setTaxBulk" ? 5 : 4;
+const withoutPlanFields = (command) => Object.fromEntries(Object.entries(command).filter(([key]) => !["ref", "stageRef", "stageName", "taskRef", "taskName", "targetRef", "targetName"].includes(key)));
+
+export function compileAiEditSemanticPlan({ semantic, request, project, confirmedTargets = {}, performer, performers = [] }) {
+  if (semantic.kind === "command") return compileAiEditSemanticCommand({ semantic, request, project, resolvedTarget: confirmedTargets[0]?.target, resolvedTask: confirmedTargets[0]?.task, performer, performers });
+  const refs = new Map();
+  for (const command of semantic.commands) {
+    if (!command.ref) continue;
+    if (refs.has(command.ref)) throw new AiEditSemanticCompileError("ai_semantic_duplicate_ref", `Повторный local ref ${command.ref}`);
+    refs.set(command.ref, { type: command.type });
+  }
+  for (const command of semantic.commands) {
+    if (command.stageRef && refs.get(command.stageRef)?.type !== "stage.create") throw new AiEditSemanticCompileError("ai_semantic_invalid_ref", `Stage ref ${command.stageRef} не существует`);
+    if (command.taskRef && refs.get(command.taskRef)?.type !== "task.create") throw new AiEditSemanticCompileError("ai_semantic_invalid_ref", `Task ref ${command.taskRef} не существует`);
+    if (command.targetRef && !refs.has(command.targetRef)) throw new AiEditSemanticCompileError("ai_semantic_invalid_ref", `Target ref ${command.targetRef} не существует`);
+  }
+  const ordered = semantic.commands.map((command, index) => ({ command, index })).sort((a, b) => creationPhase(a.command.type) - creationPhase(b.command.type) || a.index - b.index);
+  const allocated = new Map(), used = { stages: new Set(), tasks: new Set(), executors: new Set(), tags: new Set() };
+  const availableRequest = () => { const existing = indexProject(projected).allIds; return { ...request, idPool: Object.fromEntries(Object.entries(request.idPool).map(([kind, ids]) => [kind, ids.filter((id) => !used[kind].has(id) && !existing.has(id))])) }; };
+  let projected = structuredClone(project); const operations = [];
+  for (const { command, index } of ordered) {
+    const located = command.targetRef ? allocated.get(command.targetRef) : null;
+    const resolvedTarget = located ? { kind: located.kind, id: located.id } : confirmedTargets[index]?.target || null;
+    const taskId = command.taskRef ? allocated.get(command.taskRef)?.id : confirmedTargets[index]?.task?.id;
+    const stageId = command.stageRef ? allocated.get(command.stageRef)?.id : confirmedTargets[index]?.stage?.id;
+    const clean = withoutPlanFields(command);
+    const one = { kind: "command", summary: semantic.summary, command: clean, warnings: [] };
+    const diff = compileAiEditSemanticCommand({ semantic: one, request: availableRequest(), project: projected,
+      resolvedTarget: command.type === "task.create" ? { kind: "stage", id: stageId } : resolvedTarget,
+      resolvedTask: command.type === "executor.createAnonymous" ? { id: taskId } : null, performer, performers });
+    const offset = operations.length;
+    operations.push(...diff.operations.map((operation, operationIndex) => ({ ...operation, id: `semantic-${offset + operationIndex + 1}` })));
+    for (const operation of diff.operations) {
+      if (operation.type === "stage.add") used.stages.add(operation.value.stageId);
+      if (operation.type === "task.add") used.tasks.add(operation.value.taskId);
+      if (["executor.addAnonymous", "executor.addFromPerformer"].includes(operation.type)) used.executors.add(operation.value.executorId);
+      for (const key of ["roleTagId", "tagId"]) if (operation.value?.[key]) used.tags.add(operation.value[key]);
+    }
+    projected = applyAiEditOperations(projected, diff, { performers, idPool: request.idPool, instruction: request.instruction, selectedSources: request.knowledge.selectedSources });
+    const first = diff.operations[0];
+    if (command.ref && command.type === "stage.create") allocated.set(command.ref, { kind: "stage", id: first.value.stageId });
+    if (command.ref && command.type === "task.create") allocated.set(command.ref, { kind: "task", id: first.value.taskId });
+    if (command.ref && command.type === "executor.createAnonymous") allocated.set(command.ref, { kind: "executor", id: first.value.executorId });
+  }
+  const result = { schemaVersion: 1, kind: "diff", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, summary: semantic.summary, operations, warnings: semantic.warnings };
+  try { applyAiEditOperations(project, result, { performers, idPool: request.idPool, instruction: request.instruction, selectedSources: request.knowledge.selectedSources }); }
+  catch (error) { if (error instanceof AiEditValidationError) throw new AiEditSemanticCompileError(`ai_compile_${error.code}`, error.message); throw error; }
+  return result;
 }

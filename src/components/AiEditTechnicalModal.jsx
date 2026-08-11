@@ -9,6 +9,12 @@ const METRICS = [
   ["projectTax", "Налог проекта", "₽"], ["vat", "НДС", "₽"], ["total", "Итого", "₽"],
   ["stages", "Этапы", ""], ["tasks", "Задачи", ""], ["executors", "Исполнители", ""],
 ];
+const planLines = (plan) => plan ? [
+  plan.stages.created.length ? `Создадутся Stage: ${plan.stages.created.join(", ")}` : "",
+  plan.tasks.created.length ? `Создадутся Task: ${plan.tasks.created.join(", ")}` : "",
+  plan.executors.created.length ? `Добавятся Executor: ${plan.executors.created.join(", ")}` : "",
+  `Изменений: ${plan.operationCount}`,
+].filter(Boolean) : [];
 
 export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета", variant = "dialog", position = null, closing = false, submitRef = null, onRequest, onCancelRequest, onApply, onClose, onUndo, canUndo = false }) {
   const [instruction, setInstruction] = useState("");
@@ -22,7 +28,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
   const panelRef = useRef(null);
   const request = async ({ answer = "", source = null, label = "" } = {}) => {
     if (!instruction.trim()) return;
-    const continuation = buildAiEditContinuation({ instruction, answer, source, label, confirmed });
+    const continuation = buildAiEditContinuation({ instruction, answer, source, label, confirmed, continuationToken: result?.continuationToken });
     const version = ++requestVersion.current;
     setConfirmed(continuation.confirmed);
     setState("loading"); setError(""); setErrorCode(""); setResult(null);
@@ -55,6 +61,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
         {result?.kind === "out_of_scope" && <div className="kb-modal-note">{result.message}</div>}
         {result?.kind === "error" && <div className="kb-server-error">{result.message}</div>}
         {result?.kind === "diff" && <div className="kb-ai-launcher-feedback-content"><strong>{result.summary}</strong>
+          <div>{planLines(result.plan).map((line) => <div key={line} className="kb-modal-note">{line}</div>)}</div>
           <div>{result.operations.map((operation) => <div key={operation.id} className="kb-modal-note">• {operation.reason}</div>)}</div>
           <div className="kb-ai-launcher-metrics">{METRICS.map(([key, label, unit]) => <div key={key} className="kb-modal-note">{label}: {fmt(result.before[key])}{unit} → {fmt(result.after[key])}{unit}</div>)}</div>
           {result.warnings.map((warning) => <div key={warning} className="kb-server-error">{warning}</div>)}
@@ -103,6 +110,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
         {result?.kind === "error" && <div className="kb-server-error">{result.message}</div>}
         {result?.kind === "diff" && <>
           <div className="kb-modal-note"><strong>{result.summary}</strong></div>
+          <div>{planLines(result.plan).map((line) => <div key={line} className="kb-modal-note">{line}</div>)}</div>
           <div>{result.operations.map((operation) => <div key={operation.id} className="kb-modal-note">• {operation.reason}</div>)}</div>
           <div>{METRICS.map(([key, label, unit]) => <div key={key} className="kb-modal-note">{label}: {fmt(result.before[key])}{unit} → {fmt(result.after[key])}{unit}</div>)}</div>
           {result.warnings.map((warning) => <div key={warning} className="kb-server-error">{warning}</div>)}
