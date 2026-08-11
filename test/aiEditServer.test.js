@@ -131,6 +131,7 @@ test("editor prompt fixes priorities, strict JSON, no arbitrary patch and no imp
   assert.match(AI_EDIT_SYSTEM_PROMPT, /только один завершённый JSON/);
   const messages = buildAiEditMessages({ request: { schemaVersion: 1, requestId: "r", baseRevision: "x", scope: { kind: "project", projectId: "p" }, instruction: "Переименуй", confirmed: {}, idPool: { stages: [], tasks: [], executors: [], tags: [] } }, project: { id: "p", stages: [], branding: { contacts: "secret" } }, personalization: "Всегда сториборд", performers: [], knowledge: [] });
   assert.doesNotMatch(messages[1].content, /secret/); assert.match(messages[1].content, /<studio_knowledge>\[\]/);
+  assert.doesNotMatch(messages[0].content, /requestId|baseRevision/); assert.doesNotMatch(messages[1].content, /<request_meta>/);
 });
 
 test("endpoint is read-only, owner-scoped and does not log Project content", () => {

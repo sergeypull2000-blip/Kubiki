@@ -7,7 +7,7 @@ import { hasExplicitPerformerLibraryIntent, needsClarificationForBareInput, reso
 import { resolveExecutorCreationTask, resolveProjectTarget } from "./_lib/projectTargetResolver.js";
 import { createRequestBudget, RequestDeadlineError } from "./_lib/requestBudget.js";
 import { validateAiEditRequest } from "../src/ai/editSchema.js";
-import { diagnoseAiEditSemanticResponse, parseAiEditSemanticResponse } from "../src/ai/editSemanticSchema.js";
+import { attachTrustedAiEditMetadata, diagnoseAiEditSemanticResponse, parseAiEditSemanticResponse } from "../src/ai/editSemanticSchema.js";
 import { AiEditSemanticCompileError, compileAiEditSemanticCommand } from "../src/ai/editSemanticCompiler.js";
 import { projectRevision } from "../src/ai/projectRevision.js";
 import { loadOwnKnowledge } from "./_lib/knowledgeRepository.js";
@@ -74,9 +74,9 @@ async function executeEdit(req, budget) {
   if (!key) return { status: 500, body: { error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" } };
   const requestModel = createDeepSeekClient({ apiKey: key, url: DEEPSEEK_URL, model: MODEL, budget });
   const raw = await requestModel(buildAiEditMessages({ request, project, personalization: settings.personalization, performers: resolved.performers, knowledge, resolvedProjectTarget: projectTarget.target, resolvedTask: creationTask.task }), { maxTokens: 2500, retries: 1, stage: "ai_edit" });
-  const semantic = parseAiEditSemanticResponse(raw, request);
-  if (!semantic) return { status: 502, body: { error: "Модель вернула некорректную semantic command", code: diagnoseAiEditSemanticResponse(raw, request) } };
-  if (semantic.kind !== "command") return { status: 200, body: semantic };
+  const semantic = parseAiEditSemanticResponse(raw);
+  if (!semantic) return { status: 502, body: { error: "Модель вернула некорректную semantic command", code: diagnoseAiEditSemanticResponse(raw) } };
+  if (semantic.kind !== "command") return { status: 200, body: attachTrustedAiEditMetadata(semantic, request) };
   const performer = request.confirmed.performerId ? ownPerformers.find((item) => item.id === request.confirmed.performerId) : resolved.performers.length === 1 ? resolved.performers[0] : null;
   try {
     const diff = compileAiEditSemanticCommand({ semantic, request, project, resolvedTarget: projectTarget.target, resolvedTask: creationTask.task, performer, performers: ownPerformers });

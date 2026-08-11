@@ -1,20 +1,31 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseAiEditSemanticResponse, diagnoseAiEditSemanticResponse } from "../src/ai/editSemanticSchema.js";
+import { attachTrustedAiEditMetadata, parseAiEditSemanticResponse, diagnoseAiEditSemanticResponse } from "../src/ai/editSemanticSchema.js";
 import { compileAiEditSemanticCommand } from "../src/ai/editSemanticCompiler.js";
 import { applyAiEditOperations } from "../src/ai/editOperations.js";
 import { resolveExecutorCreationTask, resolveProjectTarget } from "../api/_lib/projectTargetResolver.js";
 
 const ids = { stages: ["new-stage"], tasks: ["new-task"], executors: ["new-executor"], tags: ["tag-1", "tag-2", "tag-3", "tag-4", "tag-5", "tag-6", "tag-7", "tag-8"] };
 const request = (instruction = "Измени") => ({ schemaVersion: 1, requestId: "r", projectId: "p", baseRevision: "rev", scope: { kind: "project", projectId: "p" }, instruction, knowledge: { useStudioKnowledge: false, selectedSources: [] }, confirmed: {}, idPool: ids });
-const semantic = (command, summary = "Изменение") => ({ schemaVersion: 1, kind: "command", requestId: "r", baseRevision: "rev", scope: { kind: "project", projectId: "p" }, summary, command, warnings: [] });
+const semantic = (command, summary = "Изменение") => parseAiEditSemanticResponse({ kind: "command", summary, command, warnings: [] });
 const executor = (id, name, paymentType = "fix_total", tax = null) => ({ id, amount: "1000", performerId: null, performerSnapshot: null, tags: [{ id: `${id}-name`, key: "name", value: name }, { id: `${id}-payment`, key: "payment", value: paymentType, payment: { type: paymentType, rate: "500", units: "2", hours: "3", shifts: "4" } }, ...(tax === null ? [] : [{ id: `${id}-tax`, key: "tax", value: String(tax) }])] });
 const project = () => ({ id: "p", name: "Смета", stages: [{ id: "s", name: "Препродакшн", presetKey: "preprod", tasks: [{ id: "t", name: "Концепт", executors: [executor("e1", "Гриша Петров"), executor("e2", "Анна", "hourly", 5)] }] }] });
 
 test("semantic runtime rejects direct low-level diff without fallback", () => {
-  const raw = { schemaVersion: 1, kind: "diff", requestId: "r", baseRevision: "rev", scope: { kind: "project", projectId: "p" }, summary: "x", operations: [], warnings: [] };
+  const raw = { kind: "diff", summary: "x", operations: [], warnings: [] };
   assert.equal(parseAiEditSemanticResponse(raw, request()), null);
   assert.equal(diagnoseAiEditSemanticResponse(raw, request()), "ai_semantic_low_level_forbidden");
+});
+
+test("model semantic payload has no transport metadata and server attaches trusted context", () => {
+  const trusted = request("Добавь новый этап"), raw = { kind: "command", summary: "Добавить этап", command: { type: "stage.create" }, warnings: [] };
+  const parsed = parseAiEditSemanticResponse(raw);
+  assert.deepEqual(parsed, raw);
+  assert.equal(parseAiEditSemanticResponse({ ...raw, requestId: "model-copy" }), null);
+  const diff = compileAiEditSemanticCommand({ semantic: parsed, request: trusted, project: project() });
+  assert.equal(diff.requestId, trusted.requestId); assert.equal(diff.baseRevision, trusted.baseRevision); assert.deepEqual(diff.scope, trusted.scope);
+  const clarification = attachTrustedAiEditMetadata({ kind: "clarification", question: "Какую Task выбрать?" }, trusted);
+  assert.equal(clarification.requestId, trusted.requestId); assert.equal(clarification.baseRevision, trusted.baseRevision); assert.deepEqual(clarification.scope, trusted.scope);
 });
 
 test("semantic schema accepts exactly the first-MVP command allowlist", () => {

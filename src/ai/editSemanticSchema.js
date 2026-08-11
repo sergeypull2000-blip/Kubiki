@@ -23,23 +23,25 @@ function validCommand(command) {
   }
 }
 
-export function parseAiEditSemanticResponse(raw, expected = {}) {
+export function parseAiEditSemanticResponse(raw) {
   let value;
   try { value = typeof raw === "string" ? JSON.parse(raw.trim()) : raw; } catch { return null; }
-  if (!object(value) || value.schemaVersion !== 1 || !["command", "clarification", "out_of_scope", "error"].includes(value.kind) || !id(value.requestId) || !id(value.baseRevision) || !object(value.scope)) return null;
-  if (expected.requestId && value.requestId !== expected.requestId || expected.baseRevision && value.baseRevision !== expected.baseRevision || expected.scope && JSON.stringify(value.scope) !== JSON.stringify(expected.scope)) return null;
-  if (value.kind === "command") return exact(value, ["schemaVersion", "kind", "requestId", "baseRevision", "scope", "summary", "command", "warnings"]) && text(value.summary) && validCommand(value.command) && Array.isArray(value.warnings) && value.warnings.length <= 20 && value.warnings.every((item) => typeof item === "string" && item.length <= 500) ? value : null;
-  if (value.kind === "clarification") return exact(value, ["schemaVersion", "kind", "requestId", "baseRevision", "scope", "question"]) && text(value.question) && value.question.includes("?") ? value : null;
-  if (value.kind === "out_of_scope") return exact(value, ["schemaVersion", "kind", "requestId", "baseRevision", "scope", "message"]) && text(value.message) ? value : null;
-  return exact(value, ["schemaVersion", "kind", "requestId", "baseRevision", "scope", "code", "message"]) && id(value.code) && text(value.message) ? value : null;
+  if (!object(value) || !["command", "clarification", "out_of_scope", "error"].includes(value.kind)) return null;
+  if (value.kind === "command") return exact(value, ["kind", "summary", "command", "warnings"]) && text(value.summary) && validCommand(value.command) && Array.isArray(value.warnings) && value.warnings.length <= 20 && value.warnings.every((item) => typeof item === "string" && item.length <= 500) ? value : null;
+  if (value.kind === "clarification") return exact(value, ["kind", "question"]) && text(value.question) && value.question.includes("?") ? value : null;
+  if (value.kind === "out_of_scope") return exact(value, ["kind", "message"]) && text(value.message) ? value : null;
+  return exact(value, ["kind", "code", "message"]) && id(value.code) && text(value.message) ? value : null;
 }
 
-export function diagnoseAiEditSemanticResponse(raw, expected = {}) {
+export function diagnoseAiEditSemanticResponse(raw) {
   let value;
   try { value = typeof raw === "string" ? JSON.parse(raw.trim()) : raw; } catch { return "ai_semantic_invalid_json"; }
   if (!object(value)) return "ai_semantic_invalid_schema";
   if (value.kind === "diff" || Array.isArray(value.operations)) return "ai_semantic_low_level_forbidden";
-  if (value.requestId !== expected.requestId || value.baseRevision !== expected.baseRevision || JSON.stringify(value.scope) !== JSON.stringify(expected.scope)) return "ai_semantic_request_mismatch";
   if (value.kind === "command" && !AI_EDIT_SEMANTIC_COMMAND_TYPES.includes(value.command?.type)) return "ai_semantic_unknown_command";
   return "ai_semantic_invalid_schema";
+}
+
+export function attachTrustedAiEditMetadata(semantic, request) {
+  return { schemaVersion: 1, ...semantic, requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope };
 }
