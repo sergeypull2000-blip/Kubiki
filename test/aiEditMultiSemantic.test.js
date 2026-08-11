@@ -82,3 +82,18 @@ test("continuation token is versioned, signed and expires", () => {
     assert.equal(verifyAiEditContinuation(token, 1000 + 16 * 60 * 1000), null);
   } finally { if (previous === undefined) delete process.env.AI_EDIT_CONTINUATION_SECRET; else process.env.AI_EDIT_CONTINUATION_SECRET = previous; }
 });
+
+test("multi-command plan can add a confirmed Performer from the library", () => {
+  const performer = { id: "pf-ella", firstName: "Элла", primaryRole: "3D артист", defaultPaymentType: "fix_total", defaultRate: "90000", active: true };
+  const semantic = parseAiEditSemanticResponse({ kind: "commands", summary: "Добавить из базы и обновить налог", warnings: [], commands: [
+    { type: "executor.createFromPerformer", taskId: "old-task", performerId: performer.id },
+    { type: "executor.setTaxBulk", percent: 6 },
+  ] });
+  const libraryRequest = { ...request, instruction: "Добавь Эллу из базы и поставь всем налог 6%", knowledge: { useStudioKnowledge: false, selectedSources: [{ kind: "performer", id: performer.id }] }, confirmed: { performerId: performer.id } };
+  const resolved = resolveAiEditSemanticDraft({ semantic, project, scope: libraryRequest.scope });
+  assert.deepEqual(resolved.unresolvedSlots, []);
+  const diff = compileAiEditSemanticPlan({ semantic, request: libraryRequest, project, confirmedTargets: resolved.confirmedTargets, performer, performers: [performer] });
+  assert.equal(diff.operations[0].type, "executor.addFromPerformer");
+  const next = applyAiEditOperations(project, diff, { performers: [performer], idPool, instruction: libraryRequest.instruction, selectedSources: libraryRequest.knowledge.selectedSources });
+  assert.equal(next.stages[0].tasks[0].executors.at(-1).performerId, performer.id);
+});

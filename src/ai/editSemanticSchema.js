@@ -1,6 +1,6 @@
 export const AI_EDIT_SEMANTIC_COMMAND_TYPES = Object.freeze([
   "stage.create", "stage.rename", "stage.delete", "task.create", "task.rename", "task.delete",
-  "executor.createAnonymous", "executor.delete", "executor.setCompensation", "executor.setPaymentType",
+  "executor.createAnonymous", "executor.createFromPerformer", "executor.delete", "executor.setCompensation", "executor.setPaymentType",
   "executor.setPaymentRate", "executor.setPaymentQuantity", "executor.setRole", "executor.setName",
   "executor.setTax", "executor.setTaxBulk", "executor.replacePerformer",
 ]);
@@ -52,6 +52,8 @@ export function isAiEditSemanticCommand(command, { multi = false } = {}) {
         && (command.stageName === undefined || text(command.stageName, 160))
         && !(command.taskRef && command.taskName)
       : exact(command, ["type", "name", "role"], ["compensation"]) && text(command.name, 160) && text(command.role, 160) && (command.compensation === undefined || numberValue(command.compensation));
+    case "executor.createFromPerformer": return exact(command, ["type", "taskId", "performerId"])
+      && id(command.taskId) && id(command.performerId);
     case "executor.setCompensation": return multi ? exact(command, ["type", "value"], ["targetRef", "targetName", "taskName", "stageName"]) && numberValue(command.value) && validExecutorTarget(command) : exact(command, ["type", "value"]) && numberValue(command.value);
     case "executor.setPaymentType": return multi ? exact(command, ["type", "paymentType"], ["targetRef", "targetName", "taskName", "stageName"]) && text(command.paymentType, 40) && validExecutorTarget(command) : exact(command, ["type", "paymentType"]) && text(command.paymentType, 40);
     case "executor.setPaymentRate":

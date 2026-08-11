@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { AI_SETTINGS_KEY, AI_SETTINGS_OWNER_KEY, loadLocalAiSettings, normalizeAiSettings, sanitizePersonalization, saveLocalAiSettings } from "../src/aiSettings.js";
+import { AI_SETTINGS_KEY, AI_SETTINGS_OWNER_KEY, DEFAULT_AI_PERSONALIZATION, loadLocalAiSettings, normalizeAiSettings, sanitizePersonalization, saveLocalAiSettings } from "../src/aiSettings.js";
 import { createAiSettingsRepository } from "../src/repositories/aiSettingsRepository.js";
 import { loadOwnAiSettings, normalizeServerAiSettings } from "../api/_lib/aiSettings.js";
 
@@ -11,6 +11,13 @@ test("AI settings are minimal and history is explicit opt-in", () => {
   assert.deepEqual(normalizeAiSettings(), { personalization: "", useProjectHistory: false });
   assert.deepEqual(normalizeAiSettings({ personalization: "  Делить на этапы ", use_project_history: true }), { personalization: "  Делить на этапы ", useProjectHistory: true });
   assert.deepEqual(Object.keys(normalizeAiSettings({ universal: true, currency: "RUB" })), ["personalization", "useProjectHistory"]);
+});
+
+test("new users get the performer-library default without overriding a saved empty personalization", () => {
+  assert.equal(normalizeAiSettings(undefined, { defaults: true }).personalization, DEFAULT_AI_PERSONALIZATION);
+  assert.equal(normalizeAiSettings({ personalization: "" }, { defaults: true }).personalization, "");
+  assert.equal(loadLocalAiSettings("new-user", memoryStorage()).personalization, DEFAULT_AI_PERSONALIZATION);
+  assert.equal(normalizeServerAiSettings(undefined, { defaults: true }).personalization, DEFAULT_AI_PERSONALIZATION);
 });
 
 test("personalization keeps multiline financial rules and removes only secret-bearing lines", () => {
@@ -34,7 +41,7 @@ test("local fallback is owner scoped and keeps opt-in", () => {
   saveLocalAiSettings({ personalization: "Учитывать препродакшн", useProjectHistory: true }, "u1", storage);
   assert.equal(storage.getItem(AI_SETTINGS_OWNER_KEY), "u1");
   assert.equal(loadLocalAiSettings("u1", storage).useProjectHistory, true);
-  assert.deepEqual(loadLocalAiSettings("u2", storage), { personalization: "", useProjectHistory: false });
+  assert.deepEqual(loadLocalAiSettings("u2", storage), { personalization: DEFAULT_AI_PERSONALIZATION, useProjectHistory: false });
   assert.ok(storage.getItem(AI_SETTINGS_KEY));
 });
 

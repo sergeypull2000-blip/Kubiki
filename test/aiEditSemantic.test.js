@@ -140,3 +140,13 @@ test("local hard scopes pin resolution and strict validation rejects outside tar
   assert.equal(resolveProjectTarget("Поставь Анне 10 часов", current, null, scope).target.id, "e3");
   assert.throws(() => compileAiEditSemanticCommand({ semantic: semantic({ type: "executor.setPaymentQuantity", value: 10 }), request: { ...request(), scope }, project: current, resolvedTarget: { kind: "executor", id: "e2" } }), /контекст/i);
 });
+
+test("Task scope plus one confirmed Performer compiles to addFromPerformer only", () => {
+  const current = project(), performer = { id: "pf-ella", firstName: "Элла", primaryRole: "3D артист", defaultPaymentType: "hourly", defaultRate: "2500", defaultTaxRate: 6, active: true };
+  const localRequest = { ...request("сюда добавь Эллу из базы"), scope: { kind: "task", projectId: "p", stageId: "s", taskId: "t" }, knowledge: { useStudioKnowledge: false, selectedSources: [{ kind: "performer", id: performer.id }] }, confirmed: { performerId: performer.id } };
+  const parsed = semantic({ type: "executor.createFromPerformer", taskId: "t", performerId: performer.id });
+  const diff = compileAiEditSemanticCommand({ semantic: parsed, request: localRequest, project: current, resolvedTask: { id: "t" }, performer, performers: [performer] });
+  assert.deepEqual(diff.operations.map((item) => item.type), ["executor.addFromPerformer"]);
+  assert.deepEqual(diff.operations[0].value, { executorId: "new-executor", performerId: performer.id });
+  assert.deepEqual(Object.keys(parsed.command).sort(), ["performerId", "taskId", "type"]);
+});

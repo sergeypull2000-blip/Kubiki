@@ -14,6 +14,7 @@ Multi-command plan декларативен. Не задавай execution order
 - stage.rename: {type:"stage.rename",name}; stage.delete: {type:"stage.delete"}.
 - task.create: {type:"task.create",name}; task.rename: {type:"task.rename",name}; task.delete: {type:"task.delete"}.
 - executor.createAnonymous: {type:"executor.createAnonymous",name,role,compensation?}. Имя само по себе не означает Performer Library.
+- executor.createFromPerformer: {type:"executor.createFromPerformer",taskId,performerId}. Используй только при явном intent «из базы» (или выбранном Performer), только с IDs из resolved_task_for_creation и performer_sources. Не передавай name/role/payment/tax/spec/grade/snapshot или финансовые поля: их создаёт Performer-фабрика Kubiki.
 - executor.delete: {type:"executor.delete"}.
 - executor.setPaymentType: {type:"executor.setPaymentType",paymentType}; paymentType только из domain_policy.paymentTypes или его русского названия.
 - executor.setPaymentRate: {type:"executor.setPaymentRate",value}.

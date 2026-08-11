@@ -55,6 +55,14 @@ export function compileAiEditSemanticCommand({ semantic, request, project, resol
       if (command.compensation !== undefined) { add("executor.payment.setType", executorId, { type: "fix_total" }, "Установить тип оплаты"); add("executor.amount.set", executorId, { value: money(command.compensation) }, "Установить оплату"); }
       break;
     }
+    case "executor.createFromPerformer": {
+      const task = projectIndex.tasks.get(command.taskId)?.task;
+      const confirmedPerformer = performer?.id === command.performerId ? performers.find((item) => item.id === performer.id) : null;
+      if (!task || !confirmedPerformer || resolvedTask?.id && resolvedTask.id !== task.id) throw new AiEditSemanticCompileError("ai_semantic_missing_target", "Не подтверждены Task и Performer");
+      add("executor.addFromPerformer", task.id, { executorId: take(request.idPool, used, "executors"), performerId: confirmedPerformer.id }, "Добавить подтверждённого Performer из библиотеки");
+      operations[operations.length - 1].source = { kind: "performer", id: confirmedPerformer.id };
+      break;
+    }
     case "executor.setCompensation": { const executor = projectIndex.executors.get(resolvedTarget?.id)?.executor;
       if (resolvedTarget?.kind !== "executor" || !executor) throw new AiEditSemanticCompileError("ai_semantic_missing_target", "Не подтверждён Executor");
       const type = executor.tags?.find((tag) => tag.key === "payment")?.payment?.type;
@@ -100,7 +108,7 @@ export function compileAiEditSemanticCommand({ semantic, request, project, resol
   return diff;
 }
 
-const creationPhase = (type) => type === "stage.create" ? 1 : type === "task.create" ? 2 : type === "executor.createAnonymous" ? 3 : type === "executor.setTaxBulk" ? 5 : 4;
+const creationPhase = (type) => type === "stage.create" ? 1 : type === "task.create" ? 2 : ["executor.createAnonymous", "executor.createFromPerformer"].includes(type) ? 3 : type === "executor.setTaxBulk" ? 5 : 4;
 const withoutPlanFields = (command) => Object.fromEntries(Object.entries(command).filter(([key]) => !["ref", "stageRef", "stageName", "taskRef", "taskName", "targetRef", "targetName"].includes(key)));
 
 export function compileAiEditSemanticPlan({ semantic, request, project, confirmedTargets = {}, performer, performers = [] }) {

@@ -9,6 +9,7 @@ export function hasExplicitPerformerLibraryIntent(instruction, selectedSources =
 }
 
 const displayName = (performer) => [performer?.firstName, performer?.lastName].filter(Boolean).join(" ").trim();
+const uniquePerformers = (items) => [...new Map((items || []).filter((item) => item?.id).map((item) => [item.id, item])).values()];
 const executorName = (executor) => (executor?.tags || []).find((tag) => tag.key === "name")?.value?.trim() || "";
 const allExecutors = (project) => (project?.stages || []).flatMap((stage) => (stage.tasks || []).flatMap((task) => (task.executors || []).map((executor) => ({ executor, stage, task }))));
 
@@ -21,9 +22,10 @@ function mentioned(query, name) {
 }
 
 function performerMatches(query, performers) {
-  const full = performers.filter((item) => { const name = normalizeSearchText(displayName(item)); return name && query.includes(name); });
-  if (full.length) return full;
-  return performers.filter((item) => mentioned(query, item.firstName));
+  const unique = uniquePerformers(performers);
+  const full = unique.filter((item) => { const name = normalizeSearchText(displayName(item)); return name && query.includes(name); });
+  if (full.length) return uniquePerformers(full);
+  return uniquePerformers(unique.filter((item) => mentioned(query, item.firstName)));
 }
 
 
@@ -43,6 +45,7 @@ function executorAmbiguity(items) {
 }
 
 function performerAmbiguity(items) {
+  items = uniquePerformers(items);
   return {
     performers: [], targetExecutorId: null,
     clarification: {
@@ -53,6 +56,7 @@ function performerAmbiguity(items) {
 }
 
 export function resolveExplicitPerformers(instruction, performers, selectedSources = [], project = null, resolvedProjectTarget = null) {
+  performers = uniquePerformers(performers);
   const selectedIds = new Set(selectedSources.filter((item) => item.kind === "performer").map((item) => item.id));
   const selected = performers.filter((item) => selectedIds.has(item.id));
 

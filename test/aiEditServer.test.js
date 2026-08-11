@@ -147,6 +147,16 @@ test("DeepSeek ai_edit stage has thinking disabled", () => {
   assert.match(source, /stage === "ai_edit"/);
 });
 
+test("Performer choices deduplicate stable ids but keep distinct same-name cards", () => {
+  const ella = { id: "ella-1", firstName: "Элла", lastName: "Иванова", primaryRole: "3D артист" };
+  const duplicate = { ...ella, primaryRole: "Визуализатор" };
+  const other = { id: "ella-2", firstName: "Элла", lastName: "Иванова", primaryRole: "Арт-директор" };
+  const result = resolveExplicitPerformers("Добавь Эллу из базы", [ella, duplicate, other]);
+  assert.deepEqual(result.clarification.choices.map((item) => item.source.id), ["ella-1", "ella-2"]);
+  const one = resolveExplicitPerformers("Добавь Эллу из базы", [ella, duplicate]);
+  assert.equal(one.clarification, null); assert.equal(one.performers[0].id, "ella-1");
+});
+
 test("technical modal renders only normalized error code beside generic message", () => {
   const source = readFileSync(new URL("../src/components/AiEditTechnicalModal.jsx", import.meta.url), "utf8");
   assert.match(source, /errorCode[^\n]*<code>\{errorCode\}<\/code>/);

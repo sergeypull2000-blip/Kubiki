@@ -10,7 +10,7 @@ export function createAiSettingsRepository(client) {
     async loadAiSettings(userId) {
       const result = await client.from("ai_settings").select("user_id,personalization,use_project_history,created_at,updated_at").eq("user_id", userId).maybeSingle();
       const value = data(result, "Не удалось загрузить настройки ИИ");
-      return value ? { exists: true, settings: owned(value, userId) } : { exists: false, settings: normalizeAiSettings() };
+      return value ? { exists: true, settings: owned(value, userId) } : { exists: false, settings: normalizeAiSettings(undefined, { defaults: true }) };
     },
     async upsertAiSettings(userId, settings) {
       const result = await client.from("ai_settings").upsert(row(userId, settings), { onConflict: "user_id" }).select().single();

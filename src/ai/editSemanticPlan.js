@@ -55,7 +55,7 @@ export function resolveAiEditSemanticDraft({ semantic, project, scope, prior = n
         if (resolved) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), task: { kind: "task", id: resolved.id } };
         else addSlot(index, "task", "task", "В какую Task добавить Executor?", entities(project, "task", command));
       }
-    } else if (!["stage.create", "executor.setTaxBulk"].includes(command.type) && !command.targetRef) {
+    } else if (!["stage.create", "executor.createFromPerformer", "executor.setTaxBulk"].includes(command.type) && !command.targetRef) {
       const kind = command.type.startsWith("stage.") ? "stage" : command.type.startsWith("task.") ? "task" : "executor";
       const selected = slotValues[`slot-${index}-target`] || command.targetName;
       const resolved = selectedSourceFor(slotValues[`slot-${index}-target`], project, kind) || selected && resolveNamed(project, kind, selected, command) || scopeEntity(scope, kind);

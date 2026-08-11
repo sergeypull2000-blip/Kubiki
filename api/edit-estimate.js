@@ -64,8 +64,8 @@ async function executeEdit(req, budget) {
   const explicitPerformerIntent = hasExplicitPerformerLibraryIntent(request.instruction, request.knowledge.selectedSources, request.confirmed);
   const needsPerformers = explicitPerformerIntent;
   const ownPerformers = needsPerformers ? await loadOwnPerformersForEdit(auth.client, auth.user.id) : [];
-  const resolved = resolveExplicitPerformers(request.instruction, ownPerformers, request.knowledge.selectedSources, project, projectTarget.target);
   const selectedPerformerIds = [...new Set([...request.knowledge.selectedSources.filter((item) => item.kind === "performer").map((item) => item.id), ...(request.confirmed.performerId ? [request.confirmed.performerId] : [])])];
+  const resolved = resolveExplicitPerformers(request.instruction, ownPerformers, selectedPerformerIds.map((id) => ({ kind: "performer", id })), project, projectTarget.target);
   if (selectedPerformerIds.some((id) => !ownPerformers.some((item) => item.id === id))) return { status: 404, body: { error: "Performer не найден или недоступен" } };
   if (resolved.clarification) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, ...resolved.clarification } };
 
@@ -87,7 +87,7 @@ async function executeEdit(req, budget) {
     try {
       const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope });
       if (resolvedPlan.unresolvedSlots.length) return clarificationResponse(request, resolvedPlan);
-      const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project, confirmedTargets: resolvedPlan.confirmedTargets, performers: ownPerformers });
+      const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project, confirmedTargets: resolvedPlan.confirmedTargets, performer: resolved.performers.length === 1 ? resolved.performers[0] : null, performers: ownPerformers });
       return { status: 200, body: diff };
     } catch (error) {
       if (error instanceof AiEditSemanticPlanError || error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code } };
