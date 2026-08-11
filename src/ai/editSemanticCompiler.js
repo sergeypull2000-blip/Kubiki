@@ -62,9 +62,9 @@ export function compileAiEditSemanticCommand({ semantic, request, project, resol
       break;
     }
     case "executor.createFromPerformer": {
-      const task = projectIndex.tasks.get(command.taskId)?.task;
+      const trustedTaskId = resolvedTask?.id || command.taskId, task = projectIndex.tasks.get(trustedTaskId)?.task;
       const confirmedPerformer = performer?.id === command.performerId ? performers.find((item) => item.id === performer.id) : null;
-      if (!task || !confirmedPerformer || resolvedTask?.id && resolvedTask.id !== task.id) throw new AiEditSemanticCompileError("ai_semantic_missing_target", "Не подтверждены Task и Performer");
+      if (!task || !confirmedPerformer || command.taskId && command.taskId !== trustedTaskId) throw new AiEditSemanticCompileError("ai_semantic_missing_target", "Не подтверждены Task и Performer");
       add("executor.addFromPerformer", task.id, { executorId: take(request.idPool, used, "executors"), performerId: confirmedPerformer.id }, "Добавить подтверждённого Performer из библиотеки");
       operations[operations.length - 1].source = { kind: "performer", id: confirmedPerformer.id };
       break;

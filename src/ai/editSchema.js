@@ -52,7 +52,7 @@ function isContinuation(value) {
   return value === undefined || exactKeys(value, ["token"], ["answer", "source"])
     && text(value.token, 50_000)
     && (value.answer === undefined || text(value.answer, 500))
-    && (value.source === undefined || exactKeys(value.source, ["kind", "id"]) && value.source.kind === "project" && id(value.source.id));
+    && (value.source === undefined || exactKeys(value.source, ["kind", "id"]) && ["project", "performer"].includes(value.source.kind) && id(value.source.id));
 }
 
 export function validateAiEditRequest(body) {

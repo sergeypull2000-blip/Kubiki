@@ -5,6 +5,9 @@ import { compileAiEditSemanticPlan } from "../src/ai/editSemanticCompiler.js";
 import { applyAiEditOperations } from "../src/ai/editOperations.js";
 import { materializeResolvedSemanticPlan, resolveAiEditSemanticDraft } from "../src/ai/editSemanticPlan.js";
 import { signAiEditContinuation, verifyAiEditContinuation } from "../api/_lib/semanticContinuation.js";
+import { validateAiEditRequest } from "../src/ai/editSchema.js";
+import { buildAiEditPreview } from "../src/ai/editPreview.js";
+import { projectRevision } from "../src/ai/projectRevision.js";
 
 const pool = (prefix, count) => Array.from({ length: count }, (_, index) => `${prefix}-${index + 1}`);
 const idPool = { stages: pool("stage", 6), tasks: pool("task", 30), executors: pool("executor", 40), tags: pool("tag", 200) };
@@ -97,6 +100,54 @@ test("Performer confirmations are isolated per creation command", () => {
   assert.deepEqual(resolved.unresolvedSlots, []);
   const commands = materializeResolvedSemanticPlan(resolved).commands;
   assert.equal(commands[0].performerId, "m2"); assert.equal(commands[1].performerId, "ella");
+});
+
+test("full Performer continuation preserves exact Task destinations through preview and apply", async () => {
+  const previous = process.env.AI_EDIT_CONTINUATION_SECRET; process.env.AI_EDIT_CONTINUATION_SECRET = "test-secret";
+  try {
+    const current = { id: "project", stages: [{ id: "stage", name: "Этап", tasks: [{ id: "hero", name: "герой", executors: [] }, { id: "loh", name: "лох", executors: [] }] }] };
+    const performers = [{ id: "misha", firstName: "Миша", lastName: "Иванов", active: true }, { id: "ella-1", firstName: "Элла", lastName: "Первая", active: true }, { id: "ella-2", firstName: "Элла", lastName: "Вторая", active: true }];
+    const semantic = parseAiEditSemanticResponse({ kind: "commands", summary: "Добавить Performer", warnings: [], commands: [
+      { type: "executor.createFromPerformer", taskName: "герой", performerName: "Миша" },
+      { type: "executor.createFromPerformer", taskName: "лох", performerName: "Элла" },
+    ] });
+    const first = resolveAiEditSemanticDraft({ semantic, project: current, scope: request.scope, performers });
+    assert.deepEqual(first.confirmedTargets, { 0: { task: { kind: "task", id: "hero" } }, 1: { task: { kind: "task", id: "loh" } } });
+    assert.deepEqual(first.unresolvedSlots.map((slot) => slot.id), ["slot-1-performer"]);
+    const token = signAiEditContinuation({ projectId: "project", baseRevision: "revision", scope: request.scope, semantic, unresolvedSlots: first.unresolvedSlots, confirmedTargets: first.confirmedTargets, slotValues: first.slotValues });
+    const continuationRequest = { ...request, continuation: { token, source: { kind: "performer", id: "ella-2" } } };
+    assert.equal(validateAiEditRequest(continuationRequest).ok, true);
+    const restored = verifyAiEditContinuation(token), second = resolveAiEditSemanticDraft({ semantic: restored.semantic, project: current, scope: request.scope, performers, prior: restored, selectedSource: continuationRequest.continuation.source });
+    assert.deepEqual(second.unresolvedSlots, []);
+    assert.deepEqual(second.confirmedTargets, first.confirmedTargets);
+    const materialized = materializeResolvedSemanticPlan(second);
+    assert.deepEqual(materialized.commands.map((command) => [command.taskName, command.performerId]), [["герой", "misha"], ["лох", "ella-2"]]);
+    const revision = await projectRevision(current), editRequest = { ...request, baseRevision: revision, instruction: "добавь Мишу из базы в герой, Эллу из базы в лох" };
+    const diff = compileAiEditSemanticPlan({ semantic: materialized, request: editRequest, project: current, confirmedTargets: second.confirmedTargets, performers });
+    assert.deepEqual(diff.operations.map((operation) => [operation.targetId, operation.value.performerId]), [["hero", "misha"], ["loh", "ella-2"]]);
+    const preview = await buildAiEditPreview({ project: current, response: diff, performers, idPool, expectedRevision: revision, instruction: editRequest.instruction });
+    assert.equal(preview.after.executors, 2);
+    const applied = applyAiEditOperations(current, diff, { performers, idPool, instruction: editRequest.instruction });
+    assert.equal(applied.stages[0].tasks[0].executors[0].performerId, "misha"); assert.equal(applied.stages[0].tasks[1].executors[0].performerId, "ella-2");
+  } finally { if (previous === undefined) delete process.env.AI_EDIT_CONTINUATION_SECRET; else process.env.AI_EDIT_CONTINUATION_SECRET = previous; }
+});
+
+test("continuation token survives two independent Performer ambiguities", () => {
+  const previous = process.env.AI_EDIT_CONTINUATION_SECRET; process.env.AI_EDIT_CONTINUATION_SECRET = "test-secret";
+  try {
+    const current = { id: "project", stages: [{ id: "stage", name: "Этап", tasks: [{ id: "hero", name: "герой", executors: [] }, { id: "loh", name: "лох", executors: [] }] }] };
+    const performers = [{ id: "m1", firstName: "Миша" }, { id: "m2", firstName: "Миша" }, { id: "e1", firstName: "Элла" }, { id: "e2", firstName: "Элла" }];
+    const semantic = parseAiEditSemanticResponse({ kind: "commands", summary: "Два Performer", warnings: [], commands: [{ type: "executor.createFromPerformer", taskName: "герой", performerName: "Миша" }, { type: "executor.createFromPerformer", taskName: "лох", performerName: "Элла" }] });
+    const first = resolveAiEditSemanticDraft({ semantic, project: current, scope: request.scope, performers });
+    assert.deepEqual(first.unresolvedSlots.map((slot) => slot.id), ["slot-0-performer", "slot-1-performer"]);
+    const token1 = signAiEditContinuation({ semantic, unresolvedSlots: first.unresolvedSlots, confirmedTargets: first.confirmedTargets, slotValues: first.slotValues });
+    const second = resolveAiEditSemanticDraft({ semantic, project: current, scope: request.scope, performers, prior: verifyAiEditContinuation(token1), selectedSource: { kind: "performer", id: "m2" } });
+    assert.deepEqual(second.unresolvedSlots.map((slot) => slot.id), ["slot-1-performer"]);
+    const token2 = signAiEditContinuation({ semantic, unresolvedSlots: second.unresolvedSlots, confirmedTargets: second.confirmedTargets, slotValues: second.slotValues });
+    const third = resolveAiEditSemanticDraft({ semantic, project: current, scope: request.scope, performers, prior: verifyAiEditContinuation(token2), selectedSource: { kind: "performer", id: "e1" } });
+    assert.deepEqual(third.unresolvedSlots, []); assert.deepEqual(third.confirmedTargets, first.confirmedTargets);
+    assert.deepEqual(materializeResolvedSemanticPlan(third).commands.map((command) => command.performerId), ["m2", "e1"]);
+  } finally { if (previous === undefined) delete process.env.AI_EDIT_CONTINUATION_SECRET; else process.env.AI_EDIT_CONTINUATION_SECRET = previous; }
 });
 
 test("continuation token is versioned, signed and expires", () => {

@@ -51,13 +51,15 @@ export function resolveAiEditSemanticDraft({ semantic, project, scope, performer
     } else if (command.type === "executor.createAnonymous") {
       if (!command.taskRef) {
         const selected = slotValues[`slot-${index}-task`] || command.taskId || command.taskName;
-        const resolved = selectedSourceFor(selected, project, "task") || selected && resolveNamed(project, "task", selected, command) || scopeEntity(scope, "task") || soleStageTask(project, scope);
+        const restored = selectedSourceFor(confirmedTargets[index]?.task?.id, project, "task");
+        const resolved = restored || selectedSourceFor(selected, project, "task") || selected && resolveNamed(project, "task", selected, command) || scopeEntity(scope, "task") || soleStageTask(project, scope);
         if (resolved) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), task: { kind: "task", id: resolved.id } };
         else addSlot(index, "task", "task", "В какую Task добавить Executor?", entities(project, "task", command));
       }
     } else if (command.type === "executor.createFromPerformer") {
       const selectedTask = slotValues[`slot-${index}-task`] || command.taskId || command.taskName;
-      const task = selectedSourceFor(selectedTask, project, "task") || selectedTask && resolveNamed(project, "task", selectedTask, command) || scopeEntity(scope, "task") || soleStageTask(project, scope);
+      const restoredTask = selectedSourceFor(confirmedTargets[index]?.task?.id, project, "task");
+      const task = restoredTask || selectedSourceFor(selectedTask, project, "task") || selectedTask && resolveNamed(project, "task", selectedTask, command) || scopeEntity(scope, "task") || soleStageTask(project, scope);
       if (task) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), task: { kind: "task", id: task.id } };
       else addSlot(index, "task", "task", "В какую Task добавить Performer?", entities(project, "task", command));
       const performerSlot = `slot-${index}-performer`, selectedPerformer = slotValues[performerSlot] || command.performerId;
