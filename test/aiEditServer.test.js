@@ -43,7 +43,7 @@ test("global request keeps runtime Project id equal to scope and owner-scoped cl
 
 test("ambiguous explicit Performer returns one clarification candidate set", () => {
   const performers = [{ id: "1", firstName: "Миша", lastName: "Иванов" }, { id: "2", firstName: "Миша", lastName: "Петров" }];
-  const result = resolveExplicitPerformers("Назначь Мишу на моделинг", performers);
+  const result = resolveExplicitPerformers("Назначь Мишу из базы на моделинг", performers);
   assert.equal(result.performers.length, 0); assert.match(result.clarification.question, /какого исполнителя/i); assert.equal(result.clarification.choices.length, 2);
   assert.deepEqual(resolveExplicitPerformers("Увеличь детализацию", performers).performers, []);
 });
@@ -155,6 +155,13 @@ test("Performer choices deduplicate stable ids but keep distinct same-name cards
   assert.deepEqual(result.clarification.choices.map((item) => item.source.id), ["ella-1", "ella-2"]);
   const one = resolveExplicitPerformers("Добавь Эллу из базы", [ella, duplicate]);
   assert.equal(one.clarification, null); assert.equal(one.performers[0].id, "ella-1");
+});
+
+test("same-name Performer does not turn a short anonymous intent into library intent", () => {
+  const performers = [{ id: "pf-misha", firstName: "Миша", lastName: "Иванов" }];
+  assert.equal(hasExplicitPerformerLibraryIntent("добавь Мишу", [], {}), false);
+  assert.equal(hasExplicitPerformerLibraryIntent("добавь Мишу из базы", [], {}), true);
+  assert.deepEqual(resolveExplicitPerformers("добавь Мишу", performers).performers, []);
 });
 
 test("technical modal renders only normalized error code beside generic message", () => {

@@ -150,3 +150,16 @@ test("Task scope plus one confirmed Performer compiles to addFromPerformer only"
   assert.deepEqual(diff.operations[0].value, { executorId: "new-executor", performerId: performer.id });
   assert.deepEqual(Object.keys(parsed.command).sort(), ["performerId", "taskId", "type"]);
 });
+
+test("Task scope short name intent creates an anonymous Executor without invented role", () => {
+  const current = project();
+  const localRequest = { ...request("добавь Мишу"), scope: { kind: "task", projectId: "p", stageId: "s", taskId: "t" } };
+  const parsed = semantic({ type: "executor.createAnonymous", name: "Миша" });
+  assert.ok(parsed);
+  const diff = compileAiEditSemanticCommand({ semantic: parsed, request: localRequest, project: current, resolvedTask: { id: "t" } });
+  assert.deepEqual(diff.operations.map((item) => item.type), ["executor.addAnonymous", "executor.tag.add"]);
+  assert.deepEqual(diff.operations[1].value, { tagId: "tag-2", key: "name", value: "Миша" });
+  assert.equal(diff.operations.some((item) => item.type === "executor.tag.update"), false);
+  assert.equal(semantic({ type: "executor.createAnonymous" }), null);
+  assert.ok(parseAiEditSemanticResponse({ kind: "clarification", question: "Как назвать исполнителя?" }));
+});

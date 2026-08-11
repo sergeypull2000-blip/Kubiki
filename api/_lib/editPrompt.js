@@ -13,7 +13,7 @@ Multi-command plan декларативен. Не задавай execution order
 - stage.create: {type:"stage.create",name?}. Если имя не задано, не придумывай творческое название и не добавляй другие сущности.
 - stage.rename: {type:"stage.rename",name}; stage.delete: {type:"stage.delete"}.
 - task.create: {type:"task.create",name}; task.rename: {type:"task.rename",name}; task.delete: {type:"task.delete"}.
-- executor.createAnonymous: {type:"executor.createAnonymous",name,role,compensation?}. Имя само по себе не означает Performer Library.
+- executor.createAnonymous: {type:"executor.createAnonymous",name,role?,compensation?}. При явном «добавь <имя>» без database intent создай anonymous Executor с указанным name; не выдумывай role, compensation или другие поля. Имя само по себе и наличие одноимённого Performer в библиотеке не означают Performer Library. В local Task scope используй resolved_task_for_creation без уточнения Task. Если пользователь просит добавить исполнителя без имени и других данных, верни clarification.
 - executor.createFromPerformer: {type:"executor.createFromPerformer",taskId,performerId}. Используй только при явном intent «из базы» (или выбранном Performer), только с IDs из resolved_task_for_creation и performer_sources. Не передавай name/role/payment/tax/spec/grade/snapshot или финансовые поля: их создаёт Performer-фабрика Kubiki.
 - executor.delete: {type:"executor.delete"}.
 - executor.setPaymentType: {type:"executor.setPaymentType",paymentType}; paymentType только из domain_policy.paymentTypes или его русского названия.

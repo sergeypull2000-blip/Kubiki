@@ -51,7 +51,8 @@ export function isAiEditSemanticCommand(command, { multi = false } = {}) {
         && (command.taskName === undefined || text(command.taskName, 160))
         && (command.stageName === undefined || text(command.stageName, 160))
         && !(command.taskRef && command.taskName)
-      : exact(command, ["type", "name", "role"], ["compensation"]) && text(command.name, 160) && text(command.role, 160) && (command.compensation === undefined || numberValue(command.compensation));
+      : exact(command, ["type", "name"], ["role", "compensation"]) && text(command.name, 160)
+        && (command.role === undefined || text(command.role, 160)) && (command.compensation === undefined || numberValue(command.compensation));
     case "executor.createFromPerformer": return exact(command, ["type", "taskId", "performerId"])
       && id(command.taskId) && id(command.performerId);
     case "executor.setCompensation": return multi ? exact(command, ["type", "value"], ["targetRef", "targetName", "taskName", "stageName"]) && numberValue(command.value) && validExecutorTarget(command) : exact(command, ["type", "value"]) && numberValue(command.value);

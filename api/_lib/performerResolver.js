@@ -73,6 +73,7 @@ export function resolveExplicitPerformers(instruction, performers, selectedSourc
 
   if (selected.length === 1) return { performers: selected, targetExecutorId: null, clarification: null };
   if (selected.length > 1) return performerAmbiguity(selected);
+  if (!DATABASE_INTENT.test(instruction)) return { performers: [], targetExecutorId: null, clarification: null };
   if (!ASSIGNMENT_INTENT.test(instruction)) return { performers: [], targetExecutorId: null, clarification: null };
   const matches = performerMatches(normalizeSearchText(instruction), performers);
   if (matches.length === 1) return { performers: matches, targetExecutorId: null, clarification: null };
