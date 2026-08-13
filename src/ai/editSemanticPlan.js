@@ -110,8 +110,10 @@ export function resolveAiEditSemanticDraft({ semantic, project, scope, performer
     } else if (!["stage.create", "executor.createFromPerformer", "executor.setTaxBulk"].includes(command.type) && !command.targetRef) {
       const kind = command.type.startsWith("stage.") ? "stage" : command.type.startsWith("task.") ? "task" : "executor";
       const selected = slotValues[`slot-${index}-target`] || command.targetName;
-      const scopedMatches = selected ? entities(project, kind, command).filter((item) => scopeContains(project, scope, kind, item.id) && same(item.name, selected)) : [];
-      const resolved = selectedSourceFor(slotValues[`slot-${index}-target`], project, kind) || scopedMatches.length === 1 && scopedMatches[0] || !selected && trustedScopeEntity(project, scope, kind) || !selected && scopeEntity(scope, kind);
+      const candidates = entities(project, kind, command).filter((item) => scopeContains(project, scope, kind, item.id));
+      const scopedMatches = selected ? candidates.filter((item) => same(item.name, selected)) : [];
+      const soleExecutorInNamedTask = !selected && kind === "executor" && command.taskName && candidates.length === 1 ? candidates[0] : null;
+      const resolved = selectedSourceFor(slotValues[`slot-${index}-target`], project, kind) || scopedMatches.length === 1 && scopedMatches[0] || soleExecutorInNamedTask || !selected && trustedScopeEntity(project, scope, kind) || !selected && scopeEntity(scope, kind);
       if (resolved) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), target: { kind, id: resolved.id } };
       else addSlot(index, "target", kind, `Какой ${kind} изменить?`, entities(project, kind, command));
     }

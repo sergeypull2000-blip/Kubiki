@@ -231,6 +231,43 @@ test("Stage contextual Executor creation uses sole Task and clarifies zero or ma
   assert.match(none.unresolvedSlots[0].question, /нет Task/);
 });
 
+test("Stage contextual parent stays trusted through compiler validation", () => {
+  const scope = { kind: "stage", projectId: "project", stageId: "stage-a" };
+  const current = { id: "project", stages: [
+    { id: "stage-a", name: "A", tasks: [{ id: "task-a", name: "Only", executors: [{ id: "executor-a", amount: "0", tags: [] }] }] },
+    { id: "stage-b", name: "B", tasks: [{ id: "task-b", name: "Other", executors: [] }] },
+  ] };
+  const commands = (command) => parseAiEditSemanticResponse({ kind: "commands", summary: "create", warnings: [], commands: [command] });
+  const localRequest = { ...request, scope, instruction: "добавь Мишу" };
+
+  const anonymous = commands({ type: "executor.createAnonymous", name: "Миша" });
+  const anonymousResolved = resolveAiEditSemanticDraft({ semantic: anonymous, project: current, scope });
+  const anonymousDiff = compileAiEditSemanticPlan({ semantic: anonymous, request: localRequest, project: current, confirmedTargets: anonymousResolved.confirmedTargets });
+  assert.equal(anonymousDiff.operations[0].targetId, "task-a");
+  assert.equal(applyAiEditOperations(current, anonymousDiff, { idPool, instruction: localRequest.instruction }).stages[0].tasks[0].executors.length, 2);
+
+  const performer = { id: "performer-misha", firstName: "Миша", active: true };
+  const fromLibrary = commands({ type: "executor.createFromPerformer", performerId: performer.id, performerName: "Миша" });
+  const libraryRequest = { ...localRequest, instruction: "добавь Мишу из базы", knowledge: { useStudioKnowledge: false, selectedSources: [{ kind: "performer", id: performer.id }] } };
+  const libraryResolved = resolveAiEditSemanticDraft({ semantic: fromLibrary, project: current, scope, performers: [performer], instruction: libraryRequest.instruction });
+  const libraryDiff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(libraryResolved), request: libraryRequest, project: current, confirmedTargets: libraryResolved.confirmedTargets, performers: [performer] });
+  assert.equal(libraryDiff.operations[0].targetId, "task-a");
+
+  assert.throws(() => compileAiEditSemanticPlan({ semantic: anonymous, request: localRequest, project: current, confirmedTargets: { 0: { task: { kind: "task", id: "task-b" } } } }), (error) => error.code === "ai_compile_target_out_of_scope");
+});
+
+test("Stage Task clarification confirms only a parent inside that Stage", () => {
+  const scope = { kind: "stage", projectId: "project", stageId: "stage" };
+  const current = { id: "project", stages: [{ id: "stage", name: "Stage", tasks: [{ id: "one", name: "One", executors: [] }, { id: "two", name: "Two", executors: [] }] }] };
+  const semantic = parseAiEditSemanticResponse({ kind: "commands", summary: "create", warnings: [], commands: [{ type: "executor.createAnonymous", name: "Миша" }] });
+  const pending = resolveAiEditSemanticDraft({ semantic, project: current, scope });
+  assert.equal(pending.unresolvedSlots[0].kind, "task");
+  const confirmed = resolveAiEditSemanticDraft({ semantic, project: current, scope, prior: pending, selectedSource: { kind: "project", id: "two" } });
+  assert.equal(confirmed.confirmedTargets[0].task.id, "two");
+  const diff = compileAiEditSemanticPlan({ semantic, request: { ...request, scope, instruction: "добавь Мишу" }, project: current, confirmedTargets: confirmed.confirmedTargets });
+  assert.equal(diff.operations[0].targetId, "two");
+});
+
 test("explicit named edits outside local scope stay out of scope", () => {
   const current = { id: "project", stages: [
     { id: "stage-a", name: "A", tasks: [{ id: "task-a", name: "Раскадровка", executors: [] }] },

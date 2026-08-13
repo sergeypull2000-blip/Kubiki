@@ -314,17 +314,19 @@ test("generation function has one hard budget below frontend and Vercel limits",
   await assert.rejects(() => budget.run(new Promise(() => {})), RequestDeadlineError);
 });
 
-test("professional SYSTEM_PROMPT remains byte-for-byte unchanged", () => {
+const canonicalText = (value) => value.replace(/\r\n?/g, "\n");
+
+test("professional SYSTEM_PROMPT remains unchanged across platform line endings", () => {
   const source = readFileSync(new URL("../api/generate-estimate.js", import.meta.url), "utf8");
   const start = source.indexOf("const SYSTEM_PROMPT = `") + "const SYSTEM_PROMPT = `".length;
   const end = source.indexOf("`;", start);
-  const prompt = source.slice(start, end);
-  assert.equal(prompt.length, 12927);
-  assert.equal(createHash("sha256").update(prompt).digest("hex"), "86ed287f7347f09df9a64bfdd2f88022413f895a75771ef0e27ce767d896510e");
+  const prompt = canonicalText(source.slice(start, end));
+  assert.equal(prompt.length, 12422);
+  assert.equal(createHash("sha256").update(prompt).digest("hex"), "5a76b5590d67b685a6388de846c3ae66941f03466d1e8eecc2eb5437ac788ed8");
 });
 
-test("estimate JSON schema remains byte-for-byte unchanged", () => {
-  const source = readFileSync(new URL("../api/_lib/estimateSchema.js", import.meta.url));
-  assert.equal(source.length, 1609);
+test("estimate JSON schema remains unchanged across platform line endings", () => {
+  const source = canonicalText(readFileSync(new URL("../api/_lib/estimateSchema.js", import.meta.url), "utf8"));
+  assert.equal(source.length, 1437);
   assert.equal(createHash("sha256").update(source).digest("hex"), "19c401aa0903d8c195c33b97eecdbc20e64fa26f11f4f9cf1e6211a5af6b0317");
 });

@@ -84,9 +84,13 @@ function contextualCreationAllows(index, scope, operation) {
     return scope.kind === "stage";
   }
   if (["executor.addAnonymous", "executor.addFromPerformer"].includes(operation.type)) {
-    if (!scope.taskId || operation.targetId !== scope.taskId) return false;
-    const located = index.tasks.get(scope.taskId);
+    const located = index.tasks.get(operation.targetId);
     if (!located || located.stage.id !== scope.stageId) return false;
+    // A Stage-scoped semantic request may create in a Task that the compiler
+    // resolved as the sole/clarified contextual parent. This is still bounded
+    // by the hard Stage; existing-entity edits continue through scopeAllows.
+    if (scope.kind === "stage") return true;
+    if (!scope.taskId || operation.targetId !== scope.taskId) return false;
     if (scope.kind === "executor") return index.executors.get(scope.executorId)?.task.id === scope.taskId;
     return scope.kind === "task";
   }

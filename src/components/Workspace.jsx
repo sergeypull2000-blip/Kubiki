@@ -39,6 +39,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
   const globalAiSubmitRef = useRef(null);
+  const globalAiBoundaryRef = useRef(null);
   const canvasInnerRef = useRef(null);
   const [aiAnchor, setAiAnchor] = useState({ right: 12, width: 430 });
   useOutsideClose(profileRef, profileOpen ? () => setProfileOpen(false) : null);
@@ -461,8 +462,8 @@ const toggleAllCollapsed = () =>
                 </>
               )}
             </div>
-            {!editingTemplate && onRequestAiEdit && project.stages.length > 0 && <div className="kb-ai-launcher-wrap" style={{ right: aiAnchor.right, "--kb-ai-panel-width": `${aiAnchor.width}px` }}>
-              {globalAiOpen && <AiEditTechnicalModal variant="launcher" closing={globalAiClosing} submitRef={globalAiSubmitRef} scope={globalScope} contextLabel="Вся смета" onRequest={onRequestAiEdit} onCancelRequest={onCancelAiEdit} onApply={onApplyAiEdit} onUndo={onUndoAiEdit} canUndo={canUndoAiEdit} onClose={closeGlobalAi} />}
+            {!editingTemplate && onRequestAiEdit && project.stages.length > 0 && <div ref={globalAiBoundaryRef} className="kb-ai-launcher-wrap" style={{ right: aiAnchor.right, "--kb-ai-panel-width": `${aiAnchor.width}px` }}>
+              {globalAiOpen && <AiEditTechnicalModal variant="launcher" closing={globalAiClosing} submitRef={globalAiSubmitRef} outsideBoundaryRef={globalAiBoundaryRef} scope={globalScope} contextLabel="Вся смета" onRequest={onRequestAiEdit} onCancelRequest={onCancelAiEdit} onApply={onApplyAiEdit} onUndo={onUndoAiEdit} canUndo={canUndoAiEdit} onClose={closeGlobalAi} />}
               {canUndoAiEdit && !globalAiOpen && <button type="button" className="kb-ai-undo-chip" onClick={onUndoAiEdit}>Undo AI</button>}
               <button type="button" className={`kb-ai-launcher${globalAiOpen && !globalAiClosing ? " is-open" : ""}`} aria-label={globalAiOpen ? "Предпросмотр изменений" : "Открыть AI-ассистента"} onClick={() => { setLocalAiPopover(null); if (globalAiOpen) globalAiSubmitRef.current?.(); else setGlobalAiOpen(true); }}><ArrowUp size={18} strokeWidth={1.8} /></button>
             </div>}

@@ -17,7 +17,7 @@ const planLines = (plan) => plan ? [
   `Изменений: ${plan.operationCount}`,
 ].filter(Boolean) : [];
 
-export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета", variant = "dialog", position = null, closing = false, submitRef = null, onRequest, onCancelRequest, onApply, onClose, onUndo, canUndo = false }) {
+export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета", variant = "dialog", position = null, closing = false, submitRef = null, outsideBoundaryRef = null, onRequest, onCancelRequest, onApply, onClose, onUndo, canUndo = false }) {
   const [instruction, setInstruction] = useState("");
   const [state, setState] = useState("idle");
   const [result, setResult] = useState(null);
@@ -59,14 +59,15 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
     try { await onApply(result); onClose(); } catch (failure) { setError(failure.message); setErrorCode(failure.code || ""); setState("ready"); }
   };
   const busy = state === "loading" || state === "applying";
-  if (submitRef) submitRef.current = state === "idle" && !result && !error && instruction.trim() ? () => request() : null;
+  const submit = () => request();
+  if (submitRef) submitRef.current = state === "idle" && !result && !error && instruction.trim() ? submit : null;
   useEffect(() => {
     if (variant === "dialog") return;
-    const close = (event) => { if (!busy && panelRef.current && !panelRef.current.contains(event.target)) onClose(); };
+    const close = (event) => { const boundary = outsideBoundaryRef?.current || panelRef.current; if (!busy && boundary && !boundary.contains(event.target)) onClose(); };
     const key = (event) => { if (event.key === "Escape" && !busy) onClose(); };
     document.addEventListener("mousedown", close, true); document.addEventListener("keydown", key);
     return () => { document.removeEventListener("mousedown", close, true); document.removeEventListener("keydown", key); };
-  }, [busy, onClose, variant]);
+  }, [busy, onClose, outsideBoundaryRef, variant]);
   if (variant === "launcher") {
     const feedbackVisible = state !== "idle" || !!result || !!error;
     return <div ref={panelRef} className={`kb-ai-launcher-panel${closing ? " is-closing" : ""}`}>
@@ -96,7 +97,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
         <div className="kb-unified-input">
           <textarea autoFocus className="kb-generate-textarea" rows={4} value={instruction} maxLength={4000} disabled={busy || result?.kind === "diff"}
             onChange={(event) => setInstruction(event.target.value)}
-            onKeyDown={(event) => { if (event.key === "Escape") onClose(); if (event.key === "Enter" && !event.shiftKey && !busy && !result) { event.preventDefault(); request(); } }}
+            onKeyDown={(event) => { if (event.key === "Escape") onClose(); if (event.key === "Enter" && !event.shiftKey && !busy && !result) { event.preventDefault(); submit(); } }}
             placeholder="Опишите, что нужно изменить в смете" />
         </div>
       </div>

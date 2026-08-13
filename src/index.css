@@ -43,7 +43,7 @@ body {
 .kb-ai-launcher.is-open:disabled { opacity: .55; cursor: default; }
 .kb-ai-undo-chip { position: absolute; right: 55px; bottom: 8px; width: max-content; padding: 7px 10px; border: 1px solid #d9e2f5; border-radius: 999px; background: rgba(255,255,255,.94); color: #315185; font-size: 11px; box-shadow: 0 5px 16px rgba(29, 44, 73, .12); cursor: pointer; }
 .kb-ai-global-overlay .kb-ai-edit-dialog { transform-origin: calc(100% - 28px) calc(100% - 28px); animation: kb-ai-expand .2s cubic-bezier(.2,.75,.25,1); }
-.kb-ai-inline-anchor { position: fixed; z-index: 1450; width: min(360px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: visible; overscroll-behavior: contain; }
+.kb-ai-inline-anchor { position: fixed; z-index: 1450; width: min(360px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-x: hidden; overflow-y: hidden; overscroll-behavior: contain; }
 .kb-ai-edit-inline { width: 100%; max-height: min(410px, calc(100vh - 24px)); overflow: auto; border-radius: 13px; box-shadow: 0 18px 50px rgba(24, 31, 48, .24); animation: kb-menu-in .14s ease-out; }
 .kb-ai-edit-inline .kb-modal-body { padding: 12px; }
 .kb-ai-edit-inline .kb-modal-head { padding: 11px 12px; }
@@ -51,17 +51,19 @@ body {
 .kb-ai-launcher-panel { position: absolute; right: 0; bottom: 0; width: var(--kb-ai-panel-width, 430px); }
 .kb-ai-launcher-prompt { width: 100%; min-height: 128px; background: #fff; box-shadow: 0 20px 55px rgba(24, 38, 67, .22); animation: kb-ai-launcher-open .2s cubic-bezier(.2,.75,.25,1); transform-origin: bottom right; }
 .kb-ai-launcher-feedback { width: 100%; max-height: min(440px, calc(100vh - 235px)); margin-bottom: 10px; padding: 14px 15px; overflow: auto; border: 1px solid #dce2ec; border-radius: 15px; background: #fff; box-shadow: 0 18px 48px rgba(24,38,67,.18); animation: kb-ai-feedback-in .18s cubic-bezier(.2,.75,.25,1); }
-.kb-ai-launcher-feedback-content { display: grid; gap: 9px; }
-.kb-ai-launcher-choices { display: flex; flex-wrap: wrap; gap: 6px; }
-.kb-ai-launcher-answer { display: flex; gap: 8px; align-items: center; }
-.kb-ai-launcher-answer .kb-input { flex: 1; }
+.kb-ai-launcher-feedback-content { display: grid; min-width: 0; gap: 9px; overflow-wrap: anywhere; }
+.kb-ai-launcher-choices { display: flex; min-width: 0; flex-wrap: wrap; gap: 6px; }
+.kb-ai-launcher-choices > .kb-btn { min-width: 0; max-width: 100%; height: auto; white-space: normal; overflow-wrap: anywhere; word-break: break-word; text-align: left; }
+.kb-ai-launcher-answer { display: flex; min-width: 0; gap: 8px; align-items: center; }
+.kb-ai-launcher-answer .kb-input { min-width: 0; flex: 1 1 auto; }
+.kb-ai-launcher-answer .kb-btn { min-width: 0; flex: 0 1 auto; white-space: normal; overflow-wrap: anywhere; }
 .kb-ai-launcher-metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 2px 14px; padding-top: 4px; border-top: 1px solid #edf0f4; }
 .kb-ai-launcher-feedback-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .kb-ai-inline-prompt { min-height: 128px; animation: kb-menu-in .14s ease-out; transform-origin: top left; }
 .kb-ai-inline-prompt .kb-generate-textarea { padding-right: 42px; }
-.kb-ai-inline-panel { position: relative; width: 100%; }
-.kb-ai-inline-surface { display: grid; gap: 12px; background: transparent; }
-.kb-ai-inline-feedback { position: static; width: 100%; max-height: min(360px, calc(100vh - 190px)); margin: 0; border: 0; outline: 0; border-radius: 13px; background:#fff; box-shadow:0 14px 38px rgba(24,31,48,.09),0 0 24px rgba(74,103,155,.04); }
+.kb-ai-inline-panel { position: relative; width: 100%; min-width: 0; overflow-x: hidden; }
+.kb-ai-inline-surface { display: grid; min-width: 0; gap: 12px; overflow-x: hidden; background: transparent; }
+.kb-ai-inline-feedback { position: static; width: 100%; min-width: 0; max-height: min(360px, calc(100vh - 190px)); margin: 0; overflow-x: hidden; overflow-y: auto; border: 0; outline: 0; border-radius: 13px; background:#fff; box-shadow:0 14px 38px rgba(24,31,48,.09),0 0 24px rgba(74,103,155,.04); }
 .kb-ai-inline-input-section { border: 0; outline: 0; border-radius: 13px; background:#fff; box-shadow:0 14px 38px rgba(24,31,48,.09),0 0 24px rgba(74,103,155,.04); }
 .kb-ai-inline-feedback .kb-ai-launcher-answer { align-items: stretch; }
 .kb-ai-inline-feedback .kb-ai-launcher-answer .kb-btn { padding-inline: 10px; }

@@ -3,18 +3,20 @@ import { loadOwnAiSettings, normalizeServerAiSettings } from "./_lib/aiSettings.
 import { createDeepSeekClient, DeepSeekError } from "./_lib/deepseek.js";
 import { buildAiEditMessages } from "./_lib/editPrompt.js";
 import { loadOwnPerformersForEdit, loadOwnProjectForEdit, loadOwnSelectedKnowledge } from "./_lib/editProject.js";
-import { hasExplicitPerformerLibraryIntent, needsClarificationForBareInput, resolveExplicitPerformers } from "./_lib/performerResolver.js";
-import { resolveExecutorCreationTask, resolveProjectTarget, resolveTaskCreationStage } from "./_lib/projectTargetResolver.js";
+import { hasExplicitPerformerLibraryIntent, needsClarificationForBareInput } from "./_lib/performerResolver.js";
 import { createRequestBudget, RequestDeadlineError } from "./_lib/requestBudget.js";
 import { validateAiEditRequest } from "../src/ai/editSchema.js";
-import { attachTrustedAiEditMetadata, diagnoseAiEditSemanticResponse, parseAiEditSemanticResponse } from "../src/ai/editSemanticSchema.js";
-import { AiEditSemanticCompileError, compileAiEditSemanticCommand, compileAiEditSemanticPlan } from "../src/ai/editSemanticCompiler.js";
+import { attachTrustedAiEditMetadata, diagnoseAiEditSemanticResponse, normalizeAiEditSemanticPlan, parseAiEditSemanticResponse } from "../src/ai/editSemanticSchema.js";
+import { AiEditSemanticCompileError, compileAiEditSemanticPlan } from "../src/ai/editSemanticCompiler.js";
 import { AiEditSemanticPlanError, materializeResolvedSemanticPlan, resolveAiEditSemanticDraft } from "../src/ai/editSemanticPlan.js";
 import { signAiEditContinuation, verifyAiEditContinuation } from "./_lib/semanticContinuation.js";
 import { indexProject } from "../src/ai/editOperations.js";
 import { projectRevision } from "../src/ai/projectRevision.js";
 import { loadOwnKnowledge } from "./_lib/knowledgeRepository.js";
 import { projectKnowledge } from "./_lib/knowledgeProjection.js";
+import { routeAiIntent } from "./_lib/aiIntentRouter.js";
+import { compileGeneratedStructure, parseGeneratedStructure, resolveGeneratedStructure } from "./_lib/generatedStructure.js";
+import { runEstimateGeneration } from "./_lib/generationOrchestrator.js";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const MODEL = "deepseek-v4-flash";
@@ -50,14 +52,6 @@ async function executeEdit(req, budget) {
   if (serverRevision !== request.baseRevision) return { status: 409, body: { error: "Смета изменилась. Сначала сохраните её и повторите запрос.", code: "stale_revision" } };
   if (request.continuation) return await continueSemanticPlan({ request, project, auth });
   if (needsClarificationForBareInput(request.instruction)) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, question: "Что именно нужно изменить в смете?" } };
-  const multiIntent = looksLikeMultiIntent(request.instruction);
-  const projectTarget = multiIntent ? { target: null, clarification: null } : resolveProjectTarget(request.instruction, project, request.confirmed.projectEntityId, request.scope);
-  if (projectTarget.clarification) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, ...projectTarget.clarification } };
-  const taskCreationStage = multiIntent ? { stage: null, clarification: null } : resolveTaskCreationStage(request.instruction, project, request.confirmed.projectEntityId, request.scope);
-  if (taskCreationStage.clarification) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, ...taskCreationStage.clarification } };
-  const creationTask = multiIntent ? { task: null, clarification: null } : resolveExecutorCreationTask(request.instruction, project, request.confirmed.projectEntityId, request.scope);
-  if (creationTask.clarification) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, ...creationTask.clarification } };
-
   let settings = normalizeServerAiSettings();
   try { settings = await loadOwnAiSettings(auth.client, auth.user.id); } catch (error) { console.error("AI edit settings loading failed", { name: error?.name || "Error" }); }
 
@@ -65,11 +59,7 @@ async function executeEdit(req, budget) {
   const needsPerformers = explicitPerformerIntent;
   const ownPerformers = needsPerformers ? await loadOwnPerformersForEdit(auth.client, auth.user.id) : [];
   const selectedPerformerIds = [...new Set([...request.knowledge.selectedSources.filter((item) => item.kind === "performer").map((item) => item.id), ...(request.confirmed.performerId ? [request.confirmed.performerId] : [])])];
-  const severalNamedPerformers = namedPerformerCount(request.instruction, ownPerformers) > 1;
-  const resolved = severalNamedPerformers ? { performers: ownPerformers, targetExecutorId: null, clarification: null }
-    : resolveExplicitPerformers(request.instruction, ownPerformers, selectedPerformerIds.map((id) => ({ kind: "performer", id })), project, projectTarget.target);
   if (selectedPerformerIds.some((id) => !ownPerformers.some((item) => item.id === id))) return { status: 404, body: { error: "Performer не найден или недоступен" } };
-  if (resolved.clarification) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, ...resolved.clarification } };
 
   const selectedKnowledgeSources = request.knowledge.selectedSources.filter((item) => item.kind !== "performer");
   let knowledge = [];
@@ -82,35 +72,47 @@ async function executeEdit(req, budget) {
   const key = process.env.DEEPSEEK_API_KEY;
   if (!key) return { status: 500, body: { error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" } };
   const requestModel = createDeepSeekClient({ apiKey: key, url: DEEPSEEK_URL, model: MODEL, budget });
-  const raw = await requestModel(buildAiEditMessages({ request, project, personalization: settings.personalization, performers: resolved.performers, knowledge, resolvedProjectTarget: projectTarget.target, resolvedTask: creationTask.task }), { maxTokens: 2500, retries: 1, stage: "ai_edit" });
-  const trustedRaw = withTrustedCreationTask(raw, creationTask.task?.id);
-  const semantic = parseAiEditSemanticResponse(trustedRaw);
+  const route = await routeAiIntent({ instruction: request.instruction, requestModel });
+  if (!route) return { status: 502, body: { error: "Модель вернула некорректный маршрут AI-запроса", code: "ai_route_invalid_schema" } };
+  if (route.kind === "clarification") return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, question: route.question } };
+  if (route.kind === "unsupported") return { status: 200, body: { schemaVersion: 1, kind: "error", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, code: route.code, message: "Запрос не поддерживается" } };
+  if (route.kind === "generate_structure") return generateStructurePlan({ request, project, auth, settings, requestModel });
+  const raw = await requestModel(buildAiEditMessages({ request, project, personalization: settings.personalization, performers: ownPerformers, knowledge }), { maxTokens: 2500, retries: 1, stage: "ai_edit" });
+  const semantic = normalizeAiEditSemanticPlan(parseAiEditSemanticResponse(raw));
   if (!semantic) return { status: 502, body: { error: "Модель вернула некорректную semantic command", code: diagnoseAiEditSemanticResponse(raw) } };
   if (semantic.kind === "commands") {
     try {
       const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, performers: ownPerformers, instruction: request.instruction });
       if (resolvedPlan.unresolvedSlots.length) return clarificationResponse(request, resolvedPlan);
-      const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project, confirmedTargets: resolvedPlan.confirmedTargets, performer: resolved.performers.length === 1 ? resolved.performers[0] : null, performers: ownPerformers });
+      const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project, confirmedTargets: resolvedPlan.confirmedTargets, performers: ownPerformers });
       return { status: 200, body: diff };
     } catch (error) {
       if (error instanceof AiEditSemanticPlanError || error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code } };
       throw error;
     }
   }
-  if (semantic.kind !== "command") return { status: 200, body: attachTrustedAiEditMetadata(semantic, request) };
-  const performer = request.confirmed.performerId ? ownPerformers.find((item) => item.id === request.confirmed.performerId) : resolved.performers.length === 1 ? resolved.performers[0] : null;
-  try {
-    const diff = compileAiEditSemanticCommand({ semantic, request, project, resolvedTarget: taskCreationStage.stage || projectTarget.target, resolvedTask: creationTask.task, performer, performers: ownPerformers, performerExplicit: explicitPerformerIntent });
-    return { status: 200, body: diff };
-  } catch (error) {
-    if (error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code } };
-    throw error;
-  }
+  return { status: 200, body: attachTrustedAiEditMetadata(semantic, request) };
 }
 
-function looksLikeMultiIntent(instruction) {
-  const actions = instruction.match(/(?:добав|созда|переимен|удал|замен|установ|измен|дела|модел|визуализ|налог)\p{L}*/giu) || [];
-  return actions.length > 1;
+async function generateStructurePlan({ request, project, auth, settings, requestModel }) {
+  const performers = await loadOwnPerformersForEdit(auth.client, auth.user.id);
+  const symbolicPrompt = `You generate a strict Kubiki estimate fragment. Return one JSON object only: {"projectName":"...","stages":[{"name":"...","tasks":[{"name":"...","cost":0,"performerBindings":[{"key":"binding-1","performerName":"user supplied name"}]}]}],"warnings":[]}. stages and tasks must be non-empty. cost is an integer internal production cost in RUB before markup and taxes. Create only the requested structure. For every explicit request to assign a person from the Performer database, add a symbolic performerBindings entry to the exact destination task. Keys must be unique. Never return performerId, snapshot, role, rate, payment, tax or tags. Omit performerBindings when no database assignment was explicitly requested.`;
+  const result = await runEstimateGeneration({ brief: request.instruction, systemPrompt: symbolicPrompt, requestModel,
+    getGenerationContext: async () => ({ shortlist: { projectTemplates: [], stageTemplates: [], taskTemplates: [], performers: [], historicalProjects: [] }, personalization: settings.personalization }), allowPerformerBindings: true });
+  const draft = parseGeneratedStructure(result.estimate);
+  if (!draft) return { status: 502, body: { error: "Модель вернула некорректную структуру сметы", code: "ai_semantic_invalid_schema" } };
+  const resolved = resolveGeneratedStructure({ draft, performers });
+  if (resolved.unresolvedSlots.length) return generatedClarificationResponse(request, resolved);
+  try { return { status: 200, body: compileGeneratedStructure({ resolved, request, project, performers }) }; }
+  catch (error) { if (error instanceof AiEditSemanticCompileError || error instanceof AiEditSemanticPlanError || error instanceof Error && error.code) return { status: 422, body: { error: error.message, code: error.code || "ai_compile_invalid_generated_structure" } }; throw error; }
+}
+
+function generatedClarificationResponse(request, resolved) {
+  const slot = resolved.unresolvedSlots[0];
+  const continuationToken = signAiEditContinuation({ kind: "generated_structure", projectId: request.projectId, baseRevision: request.baseRevision, scope: request.scope,
+    generatedDraft: resolved.draft, unresolvedSlots: resolved.unresolvedSlots, slotValues: resolved.slotValues });
+  return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope,
+    question: slot.question, ...(slot.choices?.length ? { choices: slot.choices } : {}), continuationToken } };
 }
 
 function clarificationResponse(request, resolvedPlan) {
@@ -129,6 +131,19 @@ function confirmedTargetsExist(project, confirmedTargets) {
 async function continueSemanticPlan({ request, project, auth }) {
   const pending = verifyAiEditContinuation(request.continuation.token);
   if (!pending || pending.projectId !== request.projectId || pending.baseRevision !== request.baseRevision || JSON.stringify(pending.scope) !== JSON.stringify(request.scope)) return { status: 400, body: { error: "Уточнение недействительно или устарело", code: "ai_continuation_invalid" } };
+  if (pending.kind === "generated_structure") {
+    const draft = parseGeneratedStructure(pending.generatedDraft);
+    if (!draft) return { status: 400, body: { error: "Уточнение недействительно или устарело", code: "ai_continuation_invalid" } };
+    try {
+      const performers = await loadOwnPerformersForEdit(auth.client, auth.user.id);
+      const resolved = resolveGeneratedStructure({ draft, performers, prior: pending, answer: request.continuation.answer, selectedSource: request.continuation.source });
+      if (resolved.unresolvedSlots.length) return generatedClarificationResponse(request, resolved);
+      return { status: 200, body: compileGeneratedStructure({ resolved, request, project, performers }) };
+    } catch (error) {
+      if (error instanceof Error && error.code) return { status: 422, body: { error: error.message, code: error.code } };
+      throw error;
+    }
+  }
   const semantic = parseAiEditSemanticResponse(pending.semantic);
   if (!semantic || semantic.kind !== "commands" || !confirmedTargetsExist(project, pending.confirmedTargets)) return { status: 409, body: { error: "Подтверждённые сущности больше не существуют", code: "stale_revision" } };
   try {
@@ -143,20 +158,6 @@ async function continueSemanticPlan({ request, project, auth }) {
     if (error instanceof AiEditSemanticPlanError || error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code } };
     throw error;
   }
-}
-
-function withTrustedCreationTask(raw, taskId) {
-  let value; try { value = typeof raw === "string" ? JSON.parse(raw.trim()) : structuredClone(raw); } catch { return raw; }
-  if (taskId && value?.kind === "command" && ["executor.createAnonymous", "executor.createFromPerformer"].includes(value.command?.type)) value.command.taskId = taskId;
-  return value;
-}
-
-function namedPerformerCount(instruction, performers) {
-  const query = String(instruction || "").normalize("NFKC").toLocaleLowerCase("ru-RU");
-  return new Set((performers || []).filter((item) => {
-    const first = String(item.firstName || "").normalize("NFKC").toLocaleLowerCase("ru-RU");
-    return first.length >= 2 && query.includes(first.slice(0, Math.max(2, first.length - 1)));
-  }).map((item) => String(item.firstName).toLocaleLowerCase("ru-RU"))).size;
 }
 
 function scopeExists(project, scope) {

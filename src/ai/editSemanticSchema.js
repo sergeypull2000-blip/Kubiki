@@ -91,13 +91,18 @@ export function parseAiEditSemanticResponse(raw) {
   let value;
   try { value = typeof raw === "string" ? JSON.parse(raw.trim()) : raw; } catch { return null; }
   if (!object(value) || !["command", "commands", "clarification", "out_of_scope", "error"].includes(value.kind)) return null;
-  if (value.kind === "command") return exact(value, ["kind", "summary", "command", "warnings"]) && text(value.summary) && isAiEditSemanticCommand(value.command) && validWarnings(value.warnings) ? value : null;
+  if (value.kind === "command") return exact(value, ["kind", "summary", "command", "warnings"]) && text(value.summary) && isAiEditSemanticCommand(value.command, { multi: true }) && validWarnings(value.warnings) ? value : null;
   if (value.kind === "commands") return exact(value, ["kind", "summary", "commands", "warnings"]) && text(value.summary)
     && Array.isArray(value.commands) && value.commands.length > 0 && value.commands.length <= MAX_AI_EDIT_SEMANTIC_COMMANDS
     && value.commands.every((command) => isAiEditSemanticCommand(command, { multi: true })) && validWarnings(value.warnings) ? value : null;
   if (value.kind === "clarification") return exact(value, ["kind", "question"]) && text(value.question) && value.question.includes("?") ? value : null;
   if (value.kind === "out_of_scope") return exact(value, ["kind", "message"]) && text(value.message) ? value : null;
   return exact(value, ["kind", "code", "message"]) && id(value.code) && text(value.message) ? value : null;
+}
+
+export function normalizeAiEditSemanticPlan(semantic) {
+  if (semantic?.kind !== "command") return semantic;
+  return { kind: "commands", summary: semantic.summary, commands: [semantic.command], warnings: semantic.warnings };
 }
 
 const validWarnings = (warnings) => Array.isArray(warnings) && warnings.length <= 20 && warnings.every((item) => typeof item === "string" && item.length <= 500);

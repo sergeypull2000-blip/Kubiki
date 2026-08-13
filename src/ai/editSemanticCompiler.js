@@ -137,7 +137,9 @@ export function compileAiEditSemanticPlan({ semantic, request, project, confirme
   for (const { command, index } of ordered) {
     const located = command.targetRef ? allocated.get(command.targetRef) : null;
     const resolvedTarget = located ? { kind: located.kind, id: located.id } : confirmedTargets[index]?.target || null;
-    const taskId = command.taskRef ? allocated.get(command.taskRef)?.id : confirmedTargets[index]?.task?.id || command.taskId;
+    const contextualTaskId = confirmedTargets[index]?.task?.id;
+    const hardTaskId = ["task", "executor"].includes(request.scope.kind) ? request.scope.taskId : null;
+    const taskId = command.taskRef ? allocated.get(command.taskRef)?.id : contextualTaskId || hardTaskId;
     const stageId = command.stageRef ? allocated.get(command.stageRef)?.id : confirmedTargets[index]?.stage?.id;
     const clean = withoutPlanFields(command);
     const one = { kind: "command", summary: semantic.summary, command: clean, warnings: [] };
