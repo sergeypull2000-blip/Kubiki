@@ -12,10 +12,14 @@ const missing = (value, required) => required.filter((key) => !object(value) || 
 const unknown = (value, allowed) => keys(value).filter((key) => !allowed.includes(key));
 const inputType = (value) => Array.isArray(value) ? "array" : value === null ? "null" : typeof value;
 
-function rejected(base, validationPath, reason, value, required = [], optional = []) {
+function rejected(base, validationPath, reason, value, required = [], optional = [], executorFailure = false) {
   return { ...base, ok: false, validationPath, reason,
     ...(required.length ? { missingKeys: missing(value, required) } : {}),
     ...(object(value) ? { unknownKeys: unknown(value, [...required, ...optional]) } : {}),
+    ...(executorFailure ? {
+      rejectedExecutorType: typeof value?.type === "string" ? value.type : null,
+      rejectedExecutorKeys: keys(value),
+    } : {}),
   };
 }
 
@@ -62,15 +66,15 @@ export function diagnoseGeneratedStructure(input) {
         const executor = task.executors[ei], path = `${taskMeta.path}.executors[${ei}]`;
         const executorMeta = { path, discriminator: typeof executor?.type === "string" ? executor.type : null, keys: keys(executor) };
         taskMeta.executors.push(executorMeta); executorTotal += 1;
-        if (!object(executor)) return rejected(base, path, "invalid_executor_type", executor);
-        if (!Object.hasOwn(executor, "type")) return rejected(base, path, "missing_executor_discriminator", executor, ["type"]);
+        if (!object(executor)) return rejected(base, path, "invalid_executor_type", executor, [], [], true);
+        if (!Object.hasOwn(executor, "type")) return rejected(base, path, "missing_executor_discriminator", executor, ["type"], [], true);
         const optional = ["role", "paymentType", "compensation", "quantity", "tax", "count", "copies"];
         const required = executor.type === "anonymous_named" ? ["type", "name"] : executor.type === "anonymous_unnamed" ? ["type"] : executor.type === "performer_binding" ? ["type", "key", "performerName"] : ["type"];
         const allowedOptional = executor.type === "performer_binding" ? [] : optional;
-        if (!["anonymous_named", "anonymous_unnamed", "performer_binding"].includes(executor.type)) return rejected(base, `${path}.type`, "unknown_executor_discriminator", executor);
-        if (missing(executor, required).length) return rejected(base, path, "missing_executor_keys", executor, required, allowedOptional);
-        if (unknown(executor, [...required, ...allowedOptional]).length) return rejected(base, path, "unknown_executor_keys", executor, required, allowedOptional);
-        if (!normalizeExecutor(executor)) return rejected(base, path, "invalid_executor_fields", executor);
+        if (!["anonymous_named", "anonymous_unnamed", "performer_binding"].includes(executor.type)) return rejected(base, `${path}.type`, "unknown_executor_discriminator", executor, [], [], true);
+        if (missing(executor, required).length) return rejected(base, path, "missing_executor_keys", executor, required, allowedOptional, true);
+        if (unknown(executor, [...required, ...allowedOptional]).length) return rejected(base, path, "unknown_executor_keys", executor, required, allowedOptional, true);
+        if (!normalizeExecutor(executor)) return rejected(base, path, "invalid_executor_fields", executor, [], [], true);
       }
     }
   }

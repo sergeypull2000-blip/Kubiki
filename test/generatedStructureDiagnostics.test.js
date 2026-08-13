@@ -19,6 +19,9 @@ test("GeneratedStructure diagnostics identify bounded structural failures", () =
     if (missingKeys.length) assert.deepEqual(diagnostic.missingKeys, missingKeys, label);
   }
   assert.deepEqual(diagnoseGeneratedStructure(cases[3][1]).unknownKeys, ["amount"]);
+  const executorDiagnostic = diagnoseGeneratedStructure(cases[3][1]);
+  assert.equal(executorDiagnostic.rejectedExecutorType, "anonymous_named");
+  assert.deepEqual(executorDiagnostic.rejectedExecutorKeys, ["amount", "compensation", "name", "tax", "type"]);
 });
 
 test("fenced response is invalid JSON and valid DTO succeeds", () => {
@@ -28,8 +31,12 @@ test("fenced response is invalid JSON and valid DTO succeeds", () => {
 });
 
 test("diagnostics never contain protected field values", () => {
-  const serialized = JSON.stringify(diagnoseGeneratedStructure(valid()));
+  const rejected = valid(); rejected.stages[0].tasks[0].executors[0].privateField = "SECRET EXECUTOR VALUE";
+  const diagnostic = diagnoseGeneratedStructure(rejected), serialized = JSON.stringify(diagnostic);
+  assert.equal(diagnostic.rejectedExecutorType, "anonymous_named");
+  assert.equal(diagnostic.rejectedExecutorKeys.includes("privateField"), true);
   for (const secret of ["SECRET PROJECT", "SECRET STAGE", "SECRET TASK", "SECRET PERSON", "123456", "six percent"]) assert.equal(serialized.includes(secret), false);
+  assert.equal(serialized.includes("SECRET EXECUTOR VALUE"), false);
 });
 
 test("raw and repair diagnostics share one request correlation id", async () => {
