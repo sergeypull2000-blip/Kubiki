@@ -3,7 +3,7 @@ export const AI_INTENT_ROUTER_VERSION = 1;
 const clean = (value) => String(value || "").normalize("NFKC").toLocaleLowerCase("ru-RU").trim();
 const GENERATION_OBJECT = /(?:смет\p{L}*|структур\p{L}*|этап\p{L}*|стади\p{L}*)/iu;
 const GENERATION_ACTION = /(?:сдела\p{L}*|собер\p{L}*|собра\p{L}*|созда\p{L}*|сгенер\p{L}*)/iu;
-const EDIT_ACTION = /(?:переимен\p{L}*|удал\p{L}*|замен\p{L}*|измен\p{L}*|увелич\p{L}*|уменьш\p{L}*|перемест\p{L}*)/iu;
+const EDIT_ACTION = /(?:добав\p{L}*|переимен\p{L}*|удал\p{L}*|замен\p{L}*|измен\p{L}*|увелич\p{L}*|уменьш\p{L}*|перемест\p{L}*)/iu;
 
 export function routeAiIntentDeterministically(instruction) {
   const value = clean(instruction);

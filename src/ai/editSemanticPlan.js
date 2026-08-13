@@ -3,6 +3,10 @@ import { indexProject } from "./editOperations.js";
 const normalized = (value) => String(value || "").normalize("NFKC").toLocaleLowerCase("ru-RU").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const same = (a, b) => normalized(a) === normalized(b);
 const choice = (kind, id, label) => ({ id: `${kind}-${id}`, label, source: { kind: kind === "performer" ? "performer" : "project", id } });
+const creationSubject = (instruction, fallback) => {
+  const match = /(?:добав|созда)\p{L}*\s+(.+?)(?=\s+(?:из\s+базы|в\s+(?:задач|task|этап|stage)\p{L}*|на\s+(?:задач|task|этап|stage)\p{L}*)|$)/iu.exec(instruction);
+  return match?.[1]?.trim() || fallback;
+};
 
 export class AiEditSemanticPlanError extends Error {
   constructor(code, message) { super(message); this.name = "AiEditSemanticPlanError"; this.code = code; }
@@ -88,25 +92,27 @@ export function resolveAiEditSemanticDraft({ semantic, project, scope, performer
         const candidates = contextualTaskCandidates(project, scope, command);
         const selectedTask = candidates.find((item) => item.id === selected) || selected && candidates.filter((item) => same(item.name, selected)).length === 1 && candidates.find((item) => same(item.name, selected));
         const resolved = contextualCreationParent(project, scope, "executor") || restored || selectedTask || soleStageTask(project, scope);
+        const person = creationSubject(instruction, command.name || command.role || "Executor");
         if (resolved) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), task: { kind: "task", id: resolved.id } };
-        else addSlot(index, "task", "task", candidates.length ? "В какую Task добавить Executor?" : "В выбранном Stage нет Task. Создать Task или выбрать другую?", candidates);
+        else addSlot(index, "task", "task", candidates.length ? scope?.kind === "stage" ? `В какую задачу добавить ${person}?` : `Куда добавить ${person}?` : "В выбранном Stage нет Task. Создать Task или выбрать другую?", candidates);
       }
     } else if (command.type === "executor.createFromPerformer") {
+      const performerSlot = `slot-${index}-performer`, selectedPerformer = slotValues[performerSlot] || command.performerId;
+      const explicitSlot = `slot-${index}-performerExplicit`;
+      const namedPerformer = command.performerName || performers.find((item) => item.id === command.performerId)?.firstName;
+      const performerLabel = creationSubject(instruction, namedPerformer || "Performer");
+      if (slotValues[explicitSlot] === undefined) slotValues[explicitSlot] = explicitDatabaseRequest(instruction, namedPerformer, performerNames);
+      const matches = selectedPerformer ? performers.filter((item) => item.id === selectedPerformer) : performerMatches(command.performerName, performers);
+      if (selectedPerformer) slotValues[performerSlot] = selectedPerformer;
+      else if (matches.length === 1) slotValues[performerSlot] = matches[0].id;
+      else addSlot(index, "performer", "performer", matches.length ? `Какого Performer «${command.performerName}» выбрать?` : `Performer «${command.performerName || ""}» не найден. Кого выбрать?`, matches);
       const selectedTask = slotValues[`slot-${index}-task`] || command.taskId || command.taskName;
       const restoredTask = selectedSourceFor(confirmedTargets[index]?.task?.id, project, "task");
       const taskCandidates = contextualTaskCandidates(project, scope, command);
       const selectedCandidate = taskCandidates.find((item) => item.id === selectedTask) || selectedTask && taskCandidates.filter((item) => same(item.name, selectedTask)).length === 1 && taskCandidates.find((item) => same(item.name, selectedTask));
       const task = contextualCreationParent(project, scope, "executor") || restoredTask || selectedCandidate || soleStageTask(project, scope);
       if (task) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), task: { kind: "task", id: task.id } };
-      else addSlot(index, "task", "task", taskCandidates.length ? "В какую Task добавить Performer?" : "В выбранном Stage нет Task. Создать Task или выбрать другую?", taskCandidates);
-      const performerSlot = `slot-${index}-performer`, selectedPerformer = slotValues[performerSlot] || command.performerId;
-      const explicitSlot = `slot-${index}-performerExplicit`;
-      const namedPerformer = command.performerName || performers.find((item) => item.id === command.performerId)?.firstName;
-      if (slotValues[explicitSlot] === undefined) slotValues[explicitSlot] = explicitDatabaseRequest(instruction, namedPerformer, performerNames);
-      const matches = selectedPerformer ? performers.filter((item) => item.id === selectedPerformer) : performerMatches(command.performerName, performers);
-      if (selectedPerformer) slotValues[performerSlot] = selectedPerformer;
-      else if (matches.length === 1) slotValues[performerSlot] = matches[0].id;
-      else addSlot(index, "performer", "performer", matches.length ? `Какого Performer «${command.performerName}» выбрать?` : `Performer «${command.performerName || ""}» не найден. Кого выбрать?`, matches);
+      else addSlot(index, "task", "task", taskCandidates.length ? scope?.kind === "stage" ? `В какую задачу добавить ${performerLabel}?` : `Куда добавить ${performerLabel}?` : "В выбранном Stage нет Task. Создать Task или выбрать другую?", taskCandidates);
     } else if (!["stage.create", "executor.createFromPerformer", "executor.setTaxBulk"].includes(command.type) && !command.targetRef) {
       const kind = command.type.startsWith("stage.") ? "stage" : command.type.startsWith("task.") ? "task" : "executor";
       const selected = slotValues[`slot-${index}-target`] || command.targetName;
@@ -135,11 +141,15 @@ function soleStageTask(project, scope) {
 function performerMatches(name, performers) {
   const query = normalized(name);
   if (!query) return [];
-  return [...new Map((performers || []).filter((item) => {
+  const unique = [...new Map((performers || []).filter((item) => item?.id).map((item) => [item.id, item])).values()];
+  const exactFull = unique.filter((item) => normalized([item.firstName, item.lastName].filter(Boolean).join(" ")) === query);
+  const exactFirst = unique.filter((item) => normalized(item.firstName) === query);
+  const candidates = exactFull.length ? exactFull : exactFirst.length ? exactFirst : unique.filter((item) => {
     const full = normalized([item.firstName, item.lastName].filter(Boolean).join(" "));
     const first = normalized(item.firstName);
-    return full === query || first === query || full.startsWith(`${query} `) || query.startsWith(`${first} `);
-  }).map((item) => [item.id, { ...item, label: [[item.firstName, item.lastName].filter(Boolean).join(" "), item.primaryRole].filter(Boolean).join(" — ") }])).values()];
+    return full.startsWith(`${query} `) || query.startsWith(`${first} `);
+  });
+  return candidates.map((item) => ({ ...item, label: [[item.firstName, item.lastName].filter(Boolean).join(" "), item.primaryRole].filter(Boolean).join(" — ") }));
 }
 
 function explicitDatabaseRequest(instruction, performerName, performerNames) {

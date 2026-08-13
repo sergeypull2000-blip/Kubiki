@@ -46,7 +46,7 @@ export function isAiEditSemanticCommand(command, { multi = false } = {}) {
       ? exact(command, ["type"], ["ref", "name", "role", "paymentType", "compensation", "quantity", "tax", "taskId", "taskRef", "taskName", "stageName"])
         && (command.ref === undefined || localRef(command.ref, "executor"))
         && (command.name === undefined || text(command.name, 160)) && (command.role === undefined || text(command.role, 160))
-        && Boolean(command.name || command.role)
+        && Boolean(command.name || command.role || command.compensation !== undefined || command.paymentType || command.quantity !== undefined || command.tax !== undefined)
         && (command.paymentType === undefined || text(command.paymentType, 40)) && (command.compensation === undefined || numberValue(command.compensation))
         && (command.quantity === undefined || numberValue(command.quantity)) && (command.tax === undefined || numberValue(command.tax))
         && (command.taskId === undefined || id(command.taskId))
@@ -87,9 +87,34 @@ function validExecutorTarget(command) {
     && (command.stageName === undefined || text(command.stageName, 160)) && !(command.targetRef && command.targetName);
 }
 
-export function parseAiEditSemanticResponse(raw) {
+const HARMLESS_MODEL_KEYS = new Set(["schemaVersion", "confidence", "explanation", "reasoning"]);
+const HARMLESS_COMMAND_KEYS = new Set(["id", "reason", "description"]);
+
+export function normalizeAiEditSemanticDto(raw) {
   let value;
-  try { value = typeof raw === "string" ? JSON.parse(raw.trim()) : raw; } catch { return null; }
+  try { value = typeof raw === "string" ? JSON.parse(raw.trim()) : structuredClone(raw); } catch { return null; }
+  if (!object(value)) return null;
+  if (object(value.semantic)) {
+    if (!Object.keys(value).every((key) => key === "semantic" || HARMLESS_MODEL_KEYS.has(key))) return null;
+    value = value.semantic;
+  } else if (object(value.result)) {
+    if (!Object.keys(value).every((key) => key === "result" || HARMLESS_MODEL_KEYS.has(key))) return null;
+    value = value.result;
+  }
+  if (!object(value)) return null;
+  for (const key of HARMLESS_MODEL_KEYS) delete value[key];
+  if (value.kind === "commands" && !Array.isArray(value.commands) && Array.isArray(value.plan)) { value.commands = value.plan; delete value.plan; }
+  if (value.kind === "command" && !object(value.command) && object(value.commands)) { value.command = value.commands; delete value.commands; }
+  if (!value.kind && object(value.command)) value.kind = "command";
+  if (!value.kind && Array.isArray(value.commands)) value.kind = "commands";
+  if (value.warnings === undefined && ["command", "commands"].includes(value.kind)) value.warnings = [];
+  const commands = value.kind === "command" ? [value.command] : value.kind === "commands" ? value.commands : [];
+  for (const command of commands || []) if (object(command)) for (const key of HARMLESS_COMMAND_KEYS) delete command[key];
+  return value;
+}
+
+export function parseAiEditSemanticResponse(raw) {
+  const value = normalizeAiEditSemanticDto(raw);
   if (!object(value) || !["command", "commands", "clarification", "out_of_scope", "error"].includes(value.kind)) return null;
   if (value.kind === "command") return exact(value, ["kind", "summary", "command", "warnings"]) && text(value.summary) && isAiEditSemanticCommand(value.command, { multi: true }) && validWarnings(value.warnings) ? value : null;
   if (value.kind === "commands") return exact(value, ["kind", "summary", "commands", "warnings"]) && text(value.summary)

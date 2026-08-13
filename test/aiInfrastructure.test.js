@@ -147,7 +147,7 @@ test("reasoning-only DeepSeek response is not accepted as an AI router result", 
     status: 200,
     json: async () => ({ choices: [{ finish_reason: "stop", message: { reasoning_content: '{"schemaVersion":1,"kind":"edit_existing"}', content: "" } }] }),
   }) });
-  await assert.rejects(() => routeAiIntent({ instruction: "добавь исполнителя", requestModel: client }), (error) => error instanceof DeepSeekError && error.code === "empty_response");
+  await assert.rejects(() => routeAiIntent({ instruction: "нужна помощь со сметой", requestModel: client }), (error) => error instanceof DeepSeekError && error.code === "empty_response");
   assert.equal(logs.length, 2);
   assert.ok(logs.every((entry) => entry.stage === "ai_route" && entry.thinkingMode === "disabled"));
   assert.ok(logs.every((entry) => entry.hasContent === false && entry.reasoningContentLength > 0));

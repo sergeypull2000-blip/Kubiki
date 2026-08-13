@@ -23,9 +23,13 @@ function mentioned(query, name) {
 
 function performerMatches(query, performers) {
   const unique = uniquePerformers(performers);
-  const full = unique.filter((item) => { const name = normalizeSearchText(displayName(item)); return name && query.includes(name); });
-  if (full.length) return uniquePerformers(full);
-  return uniquePerformers(unique.filter((item) => mentioned(query, item.firstName)));
+  const exactFull = unique.filter((item) => { const name = normalizeSearchText(displayName(item)); return name && query === name; });
+  if (exactFull.length) return exactFull;
+  const exactFirst = unique.filter((item) => normalizeSearchText(item.firstName) === query);
+  if (exactFirst.length) return exactFirst;
+  const containedFull = unique.filter((item) => { const name = normalizeSearchText(displayName(item)); return name && query.includes(name); });
+  if (containedFull.length) return containedFull;
+  return unique.filter((item) => mentioned(query, item.firstName));
 }
 
 
