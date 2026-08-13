@@ -24,6 +24,7 @@ import { createAiEditIdPool, createAiEditRequest, requestAiEdit } from "./ai/edi
 import { buildAiEditPreview } from "./ai/editPreview.js";
 import { projectRevision } from "./ai/projectRevision.js";
 import { createAiEditUndoStore } from "./ai/editUndo.js";
+import { drainProjectSaveQueue } from "./projectSaveQueue.js";
 
 /* ============================================================
    п.7.1: автосохранение в localStorage браузера — заменяет бэкенд
@@ -79,6 +80,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
   const syncEnabledRef = useRef(false);
   const timersRef = useRef(new Map());
   const pendingRef = useRef(new Map());
+  const inFlightSavesRef = useRef(new Map());
   const activeAiEditRequestsRef = useRef(new Map());
   const aiUndoRef = useRef(createAiEditUndoStore());
   const [aiUndoVersion, setAiUndoVersion] = useState(0);
@@ -225,13 +227,17 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     if (!syncEnabledRef.current || !project) return false;
     setSaveState("saving");
     try {
-      await projectRepository.upsertProject(userId, project);
-      pendingRef.current.delete(project.id);
+      await drainProjectSaveQueue({
+        project,
+        pending: pendingRef.current,
+        inFlight: inFlightSavesRef.current,
+        persist: (snapshot) => projectRepository.upsertProject(userId, snapshot),
+      });
       setSaveState("saved");
       setServerMessage("");
       return true;
     } catch (error) {
-      pendingRef.current.set(project.id, project);
+      if (!pendingRef.current.has(project.id)) pendingRef.current.set(project.id, project);
       setSaveState("error");
       setServerMessage(error.message || "Не удалось сохранить проект");
       return false;
@@ -275,6 +281,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     let cancelled = false;
     const timers = timersRef.current;
     const pending = pendingRef.current;
+    const inFlightSaves = inFlightSavesRef.current;
     syncEnabledRef.current = false;
     setServerState("loading");
     setServerMessage("");
@@ -309,6 +316,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
       for (const timer of timers.values()) clearTimeout(timer);
       timers.clear();
       pending.clear();
+      inFlightSaves.clear();
     };
   }, [userId, retryVersion, replaceProjects]);
 

@@ -7,6 +7,7 @@ import { MAX_BRIEF_CHARS, cleanPlainText, validateGenerationInput } from "../api
 import { createDeepSeekClient, DEEPSEEK_ATTEMPT_TIMEOUT_MS, DEEPSEEK_RETRIES, DeepSeekError } from "../api/_lib/deepseek.js";
 import { parseEstimate } from "../api/_lib/estimateSchema.js";
 import { runEstimateGeneration } from "../api/_lib/generationOrchestrator.js";
+import { routeAiIntent } from "../api/_lib/aiIntentRouter.js";
 import { fallbackProfile, parseProfile } from "../api/_lib/profile.js";
 import { createRequestBudget, GENERATION_FUNCTION_BUDGET_MS, RequestDeadlineError } from "../api/_lib/requestBudget.js";
 
@@ -115,7 +116,7 @@ test("invalid final JSON receives exactly one repair attempt", async () => {
   assert.ok(result.estimate);
 });
 
-test("profile, generation and repair send thinking disabled in the actual request body", async () => {
+test("all structured machine-readable stages share thinking-disabled provider configuration", async () => {
   const bodies = [];
   const logs = [];
   const client = createDeepSeekClient({
@@ -127,23 +128,29 @@ test("profile, generation and repair send thinking disabled in the actual reques
       return { ok: true, status: 200, json: async () => ({ choices: [{ finish_reason: "stop", message: { content: "{}" } }] }) };
     },
   });
-  await client([], { stage: "profile", maxTokens: 900 });
-  await client([], { stage: "generation", maxTokens: 4000 });
-  await client([], { stage: "repair", maxTokens: 4000, retries: 0 });
+  const stages = ["profile", "generation", "repair", "budget_correction", "ai_edit", "ai_route"];
+  for (const stage of stages) await client([], { stage, maxTokens: stage === "ai_route" ? 180 : 4000, retries: 0 });
 
-  assert.deepEqual(bodies[0].thinking, { type: "disabled" });
-  assert.deepEqual(bodies[1].thinking, { type: "disabled" });
-  assert.deepEqual(bodies[2].thinking, { type: "disabled" });
-  assert.deepEqual(bodies.map(({ model, max_tokens, response_format }) => ({ model, max_tokens, response_format })), [
-    { model: "deepseek-v4-flash", max_tokens: 900, response_format: { type: "json_object" } },
-    { model: "deepseek-v4-flash", max_tokens: 4000, response_format: { type: "json_object" } },
-    { model: "deepseek-v4-flash", max_tokens: 4000, response_format: { type: "json_object" } },
-  ]);
-  assert.deepEqual(logs.map(({ stage, model, thinkingMode }) => ({ stage, model, thinkingMode })), [
-    { stage: "profile", model: "deepseek-v4-flash", thinkingMode: "disabled" },
-    { stage: "generation", model: "deepseek-v4-flash", thinkingMode: "disabled" },
-    { stage: "repair", model: "deepseek-v4-flash", thinkingMode: "disabled" },
-  ]);
+  assert.deepEqual(bodies.map((body) => body.thinking), stages.map(() => ({ type: "disabled" })));
+  assert.deepEqual(bodies.map(({ model, response_format, temperature }) => ({ model, response_format, temperature })), stages.map(() => ({
+    model: "deepseek-v4-flash", response_format: { type: "json_object" }, temperature: 0,
+  })));
+  assert.deepEqual(logs.map(({ stage, model, thinkingMode }) => ({ stage, model, thinkingMode })), stages.map((stage) => ({
+    stage, model: "deepseek-v4-flash", thinkingMode: "disabled",
+  })));
+});
+
+test("reasoning-only DeepSeek response is not accepted as an AI router result", async () => {
+  const logs = [];
+  const client = createDeepSeekClient({ apiKey: "key", logger: (entry) => logs.push(entry), fetchImpl: async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ choices: [{ finish_reason: "stop", message: { reasoning_content: '{"schemaVersion":1,"kind":"edit_existing"}', content: "" } }] }),
+  }) });
+  await assert.rejects(() => routeAiIntent({ instruction: "добавь исполнителя", requestModel: client }), (error) => error instanceof DeepSeekError && error.code === "empty_response");
+  assert.equal(logs.length, 2);
+  assert.ok(logs.every((entry) => entry.stage === "ai_route" && entry.thinkingMode === "disabled"));
+  assert.ok(logs.every((entry) => entry.hasContent === false && entry.reasoningContentLength > 0));
 });
 
 test("generation with thinking disabled still returns valid JSON content unchanged", async () => {
