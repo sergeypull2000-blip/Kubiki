@@ -63,6 +63,36 @@ test("Performer binding and ordinary Executor coexist and unsafe model fields ar
   assert.equal(parseGeneratedStructure({ ...mixed, operations: [] }), null);
 });
 
+test("strict v2 parser accepts the production anonymous_named shape", () => {
+  const productionShape = {
+    schemaVersion: 2, kind: "generated_structure", generationScope: "fragment", projectName: "P", warnings: [],
+    stages: [{ name: "S", tasks: [{ name: "T", executors: [{
+      type: "anonymous_named", name: "Person", role: "Artist", paymentType: "fix_total",
+      compensation: 300000, quantity: 1, tax: 6,
+    }] }] }],
+  };
+  const parsed = parseGeneratedStructure(productionShape);
+  assert.equal(parsed.stages[0].tasks[0].executors[0].type, "anonymous_named");
+  assert.equal(parsed.stages[0].tasks[0].executors[0].quantity, 1);
+});
+
+test("ExecutorDraft branches retain strict field boundaries and can be mixed", () => {
+  const fixture = (executors) => ({
+    schemaVersion: 2, kind: "generated_structure", generationScope: "fragment", projectName: "P", warnings: [],
+    stages: [{ name: "S", tasks: [{ name: "T", executors }] }],
+  });
+  assert.equal(parseGeneratedStructure(fixture([{ type: "anonymous_named", name: "A", unexpected: true }])), null);
+  assert.equal(parseGeneratedStructure(fixture([{ type: "anonymous_unnamed", name: "A" }])), null);
+  assert.equal(parseGeneratedStructure(fixture([{ type: "performer_binding", key: "a", performerName: "A", performerId: "unsafe" }])), null);
+
+  const mixed = parseGeneratedStructure(fixture([
+    { type: "anonymous_named", name: "A", paymentType: "fix_total", quantity: 1 },
+    { type: "anonymous_unnamed", compensation: 100, tax: 6 },
+    { type: "performer_binding", key: "b", performerName: "B" },
+  ]));
+  assert.deepEqual(mixed.stages[0].tasks[0].executors.map((executor) => executor.type), ["anonymous_named", "anonymous_unnamed", "performer_binding"]);
+});
+
 test("router keeps atomic Stage edit but sends hierarchical creation to generation", () => {
   assert.equal(routeAiIntentDeterministically("Добавь этап Пост").kind, "edit_existing");
   assert.equal(routeAiIntentDeterministically("Добавь этап Продакшн с задачами моделинг и свет; Аня моделит, Гриша делает свет").kind, "generate_structure");

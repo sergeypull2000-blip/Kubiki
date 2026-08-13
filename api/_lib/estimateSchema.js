@@ -100,7 +100,6 @@ function normalizeExecutor(raw) {
   if (value.role !== undefined && !text(value.role)) return null;
   if (value.paymentType !== undefined && !GENERATED_PAYMENT_TYPES.includes(value.paymentType)) return null;
   if (financial.some((key) => value[key] !== undefined && (!numberValue(value[key]) || Number(String(value[key]).replace(/\s/g, "")) < 0 || Number(String(value[key]).replace(/\s/g, "")) > 1_000_000_000))) return null;
-  if (value.quantity !== undefined && !["fix_task", "hourly", "shift"].includes(value.paymentType)) return null;
   return Array.from({ length: count }, () => structuredClone(value));
 }
 
