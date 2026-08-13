@@ -6,7 +6,7 @@ import { loadOwnPerformersForEdit, loadOwnProjectForEdit, loadOwnSelectedKnowled
 import { hasExplicitPerformerLibraryIntent, needsClarificationForBareInput } from "./_lib/performerResolver.js";
 import { createRequestBudget, RequestDeadlineError } from "./_lib/requestBudget.js";
 import { validateAiEditRequest } from "../src/ai/editSchema.js";
-import { attachTrustedAiEditMetadata, diagnoseAiEditSemanticResponse, normalizeAiEditSemanticPlan, parseAiEditSemanticResponse } from "../src/ai/editSemanticSchema.js";
+import { attachTrustedAiEditMetadata, diagnoseAiEditSemanticResponse, diagnoseAiEditSemanticStructure, normalizeAiEditSemanticPlan, parseAiEditSemanticResponse } from "../src/ai/editSemanticSchema.js";
 import { AiEditSemanticCompileError, compileAiEditSemanticPlan } from "../src/ai/editSemanticCompiler.js";
 import { AiEditSemanticPlanError, materializeResolvedSemanticPlan, resolveAiEditSemanticDraft } from "../src/ai/editSemanticPlan.js";
 import { signAiEditContinuation, verifyAiEditContinuation } from "./_lib/semanticContinuation.js";
@@ -79,10 +79,16 @@ async function executeEdit(req, budget) {
   if (route.kind === "generate_structure") return generateStructurePlan({ request, project, auth, settings, requestModel });
   const raw = await requestModel(buildAiEditMessages({ request, project, personalization: settings.personalization, performers: ownPerformers, knowledge }), { maxTokens: 2500, retries: 1, stage: "ai_edit" });
   const semantic = normalizeAiEditSemanticPlan(parseAiEditSemanticResponse(raw));
-  if (!semantic) return { status: 502, body: { error: "Модель вернула некорректную semantic command", code: diagnoseAiEditSemanticResponse(raw) } };
+  if (!semantic) {
+    try {
+      const schemaDiagnostic = diagnoseAiEditSemanticStructure(raw);
+      console.warn("AI semantic schema rejected", schemaDiagnostic);
+    } catch {}
+    return { status: 502, body: { error: "Модель вернула некорректную semantic command", code: diagnoseAiEditSemanticResponse(raw) } };
+  }
   if (semantic.kind === "commands") {
     try {
-      const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, performers: ownPerformers, instruction: request.instruction });
+      const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, performers: ownPerformers, instruction: request.instruction, confirmedPerformerIds: selectedPerformerIds });
       if (resolvedPlan.unresolvedSlots.length) return clarificationResponse(request, resolvedPlan);
       const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project, confirmedTargets: resolvedPlan.confirmedTargets, performers: ownPerformers });
       return { status: 200, body: diff };

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { routeAiIntentDeterministically } from "../api/_lib/aiIntentRouter.js";
-import { parseAiEditSemanticResponse, normalizeAiEditSemanticPlan } from "../src/ai/editSemanticSchema.js";
+import { diagnoseAiEditSemanticStructure, parseAiEditSemanticResponse, normalizeAiEditSemanticPlan } from "../src/ai/editSemanticSchema.js";
 import { materializeResolvedSemanticPlan, resolveAiEditSemanticDraft } from "../src/ai/editSemanticPlan.js";
 import { compileAiEditSemanticPlan } from "../src/ai/editSemanticCompiler.js";
 
@@ -64,7 +64,7 @@ test("exact Performer matches retain every duplicate and continuation preserves 
     { id: "misha-1", firstName: "Миша", lastName: "Иванов", primaryRole: "Light" },
     { id: "misha-2", firstName: "Миша", lastName: "Иванов", primaryRole: "Comp" },
   ];
-  const semantic = plan([{ type: "executor.createFromPerformer", performerName: "Миша Иванов", taskName: "Свет" }]);
+  const semantic = plan([{ type: "executor.createFromPerformer", performerId: "misha-1", performerName: "Миша Иванов", taskName: "Свет" }]);
   const pending = resolveAiEditSemanticDraft({ semantic, project, scope: projectScope, performers, instruction: "добавь Мишу Иванова из базы в задачу Свет" });
   assert.equal(pending.unresolvedSlots[0].kind, "performer");
   assert.deepEqual(pending.unresolvedSlots[0].choices.map((item) => item.source.id), ["misha-1", "misha-2"]);
@@ -74,6 +74,17 @@ test("exact Performer matches retain every duplicate and continuation preserves 
   assert.deepEqual(continued.unresolvedSlots, []);
   assert.equal(continued.confirmedTargets[0].task.id, "task-light");
   assert.equal(continued.slotValues["slot-0-performer"], "misha-2");
+});
+
+test("only a user-confirmed Performer id can bypass exact-name ambiguity", () => {
+  const performers = [{ id: "m1", firstName: "Миша" }, { id: "m2", firstName: "Миша" }];
+  const semantic = plan([{ type: "executor.createFromPerformer", performerId: "m1", performerName: "Миша", taskName: "Свет" }]);
+  const untrusted = resolveAiEditSemanticDraft({ semantic, project, scope: projectScope, performers, instruction: "добавь Мишу из базы в задачу Свет" });
+  assert.equal(untrusted.unresolvedSlots[0].kind, "performer");
+  const confirmed = resolveAiEditSemanticDraft({ semantic, project, scope: projectScope, performers, instruction: "добавь Мишу из базы в задачу Свет", confirmedPerformerIds: ["m1"] });
+  assert.deepEqual(confirmed.unresolvedSlots, []);
+  assert.equal(confirmed.slotValues["slot-0-performer"], "m1");
+  assert.equal(confirmed.confirmedTargets[0].task.id, "task-light");
 });
 
 test("one exact Performer auto-resolves and anonymous names never require the Library", () => {
@@ -135,4 +146,33 @@ test("large typed multi-command plan compiles atomically with new Executors incl
   const taxedIds = new Set(diff.operations.filter((item) => item.type === "executor.tag.add" || item.type === "executor.tag.update").map((item) => item.targetId));
   assert.ok(createdExecutorIds.length >= 7);
   assert.ok(createdExecutorIds.every((id) => taxedIds.has(id)));
+});
+
+test("bounded anonymous Executor multiplicity normalizes into repeated typed commands", () => {
+  const raw = { kind: "commands", summary: "Два исполнителя", commands: [
+    { type: "executor.createAnonymous", taskName: "Композ", compensation: 300000, count: 2 },
+    { type: "executor.setTaxBulk", percent: 6 },
+  ], warnings: [] };
+  const semantic = parseAiEditSemanticResponse(raw);
+  assert.ok(semantic);
+  assert.equal(semantic.commands.length, 3);
+  assert.deepEqual(semantic.commands.slice(0, 2).map(({ type, taskName, compensation }) => ({ type, taskName, compensation })), [
+    { type: "executor.createAnonymous", taskName: "Композ", compensation: 300000 },
+    { type: "executor.createAnonymous", taskName: "Композ", compensation: 300000 },
+  ]);
+  assert.equal(parseAiEditSemanticResponse({ ...raw, commands: [{ ...raw.commands[0], count: 11 }] }), null);
+});
+
+test("schema rejection diagnostic contains structure and paths but no field values", () => {
+  const diagnostic = diagnoseAiEditSemanticStructure({ kind: "commands", summary: "private summary", commands: [
+    { type: "executor.createAnonymous", name: "Private Name", taskName: "Private Task", unexpectedField: "secret-value" },
+  ], warnings: [] });
+  assert.equal(diagnostic.topLevelType, "object");
+  assert.deepEqual(diagnostic.topLevelKeys, ["commands", "kind", "summary", "warnings"]);
+  assert.deepEqual(diagnostic.commandTypes, ["executor.createAnonymous"]);
+  assert.deepEqual(diagnostic.rejectedCommand.unknownKeys, ["unexpectedField"]);
+  assert.equal(diagnostic.validationPath, "$.commands[0]");
+  assert.equal(diagnostic.reason, "unknown_command_keys");
+  const serialized = JSON.stringify(diagnostic);
+  assert.doesNotMatch(serialized, /Private Name|Private Task|secret-value|private summary/);
 });

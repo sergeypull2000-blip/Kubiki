@@ -108,6 +108,15 @@ export function normalizeAiEditSemanticDto(raw) {
   if (!value.kind && object(value.command)) value.kind = "command";
   if (!value.kind && Array.isArray(value.commands)) value.kind = "commands";
   if (value.warnings === undefined && ["command", "commands"].includes(value.kind)) value.warnings = [];
+  if (value.kind === "commands" && Array.isArray(value.commands)) value.commands = value.commands.flatMap((command) => {
+    if (!object(command)) return [command];
+    const multiplicityKeys = ["count", "copies"].filter((key) => Object.hasOwn(command, key));
+    if (command.type !== "executor.createAnonymous" || multiplicityKeys.length !== 1) return [command];
+    const count = command[multiplicityKeys[0]];
+    if (!Number.isInteger(count) || count < 1 || count > 10) return [command];
+    const normalized = { ...command }; delete normalized[multiplicityKeys[0]];
+    return Array.from({ length: count }, (_, index) => index === 0 ? normalized : Object.fromEntries(Object.entries(normalized).filter(([key]) => key !== "ref")));
+  });
   const commands = value.kind === "command" ? [value.command] : value.kind === "commands" ? value.commands : [];
   for (const command of commands || []) if (object(command)) for (const key of HARMLESS_COMMAND_KEYS) delete command[key];
   return value;
@@ -140,6 +149,54 @@ export function diagnoseAiEditSemanticResponse(raw) {
   if ((value.kind === "command" && !AI_EDIT_SEMANTIC_COMMAND_TYPES.includes(value.command?.type))
     || (value.kind === "commands" && Array.isArray(value.commands) && value.commands.some((command) => !AI_EDIT_SEMANTIC_COMMAND_TYPES.includes(command?.type)))) return "ai_semantic_unknown_command";
   return "ai_semantic_invalid_schema";
+}
+
+const COMMAND_KEYS = Object.freeze({
+  "stage.create": { required: ["type"], optional: ["name", "ref"] },
+  "stage.rename": { required: ["type", "name"], optional: ["targetName"] },
+  "stage.delete": { required: ["type"], optional: ["targetName"] },
+  "task.create": { required: ["type"], optional: ["name", "ref", "stageRef", "stageName"] },
+  "task.rename": { required: ["type", "name"], optional: ["targetRef", "targetName", "stageName"] },
+  "task.delete": { required: ["type"], optional: ["targetRef", "targetName", "stageName"] },
+  "executor.createAnonymous": { required: ["type"], optional: ["ref", "name", "role", "paymentType", "compensation", "quantity", "tax", "taskId", "taskRef", "taskName", "stageName"] },
+  "executor.createFromPerformer": { required: ["type"], optional: ["taskId", "taskName", "stageName", "performerId", "performerName"] },
+  "executor.delete": { required: ["type"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
+  "executor.setCompensation": { required: ["type", "value"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
+  "executor.setPaymentType": { required: ["type", "paymentType"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
+  "executor.setPaymentRate": { required: ["type", "value"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
+  "executor.setPaymentQuantity": { required: ["type", "value"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
+  "executor.setRole": { required: ["type", "name"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
+  "executor.setName": { required: ["type", "name"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
+  "executor.setTax": { required: ["type", "percent"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
+  "executor.setTaxBulk": { required: ["type", "percent"], optional: [] },
+  "executor.replacePerformer": { required: ["type"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
+});
+const safeKey = (value) => typeof value === "string" ? value.replace(/[^\p{L}\p{N}_.-]/gu, "?").slice(0, 64) : "<non-string>";
+
+export function diagnoseAiEditSemanticStructure(raw) {
+  let original;
+  try { original = typeof raw === "string" ? JSON.parse(raw.trim()) : raw; } catch {
+    return { topLevelType: "invalid_json", topLevelKeys: [], envelopeKind: null, commandsCount: null, commandTypes: [], validationPath: "$", reason: "invalid_json" };
+  }
+  const topLevelType = Array.isArray(original) ? "array" : original === null ? "null" : typeof original;
+  const topLevelKeys = object(original) ? Object.keys(original).slice(0, 30).map(safeKey).sort() : [];
+  const envelopeKind = object(original) && object(original.semantic) ? "semantic" : object(original) && object(original.result) ? "result" : null;
+  const value = normalizeAiEditSemanticDto(original);
+  if (!object(value)) return { topLevelType, topLevelKeys, envelopeKind, commandsCount: null, commandTypes: [], validationPath: "$", reason: "normalization_rejected" };
+  const commands = value.kind === "command" ? [value.command] : value.kind === "commands" && Array.isArray(value.commands) ? value.commands : [];
+  const commandTypes = commands.slice(0, 30).map((command) => typeof command?.type === "string" ? command.type.slice(0, 80) : "<missing>");
+  const base = { topLevelType, topLevelKeys, envelopeKind: envelopeKind || value.kind || null, commandsCount: commands.length, commandTypes };
+  if (!["command", "commands", "clarification", "out_of_scope", "error"].includes(value.kind)) return { ...base, validationPath: "$.kind", reason: "unsupported_or_missing_kind" };
+  if (value.kind === "commands" && commands.length > MAX_AI_EDIT_SEMANTIC_COMMANDS) return { ...base, validationPath: "$.commands", reason: "commands_limit_exceeded" };
+  for (let index = 0; index < commands.length; index += 1) {
+    const command = commands[index], schema = COMMAND_KEYS[command?.type];
+    if (!schema) return { ...base, rejectedCommand: { index, type: commandTypes[index], unknownKeys: object(command) ? Object.keys(command).filter((key) => key !== "type").map(safeKey) : [], missingKeys: ["type"] }, validationPath: `$.commands[${index}].type`, reason: "unknown_command_type" };
+    const allowed = new Set([...schema.required, ...schema.optional]);
+    const unknownKeys = Object.keys(command).filter((key) => !allowed.has(key)).map(safeKey);
+    const missingKeys = schema.required.filter((key) => !Object.hasOwn(command, key));
+    if (unknownKeys.length || missingKeys.length || !isAiEditSemanticCommand(command, { multi: true })) return { ...base, rejectedCommand: { index, type: command.type, unknownKeys, missingKeys }, validationPath: `$.commands[${index}]`, reason: unknownKeys.length ? "unknown_command_keys" : missingKeys.length ? "missing_command_keys" : "invalid_command_field_shape" };
+  }
+  return { ...base, validationPath: "$", reason: "invalid_top_level_shape" };
 }
 
 export function attachTrustedAiEditMetadata(semantic, request) {

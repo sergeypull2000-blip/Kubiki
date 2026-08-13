@@ -60,7 +60,7 @@ function scopeContains(project, scope, kind, id) {
   return located.executor?.id === scope.executorId;
 }
 
-export function resolveAiEditSemanticDraft({ semantic, project, scope, performers = [], instruction = "", prior = null, answer = "", selectedSource = null }) {
+export function resolveAiEditSemanticDraft({ semantic, project, scope, performers = [], instruction = "", prior = null, answer = "", selectedSource = null, confirmedPerformerIds = [] }) {
   if (semantic.kind !== "commands") return { semantic, confirmedTargets: {}, unresolvedSlots: [] };
   const draft = semantic, confirmedTargets = structuredClone(prior?.confirmedTargets || {}), slotValues = { ...(prior?.slotValues || {}) };
   if (prior?.unresolvedSlots?.length && (answer || selectedSource)) {
@@ -97,12 +97,13 @@ export function resolveAiEditSemanticDraft({ semantic, project, scope, performer
         else addSlot(index, "task", "task", candidates.length ? scope?.kind === "stage" ? `В какую задачу добавить ${person}?` : `Куда добавить ${person}?` : "В выбранном Stage нет Task. Создать Task или выбрать другую?", candidates);
       }
     } else if (command.type === "executor.createFromPerformer") {
-      const performerSlot = `slot-${index}-performer`, selectedPerformer = slotValues[performerSlot] || command.performerId;
+      const performerSlot = `slot-${index}-performer`;
+      const selectedPerformer = slotValues[performerSlot] || confirmedPerformerIds.includes(command.performerId) && command.performerId;
       const explicitSlot = `slot-${index}-performerExplicit`;
       const namedPerformer = command.performerName || performers.find((item) => item.id === command.performerId)?.firstName;
       const performerLabel = creationSubject(instruction, namedPerformer || "Performer");
       if (slotValues[explicitSlot] === undefined) slotValues[explicitSlot] = explicitDatabaseRequest(instruction, namedPerformer, performerNames);
-      const matches = selectedPerformer ? performers.filter((item) => item.id === selectedPerformer) : performerMatches(command.performerName, performers);
+      const matches = selectedPerformer ? performers.filter((item) => item.id === selectedPerformer) : performerMatches(namedPerformer, performers);
       if (selectedPerformer) slotValues[performerSlot] = selectedPerformer;
       else if (matches.length === 1) slotValues[performerSlot] = matches[0].id;
       else addSlot(index, "performer", "performer", matches.length ? `Какого Performer «${command.performerName}» выбрать?` : `Performer «${command.performerName || ""}» не найден. Кого выбрать?`, matches);
