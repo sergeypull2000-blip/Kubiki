@@ -695,7 +695,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
       {["error", "save-error"].includes(quickAccessState) && <div className="kb-toast" role="alert">{quickAccessMessage}<button className="kb-toast-retry" type="button" onClick={() => setQuickAccessRetry((value) => value + 1)}>Повторить</button><button className="kb-toast-retry" type="button" onClick={() => { setQuickAccessState("ready"); setQuickAccessMessage(""); }}>Закрыть</button></div>}
       {aiGenerationReady && projectSource?.file && <ImportModal file={projectSource.file} instruction={projectSource.description || ""}
         onClose={() => setProjectSource(null)} onConfirm={createProjectFromEstimate} />}
-      {aiGenerationReady && projectSource && !projectSource.file && <GenerateEstimateModal description={projectSource.description}
+      {aiGenerationReady && projectSource && !projectSource.file && <GenerateEstimateModal description={projectSource.description} performers={performers}
         onClose={() => setProjectSource(null)} onConfirm={createProjectFromEstimate} />}
       {editingTemplateId ? (
         <Workspace

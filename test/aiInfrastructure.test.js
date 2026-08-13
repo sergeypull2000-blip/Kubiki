@@ -328,12 +328,12 @@ test("professional SYSTEM_PROMPT remains unchanged across platform line endings"
   const start = source.indexOf("const SYSTEM_PROMPT = `") + "const SYSTEM_PROMPT = `".length;
   const end = source.indexOf("`;", start);
   const prompt = canonicalText(source.slice(start, end));
-  assert.equal(prompt.length, 12422);
-  assert.equal(createHash("sha256").update(prompt).digest("hex"), "5a76b5590d67b685a6388de846c3ae66941f03466d1e8eecc2eb5437ac788ed8");
+  assert.equal(prompt.length, 13490);
+  assert.equal(createHash("sha256").update(prompt).digest("hex"), "5f7ec7403f6e009254e9533f12d33c4a154a53d882e554fa4cfd576976330021");
 });
 
 test("estimate JSON schema remains unchanged across platform line endings", () => {
   const source = canonicalText(readFileSync(new URL("../api/_lib/estimateSchema.js", import.meta.url), "utf8"));
-  assert.equal(source.length, 1437);
-  assert.equal(createHash("sha256").update(source).digest("hex"), "19c401aa0903d8c195c33b97eecdbc20e64fa26f11f4f9cf1e6211a5af6b0317");
+  assert.equal(source.length, 5745);
+  assert.equal(createHash("sha256").update(source).digest("hex"), "3139ed5e6fdb4936acd0a69935c6aaa1efe23c953b5b91fc6f9f7af6cba668d1");
 });

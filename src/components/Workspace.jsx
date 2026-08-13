@@ -356,7 +356,7 @@ const toggleAllCollapsed = () =>
           onConfirm={(stages, meta) => { insertParsedStages(stages, meta); setImportFile(null); }} />
       )}
       {generateDescription && (
-        <GenerateEstimateModal description={generateDescription} onClose={() => setGenerateDescription(null)}
+        <GenerateEstimateModal description={generateDescription} performers={performers} onClose={() => setGenerateDescription(null)}
           onConfirm={(stages, meta) => { insertParsedStages(stages, meta); setGenerateDescription(null); }} />
       )}
       <header className="kb-header kb-header-min">

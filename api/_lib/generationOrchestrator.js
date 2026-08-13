@@ -6,7 +6,8 @@ export const TARGET_BUDGET_WARNING_DEVIATION = 0.2;
 export const MIN_BUDGET_CORRECTION_REMAINING_MS = 60_000;
 
 export function sumTaskCosts(estimate) {
-  return estimate?.stages?.reduce((total, stage) => total + stage.tasks.reduce((stageTotal, task) => stageTotal + task.cost, 0), 0) ?? 0;
+  return estimate?.stages?.reduce((total, stage) => total + stage.tasks.reduce((stageTotal, task) => stageTotal
+    + (task.executors ? task.executors.reduce((executorTotal, executor) => executorTotal + Number(executor.compensation || 0), 0) : Number(task.cost || 0)), 0), 0) ?? 0;
 }
 
 function formatBudget({ amount, currency }) {
@@ -29,7 +30,7 @@ function finalUserPrompt(brief, instruction, personalization, shortlist, budget,
     "Следуй профессиональным правилам и JSON-схеме из system prompt.",
     "Блок <studio_knowledge> — ограниченная справочная подсказка, а не обязательный список. Используй только явно релевантные элементы.",
     "Не копируй нерелевантные задачи или ставки. Не превращай почасовую/посменную ставку в итог без обоснованного объёма.",
-    allowPerformerBindings ? "Performer разрешён только как явно запрошенный символический performerBindings без IDs, snapshot, rates, tax или tags." : "Не назначай исполнителей и не добавляй Performer в ответ. Если знания конфликтуют с текущим брифом, бриф имеет приоритет.",
+    allowPerformerBindings ? "Performer Library разрешён только как явно запрошенный symbolic performer_binding без IDs, snapshot, rates, tax или tags. Обычных названных людей возвращай как anonymous_named ExecutorDraft." : "Не назначай исполнителей из Performer Library и не создавай performer_binding. Обычных названных людей возвращай как anonymous_named ExecutorDraft. Если знания конфликтуют с текущим брифом, бриф имеет приоритет.",
     `<brief>\n${brief}\n</brief>`,
     instruction ? `<current_user_instruction>\n${instruction}\n</current_user_instruction>` : "",
     budgetConstraint(budget) ? `<budget_constraint>\n${budgetConstraint(budget)}\n</budget_constraint>` : "",

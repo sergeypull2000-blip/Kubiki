@@ -8,6 +8,8 @@ import { buildShortlist } from "./_lib/retrieval.js";
 import { loadOwnAiSettings, normalizeServerAiSettings } from "./_lib/aiSettings.js";
 import { buildGenerationMetadata, serializeGenerationMetadata } from "./_lib/generationMetadata.js";
 import { createRequestBudget, RequestDeadlineError } from "./_lib/requestBudget.js";
+import { loadOwnPerformersForEdit } from "./_lib/editProject.js";
+import { resolveGeneratedStructure } from "./_lib/generatedStructure.js";
 
 /* ============================================================
    Vercel serverless: POST /api/generate-estimate
@@ -532,6 +534,10 @@ WEB И DIGITAL
 12. Использован пайплайн, соответствующий типу проекта.
 13. Для CG сохранена специализированная логика ставок и расчетов.
 14. Все существенные допущения перечислены в warnings.
+
+ОБЯЗАТЕЛЬНЫЙ OUTPUT CONTRACT (имеет приоритет над старыми примерами выше):
+Верни GeneratedStructure v2: {"schemaVersion":2,"kind":"generated_structure","generationScope":"whole_project","projectName":"...","stages":[{"name":"...","tasks":[{"name":"...","executors":[{"type":"anonymous_named","name":"...","role":"...","paymentType":"fix_total|fix_task|hourly|shift","compensation":0,"quantity":0,"tax":6},{"type":"anonymous_unnamed","paymentType":"fix_total","compensation":0,"tax":6},{"type":"performer_binding","key":"unique-symbolic-key","performerName":"..."}]}]}],"warnings":[]}.
+У каждого Task должен быть непустой executors. Обычное имя человека означает anonymous_named. Только явное «из базы»/«из библиотеки» означает performer_binding. Не помещай имя, роль, оплату или налог исполнителя в Task.name. Несколько исполнителей — несколько drafts; допустим count/copies 1..10, которые будут нормализованы. Не возвращай performerId, snapshots, tags, trusted IDs или low-level operations. Не возвращай task.cost: компенсация относится к конкретному ExecutorDraft.
 `;
 
 export default async function handler(req, res) {
@@ -586,10 +592,17 @@ async function executeGeneration(req, budget) {
           return { shortlist: buildShortlist(profile, {}), personalization: settings.personalization };
         }
       },
+      allowPerformerBindings: true,
     });
   if (!result.estimate) {
     console.error("generate-estimate: модель дважды вернула ответ, не соответствующий JSON-схеме");
     return { status: 502, body: { error: "Не удалось обработать ответ. Попробуйте снова" } };
+  }
+  const hasBindings = result.estimate.stages.some((stage) => stage.tasks.some((task) => task.executors.some((executor) => executor.type === "performer_binding")));
+  if (hasBindings) {
+    const performers = await loadOwnPerformersForEdit(auth.client, auth.user.id);
+    const resolved = resolveGeneratedStructure({ draft: result.estimate, performers });
+    if (resolved.unresolvedSlots.length) return { status: 422, body: { error: resolved.unresolvedSlots[0].question, code: "generated_performer_unresolved" } };
   }
   return { status: 200, body: result.estimate, metadata: serializeGenerationMetadata(buildGenerationMetadata(result)) };
 }

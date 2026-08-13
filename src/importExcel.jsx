@@ -131,12 +131,15 @@ function validateParsed(json) {
   const stages = stagesIn.map((s) => ({
     name: typeof s?.name === "string" && s.name.trim() ? s.name.trim() : "Смета",
     tasks: (Array.isArray(s?.tasks) ? s.tasks : [])
-      .filter((t) => t && typeof t.name === "string" && t.name.trim() && Number.isFinite(Number(t.cost)))
-      .map((t) => ({ name: t.name.trim(), cost: Number(t.cost) })),
+      .filter((t) => t && typeof t.name === "string" && t.name.trim() && (Array.isArray(t.executors) && t.executors.length || Number.isFinite(Number(t.cost))))
+      .map((t) => ({ name: t.name.trim(), executors: Array.isArray(t.executors) && t.executors.length
+        ? structuredClone(t.executors)
+        : [{ type: "anonymous_unnamed", paymentType: "fix_total", compensation: Number(t.cost) }] })),
   })).filter((s) => s.tasks.length > 0);
   if (stages.length === 0) throw new Error("Не удалось распознать ни одной задачи с ценой. Проверьте файл или импортируйте другой лист.");
   return {
-    projectName: typeof json.projectName === "string" && json.projectName.trim() ? json.projectName.trim() : null,
+    schemaVersion: 2, kind: "generated_structure", generationScope: json.generationScope || "whole_project",
+    projectName: typeof json.projectName === "string" && json.projectName.trim() ? json.projectName.trim() : "Generated estimate",
     stages,
     warnings: Array.isArray(json.warnings) ? json.warnings.filter((w) => typeof w === "string") : [],
   };
@@ -144,7 +147,7 @@ function validateParsed(json) {
 
 /* Состояние и правки редактируемого превью (общее для импорта из файла и
    генерации по описанию — единый пайплайн, разный только источник parsed). */
-function useEstimateEditor() {
+function useEstimateEditor(performers = []) {
   const [parsed, setParsed] = useState(null);
   const [warnings, setWarnings] = useState([]);
   const load = (valid) => { setParsed(valid); setWarnings(valid.warnings); };
@@ -156,7 +159,7 @@ function useEstimateEditor() {
   const delTask = (si, ti) => setParsed((p) => ({ ...p, stages: p.stages.map((s, i) => i !== si ? s : { ...s, tasks: s.tasks.filter((_, j) => j !== ti) }).filter((s) => s.tasks.length > 0) }));
   const delStage = (si) => setParsed((p) => ({ ...p, stages: p.stages.filter((_, i) => i !== si) }));
 
-  const total = parsed ? parsed.stages.reduce((a, s) => a + s.tasks.reduce((x, t) => x + numVal(t.cost), 0), 0) : 0;
+  const total = parsed ? parsed.stages.reduce((a, s) => a + s.tasks.reduce((x, t) => x + t.executors.reduce((sum, executor) => sum + numVal(executor.compensation), 0), 0), 0) : 0;
   const taskCount = parsed ? parsed.stages.reduce((a, s) => a + s.tasks.length, 0) : 0;
 
   const buildConfirm = () => {
@@ -165,7 +168,8 @@ function useEstimateEditor() {
     const meta = {
       ...(clean.projectName ? { projectName: clean.projectName } : {}),
     };
-    return { ok: true, stages: stagesFromGeneratedEstimate(clean), meta };
+    try { return { ok: true, stages: stagesFromGeneratedEstimate(clean, performers), meta }; }
+    catch (error) { return { ok: false, message: error.message }; }
   };
 
   return {
@@ -206,9 +210,15 @@ function EstimatePreviewStep({ editor, generationMetadata, noteText, draftNotice
             {s.tasks.map((t, ti) => (
               <div key={ti} className="kb-prev-task">
                 <input className="kb-input kb-prev-task-name" value={t.name} onChange={(e) => setTaskField(si, ti, "name", e.target.value)} />
-                <input className="kb-input kb-input-num kb-prev-task-cost" value={t.cost}
-                  onChange={(e) => setTaskField(si, ti, "cost", e.target.value)} />
-                <span className="kb-prev-cur">₽</span>
+                <div className="kb-prev-executors">
+                  {t.executors.map((executor, ei) => <div key={ei} className="kb-prev-executor">
+                    <span>{executor.type === "performer_binding" ? `${executor.performerName} · Performer Library` : executor.name || "Без имени"}</span>
+                    {executor.role && <small>{executor.role}</small>}
+                    {executor.compensation !== undefined && <small>{fmt(Number(executor.compensation))} ₽ · {executor.paymentType || "fix_total"}</small>}
+                    {executor.quantity !== undefined && <small>Количество: {executor.quantity}</small>}
+                    {executor.tax !== undefined && <small>Налог: {executor.tax}%</small>}
+                  </div>)}
+                </div>
                 <button type="button" className="kb-icon-btn" title="Убрать задачу" onClick={() => delTask(si, ti)}><X size={13} strokeWidth={1.5} /></button>
               </div>
             ))}
@@ -380,11 +390,11 @@ export function ImportModal({ file, instruction = "", onClose, onConfirm }) {
    Пайплайн такой же, как у ImportModal, только вход — не файл, а
    уже введённое описание, поэтому шагов "reading"/"sheet" нет:
    сразу parsing → preview (общий EstimatePreviewStep) → error. */
-export function GenerateEstimateModal({ description, onClose, onConfirm }) {
+export function GenerateEstimateModal({ description, performers = [], onClose, onConfirm }) {
   const [step, setStep] = useState("parsing"); // parsing|preview|error
   const [errorMsg, setErrorMsg] = useState("");
   const [generationMetadata, setGenerationMetadata] = useState(null);
-  const editor = useEstimateEditor();
+  const editor = useEstimateEditor(performers);
 
   const run = () => {
     setStep("parsing");

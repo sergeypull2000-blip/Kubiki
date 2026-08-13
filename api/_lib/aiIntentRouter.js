@@ -4,10 +4,19 @@ const clean = (value) => String(value || "").normalize("NFKC").toLocaleLowerCase
 const GENERATION_OBJECT = /(?:смет\p{L}*|структур\p{L}*|этап\p{L}*|стади\p{L}*)/iu;
 const GENERATION_ACTION = /(?:сдела\p{L}*|собер\p{L}*|собра\p{L}*|созда\p{L}*|сгенер\p{L}*)/iu;
 const EDIT_ACTION = /(?:добав\p{L}*|переимен\p{L}*|удал\p{L}*|замен\p{L}*|измен\p{L}*|увелич\p{L}*|уменьш\p{L}*|перемест\p{L}*)/iu;
+const NESTED_RELATION = /(?:задач\p{L}*|исполнител\p{L}*|дела\p{L}*|модел\p{L}*|рису\p{L}*|свет\p{L}*|визуализ\p{L}*|раскадров\p{L}*|концепц\p{L}*)/iu;
+
+function isConfidentHierarchicalCreation(value) {
+  if (!/(?:добав\p{L}*|созда\p{L}*)/iu.test(value) || !GENERATION_OBJECT.test(value)) return false;
+  const clauses = value.split(/[;.!?\n]+/).filter((item) => item.trim()).length;
+  const stageMentions = value.match(/(?:этап\p{L}*|стади\p{L}*)/giu)?.length || 0;
+  return NESTED_RELATION.test(value) && (clauses > 1 || stageMentions > 1 || /\bс\s+задач/iu.test(value));
+}
 
 export function routeAiIntentDeterministically(instruction) {
   const value = clean(instruction);
   if (!value) return null;
+  if (isConfidentHierarchicalCreation(value)) return { schemaVersion: AI_INTENT_ROUTER_VERSION, kind: "generate_structure" };
   if (EDIT_ACTION.test(value)) return { schemaVersion: AI_INTENT_ROUTER_VERSION, kind: "edit_existing" };
   if (GENERATION_ACTION.test(value) && GENERATION_OBJECT.test(value)) return { schemaVersion: AI_INTENT_ROUTER_VERSION, kind: "generate_structure" };
   return null;
