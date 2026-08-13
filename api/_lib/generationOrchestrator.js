@@ -1,9 +1,10 @@
-import { ESTIMATE_REPAIR_PROMPT, parseEstimate } from "./estimateSchema.js";
+import { diagnoseGeneratedStructure, ESTIMATE_REPAIR_PROMPT, parseEstimate } from "./estimateSchema.js";
 import { PROFILE_SYSTEM_PROMPT, fallbackProfile, parseProfile } from "./profile.js";
 
 const EMPTY_SHORTLIST = { projectTemplates: [], stageTemplates: [], taskTemplates: [], performers: [], historicalProjects: [] };
 export const TARGET_BUDGET_WARNING_DEVIATION = 0.2;
 export const MIN_BUDGET_CORRECTION_REMAINING_MS = 60_000;
+const emit = (logger, requestId, event, success, diagnostic = undefined) => { try { logger({ event, requestId, success, ...(diagnostic ? { diagnostic } : {}) }); } catch {} };
 
 export function sumTaskCosts(estimate) {
   return estimate?.stages?.reduce((total, stage) => total + stage.tasks.reduce((stageTotal, task) => stageTotal
@@ -39,7 +40,7 @@ function finalUserPrompt(brief, instruction, personalization, shortlist, budget,
   ].filter(Boolean).join("\n\n");
 }
 
-export async function runEstimateGeneration({ brief, instruction = "", systemPrompt, requestModel, getKnowledgeContext, getGenerationContext, remainingRequestMs = () => Infinity, allowPerformerBindings = false }) {
+export async function runEstimateGeneration({ brief, instruction = "", systemPrompt, requestModel, getKnowledgeContext, getGenerationContext, remainingRequestMs = () => Infinity, allowPerformerBindings = false, requestId = "untracked", diagnosticLogger = console.info }) {
   let profile;
   let profileFallbackUsed = false;
   try {
@@ -60,14 +61,18 @@ export async function runEstimateGeneration({ brief, instruction = "", systemPro
     { role: "system", content: systemPrompt },
     { role: "user", content: finalUserPrompt(brief, instruction, personalization, shortlist, profile.budget, allowPerformerBindings) },
   ];
-  const raw = await requestModel(messages, { maxTokens: 4000, stage: "generation" });
+  let raw;
+  try { raw = await requestModel(messages, { maxTokens: 4000, stage: "generation" }); emit(diagnosticLogger, requestId, "generation_model_response", true); }
+  catch (error) { emit(diagnosticLogger, requestId, "generation_model_response", false, { reason: "model_request_failed" }); throw error; }
+  const rawDiagnostic = diagnoseGeneratedStructure(raw); emit(diagnosticLogger, requestId, "generation_parse_raw", rawDiagnostic.ok, rawDiagnostic);
   let estimate = parseEstimate(raw);
   if (!estimate) {
-    const repairedRaw = await requestModel([
-      ...messages,
-      { role: "assistant", content: raw || "{}" },
-      { role: "user", content: ESTIMATE_REPAIR_PROMPT },
-    ], { maxTokens: 4000, retries: 0, stage: "repair" });
+    let repairedRaw;
+    try {
+      repairedRaw = await requestModel([...messages, { role: "assistant", content: raw || "{}" }, { role: "user", content: ESTIMATE_REPAIR_PROMPT }], { maxTokens: 4000, retries: 0, stage: "repair" });
+      emit(diagnosticLogger, requestId, "generation_repair_response", true);
+    } catch (error) { emit(diagnosticLogger, requestId, "generation_repair_response", false, { reason: "model_request_failed" }); throw error; }
+    const repairDiagnostic = diagnoseGeneratedStructure(repairedRaw); emit(diagnosticLogger, requestId, "generation_parse_repair", repairDiagnostic.ok, repairDiagnostic);
     estimate = parseEstimate(repairedRaw);
   }
   if (estimate && profile.budget.mode === "hard" && sumTaskCosts(estimate) > profile.budget.amount) {

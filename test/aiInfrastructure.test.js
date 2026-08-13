@@ -334,6 +334,6 @@ test("professional SYSTEM_PROMPT remains unchanged across platform line endings"
 
 test("estimate JSON schema remains unchanged across platform line endings", () => {
   const source = canonicalText(readFileSync(new URL("../api/_lib/estimateSchema.js", import.meta.url), "utf8"));
-  assert.equal(source.length, 5745);
-  assert.equal(createHash("sha256").update(source).digest("hex"), "3139ed5e6fdb4936acd0a69935c6aaa1efe23c953b5b91fc6f9f7af6cba668d1");
+  assert.equal(source.length, 12487);
+  assert.equal(createHash("sha256").update(source).digest("hex"), "a2c093bc614f5eaebe41c77d10ddc3b82d2c1eb65667eef7ebe7f83c041932e3");
 });

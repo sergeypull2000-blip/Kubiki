@@ -10,6 +10,7 @@ import { buildGenerationMetadata, serializeGenerationMetadata } from "./_lib/gen
 import { createRequestBudget, RequestDeadlineError } from "./_lib/requestBudget.js";
 import { loadOwnPerformersForEdit } from "./_lib/editProject.js";
 import { resolveGeneratedStructure } from "./_lib/generatedStructure.js";
+import { randomUUID } from "node:crypto";
 
 /* ============================================================
    Vercel serverless: POST /api/generate-estimate
@@ -564,6 +565,7 @@ export default async function handler(req, res) {
 }
 
 async function executeGeneration(req, budget) {
+  const generationRequestId = randomUUID();
   const auth = await authenticateRequest(req);
   if (!auth.ok) return { status: auth.status, body: { error: auth.error } };
 
@@ -593,16 +595,24 @@ async function executeGeneration(req, budget) {
         }
       },
       allowPerformerBindings: true,
+      requestId: generationRequestId,
     });
   if (!result.estimate) {
     console.error("generate-estimate: модель дважды вернула ответ, не соответствующий JSON-схеме");
+    console.info({ event: "generation_response_validation", requestId: generationRequestId, success: false, diagnostic: { reason: "generated_structure_missing" } });
     return { status: 502, body: { error: "Не удалось обработать ответ. Попробуйте снова" } };
   }
   const hasBindings = result.estimate.stages.some((stage) => stage.tasks.some((task) => task.executors.some((executor) => executor.type === "performer_binding")));
   if (hasBindings) {
-    const performers = await loadOwnPerformersForEdit(auth.client, auth.user.id);
-    const resolved = resolveGeneratedStructure({ draft: result.estimate, performers });
-    if (resolved.unresolvedSlots.length) return { status: 422, body: { error: resolved.unresolvedSlots[0].question, code: "generated_performer_unresolved" } };
-  }
+    try {
+      const performers = await loadOwnPerformersForEdit(auth.client, auth.user.id);
+      const resolved = resolveGeneratedStructure({ draft: result.estimate, performers });
+      const success = !resolved.unresolvedSlots.length;
+      console.info({ event: "generation_performer_resolution", requestId: generationRequestId, success, diagnostic: { reason: success ? "resolved" : "unresolved_slots", unresolvedCount: resolved.unresolvedSlots.length } });
+      if (!success) return { status: 422, body: { error: resolved.unresolvedSlots[0].question, code: "generated_performer_unresolved" } };
+    } catch (error) { console.info({ event: "generation_performer_resolution", requestId: generationRequestId, success: false, diagnostic: { reason: "resolution_failed" } }); throw error; }
+  } else console.info({ event: "generation_performer_resolution", requestId: generationRequestId, success: true, diagnostic: { reason: "not_required", unresolvedCount: 0 } });
+  console.info({ event: "generation_compile", requestId: generationRequestId, success: true, diagnostic: { reason: "initial_ui_adapter" } });
+  console.info({ event: "generation_response_validation", requestId: generationRequestId, success: true, diagnostic: { reason: "generated_structure_valid" } });
   return { status: 200, body: result.estimate, metadata: serializeGenerationMetadata(buildGenerationMetadata(result)) };
 }
