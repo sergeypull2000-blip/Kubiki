@@ -78,6 +78,19 @@ test("anonymous Executor uses only explicitly preallocated Executor and role tag
   assert.equal(executor.id, "e-new"); assert.equal(executor.tags[0].id, "tg-new-1"); assert.equal(executor.tags[0].key, "role");
 });
 
+test("custom role text is supported but arbitrary tag payload stays rejected", () => {
+  const customRole = response([
+    operation("executor.addAnonymous", "t", { executorId: "e-new", roleTagId: "tg-new-1" }, undefined, "op-1"),
+    operation("executor.tag.update", "tg-new-1", { executorId: "e-new", value: "Раскадровщик" }, undefined, "op-2"),
+  ], scope("task"));
+  const next = applyAiEditOperations(project(), customRole, { idPool: pool() });
+  assert.equal(next.stages[0].tasks[0].executors[1].tags[0].value, "Раскадровщик");
+  assert.throws(
+    () => applyAiEditOperations(project(), response([operation("executor.tag.add", "e", { tagId: "tg-new-1", key: "arbitrary", value: "payload" })], scope("executor")), { idPool: pool() }),
+    (error) => error instanceof AiEditValidationError && error.code === "unknown_tag",
+  );
+});
+
 test("custom Stage creation uses a preallocated id and explicit custom preset", () => {
   const diff = response([operation("stage.add", "p", { stageId: "s-new", name: "Новый этап", presetKey: "custom", beforeStageId: null })]);
   const next = applyAiEditOperations(project(), diff, { idPool: pool() });

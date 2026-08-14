@@ -1,11 +1,13 @@
-import { PAYMENT_OPTIONS, ROLE_OPTIONS, SPECIALIZATION_OPTIONS, GRADE_OPTIONS, SOFTWARE_OPTIONS, STAGE_PRESETS } from "../constants.js";
+import { PAYMENT_OPTIONS, SPECIALIZATION_OPTIONS, GRADE_OPTIONS, SOFTWARE_OPTIONS, STAGE_PRESETS } from "../constants.js";
 import { buildExecutorFromPerformer, performerSnapshot } from "../performerLibrary.js";
 import { makeExecutor, makeStage, makeTag, makeTask, normalizeProject } from "../store.js";
 
 export const AI_EDIT_MAX_MONEY = 1_000_000_000;
 const PAYMENT_TYPES = new Set(PAYMENT_OPTIONS.map((item) => item.key));
 const TAG_RULES = {
-  role: new Set(ROLE_OPTIONS),
+  // Executor roles are bounded user text. ROLE_OPTIONS drives suggestions and
+  // semantic-model normalization, but imported/generated roles may be custom.
+  role: null,
   name: null,
   spec: new Set(SPECIALIZATION_OPTIONS),
   grade: new Set(GRADE_OPTIONS),

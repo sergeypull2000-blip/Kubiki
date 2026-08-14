@@ -28,6 +28,16 @@ test("AI preview no longer contains cost recovery controls", () => {
   assert.match(source, /Суммы отражают ориентировочную внутреннюю себестоимость до маркапа и налогов/);
 });
 
+test("GeneratedStructure preview separates responsive Executor fields", () => {
+  const component = readFileSync(new URL("../src/importExcel.jsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../src/styles.js", import.meta.url), "utf8");
+  for (const className of ["kb-prev-executor-name", "kb-prev-executor-field"]) assert.match(component, new RegExp(className));
+  assert.match(component, /\["fix_task", "hourly", "shift"\]\.includes\(executor\.paymentType\)/);
+  assert.match(styles, /\.kb-prev-executor\{[^}]*flex-wrap:wrap/);
+  assert.match(styles, /\.kb-prev-executor-name\{[^}]*overflow-wrap:anywhere/);
+  assert.match(styles, /@media\(max-width:520px\)/);
+});
+
 test("professional SYSTEM_PROMPT explicitly defines cost as internal cost", () => {
   const source = readFileSync(new URL("../api/generate-estimate.js", import.meta.url), "utf8");
   assert.match(source, /cost = внутренняя себестоимость задачи/);

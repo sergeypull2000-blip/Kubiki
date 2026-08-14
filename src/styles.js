@@ -608,10 +608,16 @@ export const CSS = `
 .kb-prev-stage{border:1px solid var(--line); border-radius:8px; overflow:hidden; flex:0 0 auto}
 .kb-prev-stage-head{display:flex; align-items:center; gap:6px; padding:6px 8px 6px 10px; background:var(--surface-sunken); border-bottom:1px solid var(--line)}
 .kb-prev-stage-name{flex:1; font-weight:var(--fw-semibold); border:none; background:none; padding:4px 2px}
-.kb-prev-task{display:flex; align-items:center; gap:6px; padding:5px 8px 5px 10px; border-bottom:1px solid var(--line)}
+.kb-prev-task{display:grid; grid-template-columns:minmax(120px,1fr) minmax(0,1.65fr) auto; align-items:start; gap:10px; padding:8px 8px 8px 10px; border-bottom:1px solid var(--line); min-width:0}
 .kb-prev-task:last-child{border-bottom:none}
-.kb-prev-task-name{flex:1; border:1px solid transparent; border-radius:4px; padding:4px 6px; background:none}
+.kb-prev-task-name{width:100%; min-width:0; border:1px solid transparent; border-radius:4px; padding:4px 6px; background:none}
 .kb-prev-task-name:hover,.kb-prev-task-name:focus{border-color:var(--line); background:var(--surface)}
+.kb-prev-executors{display:flex; flex-direction:column; gap:6px; min-width:0}
+.kb-prev-executor{display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px; min-width:0; padding:5px 7px; border-radius:6px; background:var(--surface-sunken)}
+.kb-prev-executor-name{flex:1 1 100%; min-width:0; overflow-wrap:anywhere; font-size:12px; font-weight:var(--fw-medium); color:var(--text)}
+.kb-prev-executor-field{display:inline-flex; flex:0 1 auto; min-width:0; max-width:100%; gap:4px; color:var(--text-muted); line-height:1.35; overflow-wrap:anywhere}
+.kb-prev-executor-field b{color:var(--text-faint); font-weight:var(--fw-medium)}
+@media(max-width:520px){.kb-prev-task{grid-template-columns:minmax(0,1fr) auto}.kb-prev-task-name,.kb-prev-executors{grid-column:1}.kb-prev-task>.kb-icon-btn{grid-column:2;grid-row:1}}
 .kb-prev-task-cost{width:96px; text-align:right; border:1px solid var(--line); border-radius:4px; padding:4px 6px; background:var(--surface)}
 .kb-prev-cur{color:var(--text-muted); font-size:12px}
 .kb-prev-warnings{border:1px dashed var(--line-strong); border-radius:8px; padding:10px 12px; background:var(--surface-sunken)}
