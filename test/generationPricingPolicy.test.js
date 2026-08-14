@@ -16,16 +16,22 @@ test("generation profile exposes a bounded financial policy", () => {
 });
 
 test("generation contract separates an unnamed profession from an explicitly named person", async () => {
-  for (const [brief, draft, expectedType, expectedName] of [
-    ["нужен графический дизайнер", { type: "anonymous_unnamed", role: "Графический дизайнер" }, "anonymous_unnamed", undefined],
-    ["Миша делает дизайн", { type: "anonymous_named", name: "Миша", role: "Графический дизайнер" }, "anonymous_named", "Миша"],
+  for (const [brief, taskName, draft, expectedType, expectedName] of [
+    ["нужен графический дизайнер", "Графический дизайн", { type: "anonymous_unnamed", role: "Графический дизайнер" }, "anonymous_unnamed", undefined],
+    ["Нужны UI-дизайн лендинга и адаптивная верстка", "UI-дизайн лендинга", { type: "anonymous_unnamed", role: "UI-дизайнер" }, "anonymous_unnamed", undefined],
+    ["Нужна адаптивная верстка", "Адаптивная верстка", { type: "anonymous_unnamed", role: "Frontend-разработчик" }, "anonymous_unnamed", undefined],
+    ["Нужна разработка логотипа", "Разработка логотипа", { type: "anonymous_unnamed", role: "Дизайнер айдентики" }, "anonymous_unnamed", undefined],
+    ["Миша делает дизайн", "Дизайн", { type: "anonymous_named", name: "Миша", role: "Графический дизайнер" }, "anonymous_named", "Миша"],
   ]) {
-    const calls = [], responses = [profile("estimate_missing"), JSON.stringify(estimate("fragment", [draft]))];
+    const calls = [], generated = estimate("fragment", [draft]); generated.stages[0].tasks[0].name = taskName;
+    const responses = [profile("estimate_missing"), JSON.stringify(generated)];
     const result = await runEstimateGeneration({ brief, systemPrompt: "SYSTEM", requestModel: async (messages) => { calls.push(messages); return responses.shift(); } });
     assert.match(calls[1][1].content, /anonymous_named допустим только когда имя конкретного человека, команды или компании явно присутствует/);
+    assert.match(calls[1][1].content, /профессиональную role из смысла его Task, если её можно разумно определить/);
+    assert.match(calls[1][1].content, /отсутствие имени не является причиной оставлять role пустой/);
     assert.match(calls[1][1].content, /Никогда не копируй профессию или role в name/);
-    assert.equal(result.estimate.stages[0].tasks[0].executors[0].type, expectedType);
-    assert.equal(result.estimate.stages[0].tasks[0].executors[0].name, expectedName);
+    const executor = result.estimate.stages[0].tasks[0].executors[0];
+    assert.equal(executor.type, expectedType); assert.equal(executor.name, expectedName); assert.equal(Boolean(executor.role), true);
   }
 });
 
