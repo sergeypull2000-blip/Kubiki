@@ -328,8 +328,8 @@ test("professional SYSTEM_PROMPT remains unchanged across platform line endings"
   const start = source.indexOf("const SYSTEM_PROMPT = `") + "const SYSTEM_PROMPT = `".length;
   const end = source.indexOf("`;", start);
   const prompt = canonicalText(source.slice(start, end));
-  assert.equal(prompt.length, 13870);
-  assert.equal(createHash("sha256").update(prompt).digest("hex"), "ffaf39169bc7980036beb0d43164e1746bd83af259746d47ccfa957f3748c5c4");
+  assert.equal(prompt.length, 14073);
+  assert.equal(createHash("sha256").update(prompt).digest("hex"), "5ae1475fd09e3a78da63712308add30023e06704ac01714b427b0b430a396a4f");
 });
 
 test("estimate JSON schema remains unchanged across platform line endings", () => {

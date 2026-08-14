@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { runEstimateGeneration } from "../api/_lib/generationOrchestrator.js";
 import { parseProfile } from "../api/_lib/profile.js";
 import { compileGeneratedStructure, resolveGeneratedStructure } from "../api/_lib/generatedStructure.js";
@@ -32,6 +33,29 @@ test("generation contract separates an unnamed profession from an explicitly nam
     assert.match(calls[1][1].content, /Никогда не копируй профессию или role в name/);
     const executor = result.estimate.stages[0].tasks[0].executors[0];
     assert.equal(executor.type, expectedType); assert.equal(executor.name, expectedName); assert.equal(Boolean(executor.role), true);
+  }
+});
+
+test("whole-project and fragment examples teach optional tax and unnamed roles", () => {
+  for (const source of [
+    readFileSync(new URL("../api/generate-estimate.js", import.meta.url), "utf8"),
+    readFileSync(new URL("../api/edit-estimate.js", import.meta.url), "utf8"),
+  ]) {
+    assert.doesNotMatch(source, /"tax"\s*:\s*6/);
+    assert.match(source, /"type":"anonymous_unnamed","role":"\.\.\."/);
+    assert.match(source, /tax (?:опционально|is optional)/i);
+  }
+});
+
+test("tax is absent by default and preserves explicit zero or six in both scopes", async () => {
+  for (const scope of ["whole_project", "fragment"]) {
+    for (const [brief, tax] of [["Нужна профессиональная работа", undefined], ["Налог исполнителя 6%", 6], ["Налог исполнителя 0%", 0]]) {
+      const draft = { type: "anonymous_unnamed", role: "Специалист", ...(tax === undefined ? {} : { tax }) };
+      const calls = [], responses = [profile("estimate_missing"), JSON.stringify(estimate(scope, [draft]))];
+      const result = await runEstimateGeneration({ brief, systemPrompt: "SYSTEM", requestModel: async (messages) => { calls.push(messages); return responses.shift(); } });
+      assert.match(calls[1][1].content, /Поле tax опционально/);
+      assert.equal(result.estimate.stages[0].tasks[0].executors[0].tax, tax);
+    }
   }
 });
 
