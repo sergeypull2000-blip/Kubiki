@@ -98,7 +98,7 @@ function ExecutorTag({ tag, onSetValue, onSetPayment, onRemove, isOpen, onOpenCh
   };
 
   return (
-    <div className={"kb-tag" + (filled ? " kb-tag-filled" : " kb-tag-empty")} ref={wrapRef}
+    <div className={`kb-tag kb-tag-${tag.key}` + (filled ? " kb-tag-filled" : " kb-tag-empty")} ref={wrapRef}
       {...(filled ? dragHandlers : {})}
       onMouseDownCapture={onTagMouseDownCapture}
       onMouseUp={restoreTagDraggable}
@@ -136,7 +136,7 @@ function ExecutorTag({ tag, onSetValue, onSetPayment, onRemove, isOpen, onOpenCh
           <span className="kb-tag-taxpct">%</span>
         </span>
       ) : filled ? (
-        <span className="kb-tag-val" onMouseDown={(e) => { e.stopPropagation(); openFilled(); }}>
+        <span className="kb-tag-val" title={["name", "role"].includes(tag.key) ? displayValue() : undefined} onMouseDown={(e) => { e.stopPropagation(); openFilled(); }}>
           {displayValue()}
         </span>
       ) : (

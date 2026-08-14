@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { parseGeneratedStructure, resolveGeneratedStructure, compileGeneratedStructure } from "../api/_lib/generatedStructure.js";
 import { routeAiIntentDeterministically } from "../api/_lib/aiIntentRouter.js";
 import { stagesFromGeneratedEstimate } from "../src/ai/estimateInsertion.js";
@@ -57,6 +58,13 @@ test("projectName validation depends on generation scope", () => {
   assert.equal(parseGeneratedStructure(control).projectName, "QA");
   assert.equal(parseGeneratedStructure({ ...control, projectName: "" }), null);
   assert.equal(parseGeneratedStructure({ ...control, projectName: "x".repeat(161) }), null);
+});
+
+test("Initial preview exposes whole-project name and carries it into creation metadata", () => {
+  const source = readFileSync(new URL("../src/importExcel.jsx", import.meta.url), "utf8");
+  assert.match(source, /parsed\.generationScope === "whole_project"/);
+  assert.match(source, /aria-label="Название проекта" value=\{parsed\.projectName\}/);
+  assert.match(source, /clean\.projectName \? \{ projectName: clean\.projectName \}/);
 });
 
 test("custom GeneratedStructure role has identical Initial and Global semantics", () => {

@@ -153,6 +153,7 @@ function useEstimateEditor(performers = []) {
   const load = (valid) => { setParsed(valid); setWarnings(valid.warnings); };
 
   const setStageName = (si, name) => setParsed((p) => ({ ...p, stages: p.stages.map((s, i) => i === si ? { ...s, name } : s) }));
+  const setProjectName = (projectName) => setParsed((p) => ({ ...p, projectName }));
   const setTaskField = (si, ti, field, val) => setParsed((p) => ({
     ...p, stages: p.stages.map((s, i) => i !== si ? s : { ...s, tasks: s.tasks.map((t, j) => j === ti ? { ...t, [field]: val } : t) }),
   }));
@@ -174,7 +175,7 @@ function useEstimateEditor(performers = []) {
 
   return {
     parsed, warnings,
-    load, setStageName, setTaskField, delTask, delStage,
+    load, setProjectName, setStageName, setTaskField, delTask, delStage,
     total, taskCount, buildConfirm,
   };
 }
@@ -184,7 +185,7 @@ function useEstimateEditor(performers = []) {
 function EstimatePreviewStep({ editor, generationMetadata, noteText, draftNotice, warnTitle, warnProminent, confirmLabel = "Импортировать", onClose, onConfirm }) {
   const {
     parsed, warnings,
-    setStageName, setTaskField, delTask, delStage,
+    setProjectName, setStageName, setTaskField, delTask, delStage,
     total, taskCount, buildConfirm,
   } = editor;
   const [localError, setLocalError] = useState("");
@@ -200,6 +201,9 @@ function EstimatePreviewStep({ editor, generationMetadata, noteText, draftNotice
       <div className="kb-modal-body kb-import-preview">
         {draftNotice && <div className="kb-draft-notice"><AlertTriangle size={14} strokeWidth={1.5} /> {draftNotice}</div>}
         <div className="kb-modal-note">{noteText}</div>
+        {parsed.generationScope === "whole_project" && (
+          <input className="kb-input kb-prev-project-name" aria-label="Название проекта" value={parsed.projectName} onChange={(event) => setProjectName(event.target.value)} />
+        )}
 
         {parsed.stages.map((s, si) => (
           <div key={si} className="kb-prev-stage">

@@ -11,6 +11,7 @@ import {
   validateExportModelTotals,
 } from "../src/exportEstimate.js";
 import { executorFinancialCommission, projectFinancialCommission, projectTaxBreakdown, projectTotalWithTax } from "../src/calculations.js";
+import { buildExcelWorkbook, buildExcelRows } from "../src/excelExport.js";
 
 const task = (id, name, directCost, markupOverride = null) => ({ id, name, directCost, markupOverride, executors: [] });
 const project = (patch = {}) => ({
@@ -149,11 +150,35 @@ test("PDF, Excel и preview получают один ExportEstimateModel без
   assert.doesNotMatch(source, /projectTaxAmount|projectVatAmount|projectMarkupAmount|taskPrice|projectTotalWithTax/);
 });
 
+test("все денежные Excel cells являются числами с рублёвым number format", () => {
+  const model = buildExportEstimateModel(project(), { markupPresentation: "separate_line", taxPresentation: "separate_line" });
+  const workbook = buildExcelWorkbook(model);
+  const sheet = workbook.worksheets[0];
+  const expectedMoneyCells = buildExcelRows(model).rows.length + 1;
+  const moneyCells = [];
+  sheet.eachRow((row) => {
+    const cell = row.getCell(2);
+    if (cell.numFmt?.includes("₽")) moneyCells.push(cell);
+  });
+  assert.equal(moneyCells.length, expectedMoneyCells);
+  assert.ok(moneyCells.every((cell) => typeof cell.value === "number" && Number.isFinite(cell.value)));
+});
+
+test("Executor name и role получают гибкую ширину, ellipsis и полный title", () => {
+  const component = readFileSync(new URL("../src/components/Executor.jsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../src/styles.js", import.meta.url), "utf8");
+  assert.match(component, /kb-tag-\$\{tag\.key\}/);
+  assert.match(component, /title=\{\["name", "role"\]\.includes\(tag\.key\)/);
+  assert.match(styles, /\.kb-tag-name,\.kb-tag-role\{[^}]*flex:1 1 220px;[^}]*min-width:0;[^}]*max-width:280px/);
+  assert.match(styles, /\.kb-erow-tags\{[^}]*min-width:0/);
+  assert.match(styles, /\.kb-tag-val,\.kb-tag-placeholder\{[^}]*overflow:hidden; text-overflow:ellipsis/);
+});
+
 test("настройка брендинга доступна из модалки экспорта и используется обоими форматами", () => {
   const source = readFileSync(new URL("../src/exportFiles.jsx", import.meta.url), "utf8");
   assert.match(source, /aria-label="Настроить брендинг сметы"/);
   assert.match(source, /<BrandingSettings branding=\{project\.branding\}/);
-  assert.match(source, /addExcelLogo\(workbook, sheet, brand\.logo\)/);
+  assert.match(source, /buildExcelWorkbook\(model, addExcelLogo\)/);
   assert.match(source, /model\.brand\?\.logo/);
 });
 

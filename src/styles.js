@@ -234,6 +234,7 @@ export const CSS = `
 .kb-tag{position:relative; display:inline-flex; align-items:center; gap:5px; border:1px solid var(--line-strong);
   border-radius:5px; padding:3px 5px 3px 7px; background:var(--surface); font-size:var(--fs-xs); width:156px; flex:0 0 156px; min-width:156px; max-width:156px;
   transition:border-color .12s, background .12s, color .12s}
+.kb-tag-name,.kb-tag-role{width:auto; flex:1 1 220px; min-width:0; max-width:280px}
 .kb-tag:hover{border-color:var(--accent); background:var(--accent-soft)}
 .kb-tag:hover .kb-tag-ic{color:var(--accent)}
 .kb-tag:hover .kb-tag-val{color:var(--accent)}
@@ -606,6 +607,7 @@ export const CSS = `
 .kb-import-preview{display:flex; flex-direction:column; gap:14px; overflow-y:auto}
 .kb-import-preview > *{flex-shrink:0}
 .kb-prev-stage{border:1px solid var(--line); border-radius:8px; overflow:hidden; flex:0 0 auto}
+.kb-prev-project-name{width:100%; margin-bottom:10px; font-weight:var(--fw-semibold)}
 .kb-prev-stage-head{display:flex; align-items:center; gap:6px; padding:6px 8px 6px 10px; background:var(--surface-sunken); border-bottom:1px solid var(--line)}
 .kb-prev-stage-name{flex:1; font-weight:var(--fw-semibold); border:none; background:none; padding:4px 2px}
 .kb-prev-task{display:grid; grid-template-columns:minmax(120px,1fr) minmax(0,1.65fr) auto; align-items:start; gap:10px; padding:8px 8px 8px 10px; border-bottom:1px solid var(--line); min-width:0}
