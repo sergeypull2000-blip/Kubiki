@@ -37,6 +37,19 @@ export function makeProjectFromEstimate(stages, meta = {}) {
   return normalizeProject(project);
 }
 
+export function applyConfirmedEstimate(project, stages, meta = {}) {
+  const source = normalizeProject(project);
+  const previewName = typeof meta.projectName === "string" ? meta.projectName.trim() : "";
+  const renameInitialProject = meta.generationScope === "whole_project" && source.stages.length === 0 && previewName;
+  return normalizeProject({
+    ...source,
+    ...(renameInitialProject ? { name: previewName } : {}),
+    stages: [...source.stages, ...stages],
+    ...(Number.isFinite(meta.globalMarkup) ? { globalMarkup: meta.globalMarkup } : {}),
+    ...(meta.generationMetadata ? { metadata: { ...source.metadata, aiGeneration: meta.generationMetadata } } : {}),
+  });
+}
+
 /** Normalize persisted or external project data for safe runtime use. */
 export function normalizeProject(project) {
   const source = project && typeof project === "object" && !Array.isArray(project) ? project : {};

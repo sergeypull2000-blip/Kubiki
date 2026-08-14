@@ -29,6 +29,8 @@ export function buildExcelWorkbook(model, addLogo) {
   sheet.getCell(`A${sheet.rowCount}`).font = { bold: true, size: 15, name: "Inter" };
   sheet.addRow([new Date().toLocaleDateString("ru-RU"), ""]); sheet.addRow([]);
   const totalReferences = [];
+  const derivedBaseReferences = [];
+  let derivedBaseAmount = 0;
   for (const stage of model.stages) {
     const stageRow = sheet.addRow([stage.name, null]);
     stageRow.font = { bold: true, name: "Inter" };
@@ -42,12 +44,20 @@ export function buildExcelWorkbook(model, addLogo) {
     stageCell.value = { formula: `SUM(B${firstTaskRow}:B${lastTaskRow})` };
     stageCell.numFmt = '#,##0.00" ₽"';
     totalReferences.push(stageCell.address);
+    derivedBaseReferences.push(stageCell.address);
+    derivedBaseAmount += stage.exportedSubtotal;
   }
   for (const row of model.separateRows) {
-    const separateRow = sheet.addRow([row.label, moneyValue(row.amount)]);
+    const rate = Number(row.metadata?.rate);
+    const baseAmount = Number(row.metadata?.baseAmount);
+    if (!Number.isFinite(rate) || !Number.isFinite(baseAmount)) throw new TypeError("Derived Excel money row requires canonical rate and base metadata");
+    if (Math.round(baseAmount * 100) !== Math.round(derivedBaseAmount * 100)) throw new TypeError("Derived Excel money row base does not match preceding canonical rows");
+    const separateRow = sheet.addRow([row.label, { formula: `ROUND(SUM(${derivedBaseReferences.join(",")})*${rate}/100,2)` }]);
     separateRow.font = { italic: true, name: "Inter" };
     separateRow.getCell(2).numFmt = '#,##0.00" ₽"';
     totalReferences.push(separateRow.getCell(2).address);
+    derivedBaseReferences.push(separateRow.getCell(2).address);
+    derivedBaseAmount += row.amount;
   }
   sheet.addRow([]);
   const totalRow = sheet.addRow(["ИТОГО", { formula: `SUM(${totalReferences.join(",")})` }]);

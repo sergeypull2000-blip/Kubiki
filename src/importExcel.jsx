@@ -168,6 +168,7 @@ function useEstimateEditor(performers = []) {
     if (clean.stages.length === 0) return { ok: false, message: "Нечего импортировать." };
     const meta = {
       ...(clean.projectName ? { projectName: clean.projectName } : {}),
+      generationScope: clean.generationScope,
     };
     try { return { ok: true, stages: stagesFromGeneratedEstimate(clean, performers, parsed.__generationPolicy || {}), meta }; }
     catch (error) { return { ok: false, message: error.message }; }
@@ -479,7 +480,7 @@ export function UnifiedImportEmptyState({ onPickFile, onGenerate, disabled = fal
         <div className="kb-unified-input">
           <textarea className="kb-generate-textarea" rows={4} value={desc}
             onChange={(e) => setDesc(e.target.value)}
-            onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") submit(); }}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
             placeholder="Опишите проект, импортируйте файл сметы или сделайте и то, и другое." />
           <button type="button" className="kb-icon-btn kb-attach-btn" onClick={() => inputRef.current?.click()} title="Прикрепить файл"><Paperclip size={16} strokeWidth={1.5} /></button>
           <button type="button" className="kb-send-btn" onClick={submit} disabled={disabled || (!desc.trim() && !file)} title="Создать смету" aria-label="Создать смету"><ArrowUp size={15} strokeWidth={1.8} /></button>

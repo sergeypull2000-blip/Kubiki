@@ -38,6 +38,15 @@ test("GeneratedStructure preview separates responsive Executor fields", () => {
   assert.match(styles, /@media\(max-width:520px\)/);
 });
 
+test("Initial generation starts with Enter and keeps Shift+Enter for a newline", () => {
+  const dashboard = readFileSync(new URL("../src/components/Dashboard.jsx", import.meta.url), "utf8");
+  const emptyState = readFileSync(new URL("../src/importExcel.jsx", import.meta.url), "utf8");
+  for (const source of [dashboard, emptyState]) {
+    assert.match(source, /event\.key === "Enter" && !event\.shiftKey|e\.key === "Enter" && !e\.shiftKey/);
+    assert.match(source, /preventDefault\(\); submit\(\)/);
+  }
+});
+
 test("professional SYSTEM_PROMPT explicitly defines cost as internal cost", () => {
   const source = readFileSync(new URL("../api/generate-estimate.js", import.meta.url), "utf8");
   assert.match(source, /cost = внутренняя себестоимость задачи/);

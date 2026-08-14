@@ -163,7 +163,10 @@ export function buildExportEstimateModel(project, rawSettings = project?.exportS
     return { id: stage.id, name: stage.name || "Этап", rows, baseSubtotal: fromMinor(baseSubtotalMinor), baseSubtotalMinor, exportedSubtotal: fromMinor(exportedSubtotalMinor), exportedSubtotalMinor };
   });
   const separateRows = [
-    ...(markupSeparate && markupMinor !== 0 ? [buildSeparateMarkupRow(markupMinor)] : []),
+    ...(markupSeparate && markupMinor !== 0 ? [buildSeparateMarkupRow(markupMinor, {
+      baseAmount: fromMinor(baseTotalMinor),
+      rate: baseTotalMinor ? markupMinor / baseTotalMinor * 100 : 0,
+    })] : []),
     ...buildSeparateTaxRows(separateTaxComponents),
   ];
   const totalMinor = toMinor(projectTotalWithTax(project));

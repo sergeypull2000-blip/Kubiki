@@ -77,6 +77,10 @@ function ProjectSourceModal({ mode, aiGenerationReady, onClose, onSubmit }) {
     if (inputRef.current) inputRef.current.value = "";
   };
   const canSubmit = aiGenerationReady && (isImport ? Boolean(file) : Boolean(description.trim() || file));
+  const submit = () => {
+    if (!canSubmit) return;
+    onSubmit({ file, description: description.trim() });
+  };
 
   return <div className="kb-modal-overlay" onMouseDown={onClose}>
     <div className={`kb-modal kb-project-source-modal is-${mode}`} onMouseDown={(event) => event.stopPropagation()}>
@@ -86,7 +90,9 @@ function ProjectSourceModal({ mode, aiGenerationReady, onClose, onSubmit }) {
       </div>
       <div className="kb-modal-body">
         {!isImport && <textarea className="kb-generate-textarea kb-project-source-description is-primary" rows={7}
-          value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Описание проекта" />}
+          value={description} onChange={(event) => setDescription(event.target.value)}
+          onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } }}
+          placeholder="Описание проекта" />}
         <input ref={inputRef} type="file" accept={isImport ? ".xlsx,.csv,.pdf" : ".docx,.doc"} hidden onChange={(event) => pickFile(event.target.files?.[0])} />
         <div className={`kb-import-zone kb-project-source-file ${isImport ? "is-primary" : "is-secondary"}${over ? " is-over" : ""}`}
           onClick={() => inputRef.current?.click()}
@@ -107,7 +113,7 @@ function ProjectSourceModal({ mode, aiGenerationReady, onClose, onSubmit }) {
           {!aiGenerationReady && <span className="kb-ai-hydration-note">Загружаем знания студии…</span>}
           <button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button>
           <button type="button" className="kb-btn kb-btn-primary" disabled={!canSubmit}
-            onClick={() => onSubmit({ file, description: description.trim() })}>
+            onClick={submit}>
             {isImport ? "Импортировать" : "Создать проект"}
           </button>
         </div>

@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PROJECT_DATA_VERSION, makeProject, makeProjectFromEstimate, normalizeProject } from "../src/store.js";
+import { readFileSync } from "node:fs";
+import { PROJECT_DATA_VERSION, applyConfirmedEstimate, makeProject, makeProjectFromEstimate, normalizeProject } from "../src/store.js";
+import { buildProjectRow, deserializeProjectFromServer } from "../src/projectServer.js";
 
 test("new project has the canonical data version", () => {
   assert.equal(makeProject().dataVersion, PROJECT_DATA_VERSION);
@@ -13,6 +15,20 @@ test("Initial estimate materialization persists the edited preview project name"
   assert.deepEqual(generated.stages, stages);
   const reloaded = normalizeProject(JSON.parse(JSON.stringify(generated)));
   assert.equal(reloaded.name, "Edited Campaign Name");
+});
+
+test("real Workspace confirm path renames an empty whole-project Initial estimate and survives server round-trip", () => {
+  const workspace = readFileSync(new URL("../src/components/Workspace.jsx", import.meta.url), "utf8");
+  assert.match(workspace, /dispatch\(\(project\) => applyConfirmedEstimate\(project, stages, meta\)\)/);
+  const current = makeProject();
+  const stages = [{ id: "stage", name: "Production", tasks: [] }];
+  const confirmed = applyConfirmedEstimate(current, stages, { generationScope: "whole_project", projectName: "Brand Launch 2026" });
+  assert.equal(confirmed.name, "Brand Launch 2026");
+  const row = buildProjectRow("user", confirmed);
+  assert.equal(row.name, "Brand Launch 2026");
+  assert.equal(deserializeProjectFromServer({ ...row, client_id: confirmed.id }).name, "Brand Launch 2026");
+  const fragment = applyConfirmedEstimate({ ...confirmed, stages: [] }, stages, { generationScope: "fragment", projectName: "Unsafe Rename" });
+  assert.equal(fragment.name, "Brand Launch 2026");
 });
 
 test("normalizeProject(undefined) returns a safe project", () => {

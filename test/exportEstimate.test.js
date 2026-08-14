@@ -165,8 +165,8 @@ test("Excel leaf amounts are numeric while Stage subtotals and grand total are d
   });
   const formulaCells = moneyCells.filter((cell) => typeof cell.value === "object" && cell.value?.formula);
   const numericCells = moneyCells.filter((cell) => typeof cell.value === "number");
-  assert.equal(formulaCells.length, model.stages.length + 1);
-  assert.equal(numericCells.length, model.stages.flatMap((stage) => stage.rows).length + model.separateRows.length);
+  assert.equal(formulaCells.length, model.stages.length + model.separateRows.length + 1);
+  assert.equal(numericCells.length, model.stages.flatMap((stage) => stage.rows).length);
   assert.ok(numericCells.every((cell) => Number.isFinite(cell.value)));
   for (const stage of model.stages) {
     const subtotal = formulaCells.find((cell) => sheet.getRow(cell.row).getCell(1).value === stage.name);
@@ -181,6 +181,39 @@ test("Excel leaf amounts are numeric while Stage subtotals and grand total are d
   assert.ok(taskCells.every((cell) => !grandTotalReferences.includes(cell.address)));
   assert.equal(workbook.calcProperties.calcMode, "auto");
   assert.equal(workbook.calcProperties.fullCalcOnLoad, true);
+});
+
+test("all separate markup, tax and VAT rows are formulas with canonical coordinate dependencies", () => {
+  const source = project({ stages: [
+    { id: "stage-one", name: "Stage One", tasks: [task("one", "Task One", 100), task("two", "Task Two", 200)] },
+    { id: "stage-two", name: "Stage Two", tasks: [task("three", "Task Three", 300), task("four", "Task Four", 400)] },
+  ] });
+  const model = buildExportEstimateModel(source, { markupPresentation: "separate_line", taxPresentation: "separate_line" });
+  const workbook = buildExcelWorkbook(model);
+  const sheet = workbook.worksheets[0];
+  const byLabel = (label) => {
+    const row = sheet.findRow(sheet.getColumn(1).values.findIndex((value) => value === label));
+    return row.getCell(2);
+  };
+  const stageCells = model.stages.map((stage) => byLabel(stage.name));
+  const derivedCells = model.separateRows.map((row) => byLabel(row.label));
+  const totalCell = byLabel("ИТОГО");
+  const taskLabels = new Set(model.stages.flatMap((stage) => stage.rows).map((row) => `  ${row.name}`));
+  const taskCells = [];
+  sheet.eachRow((row) => { if (taskLabels.has(row.getCell(1).value)) taskCells.push(row.getCell(2)); });
+
+  assert.ok(taskCells.every((cell) => typeof cell.value === "number"));
+  assert.ok([...stageCells, ...derivedCells, totalCell].every((cell) => cell.value?.formula && cell.numFmt.includes("₽")));
+  derivedCells.forEach((cell, index) => {
+    const expectedBase = [...stageCells, ...derivedCells.slice(0, index)].map((item) => item.address);
+    assert.match(cell.value.formula, /^ROUND\(SUM\([A-Z]\d+(?:,[A-Z]\d+)*\)\*[\d.eE+-]+\/100,2\)$/);
+    assert.ok(expectedBase.every((address) => cell.value.formula.includes(address)));
+    assert.ok(taskCells.every((taskCell) => !cell.value.formula.includes(taskCell.address)));
+  });
+  const totalReferences = totalCell.value.formula.slice(4, -1).split(",");
+  assert.deepEqual(totalReferences, [...stageCells, ...derivedCells].map((cell) => cell.address));
+  assert.ok(taskCells.every((cell) => !totalReferences.includes(cell.address)));
+  assert.deepEqual(model.separateRows.map((row) => row.metadata.type || row.type), ["markup", "usn", "vat"]);
 });
 
 test("Executor name и role получают гибкую ширину, ellipsis и полный title", () => {

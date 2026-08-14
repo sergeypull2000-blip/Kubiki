@@ -9,6 +9,7 @@ import {
   findExecutor, cloneExecutor, insertStage, applyTagToExecutor,
 } from "../store.js";
 import { ImportModal, GenerateEstimateModal, UnifiedImportEmptyState, LogoMenu } from "../importExcel.jsx";
+import { applyConfirmedEstimate } from "../store.js";
 import { PalettePanel } from "./LeftPanel.jsx";
 import { StageCard, CanvasDropZone } from "./Stage.jsx";
 import { RightPanel } from "./RightPanel.jsx";
@@ -219,12 +220,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
 
   // Общая точка вставки этапов, подтверждённых в превью импорта/генерации.
   const insertParsedStages = (stages, meta) => {
-    dispatch((p) => ({
-      ...p,
-      stages: [...(p.stages || []), ...stages],
-      ...(meta && Number.isFinite(meta.globalMarkup) ? { globalMarkup: meta.globalMarkup } : {}),
-      ...(meta?.generationMetadata ? { metadata: { ...p.metadata, aiGeneration: meta.generationMetadata } } : {}),
-    }));
+    dispatch((project) => applyConfirmedEstimate(project, stages, meta));
   };
 
   const isEmpty = (project?.stages || []).length === 0;
