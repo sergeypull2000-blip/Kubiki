@@ -4,9 +4,10 @@ import { useOutsideClose } from "../hooks.js";
 /* ============================================================
    Автоподсказка (для названия задачи и для «Специализации»)
    ============================================================ */
-export function SuggestInput({ value, onChange, onCommit, dictionary, featured, placeholder, className, autoFocus, title }) {
+export function SuggestInput({ value, onChange, onCommit, onCancel, dictionary, featured, placeholder, className, autoFocus, title }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
+  const cancelRef = useRef(false);
   const typing = value.trim().length > 0;
   const matches = typing
     ? dictionary.filter((t) => t.toLowerCase().includes(value.trim().toLowerCase())).slice(0, 7)
@@ -23,8 +24,11 @@ export function SuggestInput({ value, onChange, onCommit, dictionary, featured, 
         autoFocus={autoFocus}
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
-        onKeyDown={(e) => { if (e.key === "Enter") { setOpen(false); onCommit && onCommit(value); } }}
-        onBlur={() => onCommit && onCommit(value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { setOpen(false); onCommit && onCommit(value); e.currentTarget.blur(); }
+          if (e.key === "Escape" && onCancel) { cancelRef.current = true; setOpen(false); onCancel(); }
+        }}
+        onBlur={() => { if (cancelRef.current) cancelRef.current = false; else onCommit && onCommit(value); }}
       />
       {open && matches.length > 0 && (
         <div className="kb-suggest">

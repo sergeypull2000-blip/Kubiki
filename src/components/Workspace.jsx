@@ -25,6 +25,8 @@ import { useOutsideClose } from "../hooks.js";
    Рабочая зона
    ============================================================ */
 export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onOpenAiSettings, onSignOut, userAccount, aiGenerationReady = false, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange, onRequestAiEdit, onCancelAiEdit, onApplyAiEdit, onUndoAiEdit, canUndoAiEdit = false }) {
+  const [leftPanelWidth, setLeftPanelWidth] = useState(() => Number(localStorage.getItem("kb-workspace-left-width")) || 248);
+  const [rightPanelWidth, setRightPanelWidth] = useState(() => Number(localStorage.getItem("kb-workspace-right-width")) || 288);
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
   // в Клайне можно persist'ить в localStorage.
   const [importFile, setImportFile] = useState(null);
@@ -60,6 +62,26 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
   const clipboardRef = useRef(null); // скопированный исполнитель (Ctrl+C/Ctrl+V)
   const dispatch = (fn) => onChange(fn);
   const total = projectSum(project);
+  const beginPanelResize = useCallback((side, event) => {
+    event.preventDefault(); event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = side === "left" ? leftPanelWidth : rightPanelWidth;
+    const [min, max] = side === "left" ? [210, 380] : [250, 440];
+    const onMove = (moveEvent) => {
+      const delta = (moveEvent.clientX - startX) * (side === "left" ? 1 : -1);
+      const width = Math.min(max, Math.max(min, startWidth + delta));
+      if (side === "left") setLeftPanelWidth(width); else setRightPanelWidth(width);
+    };
+    const onUp = () => {
+      document.body.classList.remove("kb-is-panel-resizing");
+      window.removeEventListener("pointermove", onMove);
+    };
+    document.body.classList.add("kb-is-panel-resizing");
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }, [leftPanelWidth, rightPanelWidth]);
+  useEffect(() => { localStorage.setItem("kb-workspace-left-width", String(leftPanelWidth)); }, [leftPanelWidth]);
+  useEffect(() => { localStorage.setItem("kb-workspace-right-width", String(rightPanelWidth)); }, [rightPanelWidth]);
 
   // теги выделенного исполнителя — для контекстной подсказки под «Кубиками исполнителя»
   const activeExecutorTags = (() => {
@@ -380,6 +402,7 @@ const toggleAllCollapsed = () =>
       </header>
 
       <div className="kb-layout">
+        <div className="kb-panel-shell kb-panel-shell-left" style={{ width: leftPanelWidth }}>
           <PalettePanel
             activeExecutorId={activeExecutorId}
             activeExecutorTags={activeExecutorTags}
@@ -399,6 +422,8 @@ const toggleAllCollapsed = () =>
             onRemoveStageTemplate={handleRemoveStageTemplate}
             accountControl={accountControl}
           />
+          <div className="kb-panel-resizer kb-panel-resizer-left" role="separator" aria-label="Изменить ширину левой панели" aria-orientation="vertical" onPointerDown={(event) => beginPanelResize("left", event)} />
+        </div>
           {/* клик по нейтральной зоне листа снимает все выделения. */}
           <main className="kb-canvas"
             onMouseDown={clearSelection}
@@ -464,7 +489,10 @@ const toggleAllCollapsed = () =>
               <button type="button" className={`kb-ai-launcher${globalAiOpen && !globalAiClosing ? " is-open" : ""}`} aria-label={globalAiOpen ? "Предпросмотр изменений" : "Открыть AI-ассистента"} onClick={() => { setLocalAiPopover(null); if (globalAiOpen) globalAiSubmitRef.current?.(); else setGlobalAiOpen(true); }}><ArrowUp size={18} strokeWidth={1.8} /></button>
             </div>}
           </main>
-          {rightPanel}
+          <div className="kb-panel-shell kb-panel-shell-right" style={{ width: rightPanelWidth }}>
+            <div className="kb-panel-resizer kb-panel-resizer-right" role="separator" aria-label="Изменить ширину правой панели" aria-orientation="vertical" onPointerDown={(event) => beginPanelResize("right", event)} />
+            {rightPanel}
+          </div>
           {performerModal && <PerformerModal initial={performerModal.draft} isNew={!performerModal.existingId} initialAddToQuickAccess={performerModal.addToQuickAccess} onSave={savePerformerCard} onClose={() => setPerformerModal(null)} />}
           {localAiPopover && <AiEditTechnicalModal variant="inline" position={{ x: localAiPopover.x, y: localAiPopover.y }} scope={localScope(localAiPopover.context)} contextLabel={localAiPopover.context.label} onRequest={onRequestAiEdit} onCancelRequest={onCancelAiEdit} onApply={onApplyAiEdit} onClose={() => setLocalAiPopover(null)} />}
       </div>
