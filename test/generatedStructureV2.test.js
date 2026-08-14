@@ -43,6 +43,20 @@ test("the same v2 fixture compiles through Global generation without semantic CR
   assert.equal(diff.operations.filter((item) => item.type === "executor.addAnonymous").length, 7);
   assert.equal(diff.operations.filter((item) => item.type === "executor.amount.set").length, 2);
   assert.equal(diff.operations.filter((item) => item.type === "executor.tag.add" && item.value.key === "name").length, 5);
+  assert.equal(diff.operations.some((item) => item.type.includes("project") || item.type.includes("rename")), false);
+});
+
+test("projectName validation depends on generation scope", () => {
+  const fragment = { ...control, generationScope: "fragment" };
+  delete fragment.projectName;
+  assert.equal(Object.hasOwn(parseGeneratedStructure(fragment), "projectName"), false);
+  for (const projectName of ["", " ", "x".repeat(161), { unsafe: true }]) {
+    const parsed = parseGeneratedStructure({ ...fragment, projectName });
+    assert.ok(parsed); assert.equal(Object.hasOwn(parsed, "projectName"), false);
+  }
+  assert.equal(parseGeneratedStructure(control).projectName, "QA");
+  assert.equal(parseGeneratedStructure({ ...control, projectName: "" }), null);
+  assert.equal(parseGeneratedStructure({ ...control, projectName: "x".repeat(161) }), null);
 });
 
 test("custom GeneratedStructure role has identical Initial and Global semantics", () => {

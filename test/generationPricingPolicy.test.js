@@ -28,10 +28,11 @@ test("default and explicit blank pricing policies reach whole_project and fragme
 });
 
 test("explicit compensation survives no-pricing while other compensation stays absent", async () => {
-  const generated = estimate("fragment", [{ type: "anonymous_named", name: "A", compensation: 300000 }, { type: "anonymous_named", name: "B" }]);
+  const generated = estimate("fragment", [{ type: "anonymous_named", name: "A", compensation: 300000 }, { type: "anonymous_named", name: "B" }]); delete generated.projectName;
   const responses = [profile("leave_missing_blank"), JSON.stringify(generated)];
   const result = await runEstimateGeneration({ brief: "Добавь двух исполнителей по 300к, остальные ставки не заполняй", systemPrompt: "SYSTEM", requestModel: async () => responses.shift() });
   assert.deepEqual(result.estimate.stages[0].tasks[0].executors.map((draft) => draft.compensation), [300000, undefined]);
+  assert.equal(Object.hasOwn(result.estimate, "projectName"), false);
 });
 
 test("no-pricing suppresses Performer defaults equally in Initial and Global", () => {

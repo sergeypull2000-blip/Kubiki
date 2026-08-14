@@ -35,13 +35,14 @@ export function diagnoseGeneratedStructure(input) {
   base.topLevelKeys = keys(value); base.schemaVersion = value.schemaVersion ?? null; base.kind = typeof value.kind === "string" ? value.kind : null;
   base.generationScope = typeof value.generationScope === "string" ? value.generationScope : null;
   base.stagesCount = Array.isArray(value.stages) ? value.stages.length : null; base.stages = [];
-  const topRequired = ["schemaVersion", "kind", "generationScope", "projectName", "stages", "warnings"];
-  if (missing(value, topRequired).length) return rejected(base, "$", "missing_top_level_keys", value, topRequired);
-  if (unknown(value, topRequired).length) return rejected(base, "$", "unknown_top_level_keys", value, topRequired);
+  const topRequired = ["schemaVersion", "kind", "generationScope", "stages", "warnings"], topOptional = ["projectName"];
+  if (missing(value, topRequired).length) return rejected(base, "$", "missing_top_level_keys", value, topRequired, topOptional);
+  if (unknown(value, [...topRequired, ...topOptional]).length) return rejected(base, "$", "unknown_top_level_keys", value, topRequired, topOptional);
   if (value.schemaVersion !== 2) return rejected(base, "$.schemaVersion", "invalid_schema_version", value);
   if (value.kind !== "generated_structure") return rejected(base, "$.kind", "invalid_structure_kind", value);
   if (!["whole_project", "fragment"].includes(value.generationScope)) return rejected(base, "$.generationScope", "invalid_generation_scope", value);
-  if (!text(value.projectName)) return rejected(base, "$.projectName", "invalid_project_name", value);
+  if (value.generationScope === "whole_project" && !Object.hasOwn(value, "projectName")) return rejected(base, "$", "missing_top_level_keys", value, [...topRequired, "projectName"]);
+  if (value.generationScope === "whole_project" && !text(value.projectName)) return rejected(base, "$.projectName", "invalid_project_name", value);
   if (!Array.isArray(value.stages) || !value.stages.length || value.stages.length > 30) return rejected(base, "$.stages", "invalid_stages", value);
   if (!Array.isArray(value.warnings) || value.warnings.length > 20 || !value.warnings.every((item) => typeof item === "string" && item.length <= 500)) return rejected(base, "$.warnings", "invalid_warnings", value);
   let taskTotal = 0, executorTotal = 0;
@@ -104,9 +105,10 @@ function normalizeExecutor(raw) {
 }
 
 function parseV2(value) {
-  if (!exact(value, ["schemaVersion", "kind", "generationScope", "projectName", "stages", "warnings"])
+  if (!exact(value, ["schemaVersion", "kind", "generationScope", "stages", "warnings"], ["projectName"])
     || value.schemaVersion !== GENERATED_STRUCTURE_VERSION || value.kind !== "generated_structure"
-    || !["whole_project", "fragment"].includes(value.generationScope) || !text(value.projectName)
+    || !["whole_project", "fragment"].includes(value.generationScope)
+    || value.generationScope === "whole_project" && !text(value.projectName)
     || !Array.isArray(value.stages) || !value.stages.length || value.stages.length > 30
     || !Array.isArray(value.warnings) || value.warnings.length > 20 || !value.warnings.every((item) => typeof item === "string" && item.length <= 500)) return null;
   let tasks = 0, executors = 0;
@@ -127,7 +129,10 @@ function parseV2(value) {
     stages.push(nextStage);
   }
   if (tasks > 200 || executors > 200) return null;
-  return { ...value, projectName: value.projectName.trim(), stages };
+  const parsed = { ...value, stages };
+  if (value.generationScope === "whole_project") parsed.projectName = value.projectName.trim();
+  else delete parsed.projectName;
+  return parsed;
 }
 
 // Compatibility boundary for persisted/tests and temporarily stale model responses.
