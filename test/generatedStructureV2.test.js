@@ -94,6 +94,32 @@ test("strict v2 parser accepts the production anonymous_named shape", () => {
   assert.equal(parsed.stages[0].tasks[0].executors[0].quantity, 1);
 });
 
+test("GeneratedStructure payment semantics match between Initial and Global", () => {
+  const fixture = {
+    schemaVersion: 2, kind: "generated_structure", generationScope: "fragment", projectName: "P", warnings: [],
+    stages: [{ name: "S", tasks: [{ name: "T", executors: [
+      { type: "anonymous_named", name: "Fixed", paymentType: "fix_total", compensation: 100000, quantity: 1 },
+      { type: "anonymous_named", name: "Shift", paymentType: "shift", compensation: 5000, quantity: 3 },
+    ] }] }],
+  };
+  const parsed = parseGeneratedStructure(fixture), initial = stagesFromGeneratedEstimate(parsed);
+  const fixedInitial = initial[0].tasks[0].executors[0], shiftInitial = initial[0].tasks[0].executors[1];
+  assert.equal(fixedInitial.amount, "100000");
+  assert.deepEqual(fixedInitial.tags.find((tag) => tag.key === "payment").payment, { type: "fix_total", rate: "", units: "", hours: "", shifts: "" });
+  assert.deepEqual(shiftInitial.tags.find((tag) => tag.key === "payment").payment, { type: "shift", rate: "5000", units: "", hours: "", shifts: "3" });
+
+  const request = { requestId: "r", baseRevision: "rev", scope: { kind: "project", projectId: "p" }, instruction: "Create", knowledge: { selectedSources: [] }, idPool: {
+    stages: ["s"], tasks: ["t"], executors: ["e1", "e2"], tags: Array.from({ length: 8 }, (_, index) => `g${index}`),
+  } };
+  const global = compileGeneratedStructure({ resolved: resolveGeneratedStructure({ draft: parsed, performers: [] }), request, project: { id: "p", stages: [] }, performers: [] });
+  const fixedOperations = global.operations.filter((operation) => operation.targetId === "e1");
+  const shiftOperations = global.operations.filter((operation) => operation.targetId === "e2");
+  assert.equal(fixedOperations.some((operation) => operation.type === "executor.amount.set" && operation.value.value === "100000"), true);
+  assert.equal(fixedOperations.some((operation) => operation.type === "executor.payment.setQuantity"), false);
+  assert.equal(shiftOperations.some((operation) => operation.type === "executor.payment.setRate" && operation.value.value === "5000"), true);
+  assert.equal(shiftOperations.some((operation) => operation.type === "executor.payment.setQuantity" && operation.value.field === "shifts" && operation.value.value === "3"), true);
+});
+
 test("ExecutorDraft branches retain strict field boundaries and can be mixed", () => {
   const fixture = (executors) => ({
     schemaVersion: 2, kind: "generated_structure", generationScope: "fragment", projectName: "P", warnings: [],

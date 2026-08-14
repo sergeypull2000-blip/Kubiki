@@ -1,5 +1,6 @@
 import { parseEstimate } from "./estimateSchema.js";
 import { applyAiEditOperations, AiEditValidationError } from "../../src/ai/editOperations.js";
+import { generatedPaymentSemantics } from "../../src/ai/generatedPayment.js";
 
 export const parseGeneratedStructure = parseEstimate;
 const displayName = (performer) => [performer.firstName, performer.lastName].filter(Boolean).join(" ").trim();
@@ -47,10 +48,10 @@ export function compileGeneratedStructure({ resolved, request, project, performe
       if (draft.name) addTag(executorId, "name", draft.name);
       if (draft.role) add("executor.tag.update", roleTagId, { executorId, value: draft.role }, "Установить роль Executor");
       if (draft.tax !== undefined) addTag(executorId, "tax", Number(draft.tax));
-      const paymentType = draft.paymentType || (draft.compensation !== undefined ? "fix_total" : null);
+      const { type: paymentType, quantityField } = generatedPaymentSemantics(draft);
       if (paymentType) add("executor.payment.setType", executorId, { type: paymentType }, "Установить тип оплаты");
       if (draft.compensation !== undefined) add(paymentType === "fix_total" ? "executor.amount.set" : "executor.payment.setRate", executorId, { value: money(draft.compensation) }, "Установить оплату");
-      if (draft.quantity !== undefined) add("executor.payment.setQuantity", executorId, { field: { fix_task: "units", hourly: "hours", shift: "shifts" }[paymentType], value: money(draft.quantity) }, "Установить количество");
+      if (draft.quantity !== undefined && quantityField) add("executor.payment.setQuantity", executorId, { field: quantityField, value: money(draft.quantity) }, "Установить количество");
     });
   }));
   const diff = { schemaVersion: 1, kind: "diff", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, summary: "Добавить сгенерированную структуру", operations, warnings: resolved.draft.warnings };

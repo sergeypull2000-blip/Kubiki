@@ -121,6 +121,14 @@ test("payment type change exactly follows current UI and inactive amount is pres
   assert.equal(executorSum(executor), 0);
 });
 
+test("low-level validator still rejects quantity for fix_total", () => {
+  const diff = response([operation("executor.payment.setQuantity", "e", { field: "units", value: "1" })], scope("executor"));
+  assert.throws(
+    () => applyAiEditOperations(project(), diff, { idPool: pool() }),
+    (error) => error instanceof AiEditValidationError && error.code === "payment_type_mismatch",
+  );
+});
+
 test("Performer snapshot creation requires a direct request and preserves source independence", () => {
   const performer = { id: "pf", firstName: "Миша", lastName: "Иванов", primaryRole: "3D артист", additionalRoles: [], specializations: [], software: [], grade: null, defaultPaymentType: "fix_total", defaultRate: 5000, defaultUnit: "total", defaultTaxRate: 6, defaultCommission: null, legalStatus: null, active: true };
   const diff = response([operation("executor.addFromPerformer", "t", { executorId: "e-new", performerId: "pf" }, { kind: "performer", id: "pf", name: "Миша Иванов" })], scope("task"));
