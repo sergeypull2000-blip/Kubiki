@@ -18,6 +18,7 @@ export function buildExcelRows(model) {
 
 export function buildExcelWorkbook(model, addLogo) {
   const workbook = new ExcelJS.Workbook();
+  workbook.calcProperties = { calcMode: "auto", fullCalcOnLoad: true, forceFullCalc: true };
   const sheet = workbook.addWorksheet("Смета", { views: [{ showGridLines: false }] });
   sheet.columns = [{ width: 60 }, { width: 20 }];
   const brand = model.brand || {};
@@ -27,14 +28,29 @@ export function buildExcelWorkbook(model, addLogo) {
   sheet.addRow([model.projectName, ""]); sheet.mergeCells(`A${sheet.rowCount}:B${sheet.rowCount}`);
   sheet.getCell(`A${sheet.rowCount}`).font = { bold: true, size: 15, name: "Inter" };
   sheet.addRow([new Date().toLocaleDateString("ru-RU"), ""]); sheet.addRow([]);
-  for (const row of buildExcelRows(model).rows) {
-    const excelRow = sheet.addRow([row.type === "task" ? `  ${row.label}` : row.label, moneyValue(row.amount)]);
-    excelRow.getCell(2).numFmt = '#,##0.00" ₽"';
-    if (row.type === "stage") excelRow.font = { bold: true, name: "Inter" };
-    if (row.type === "markup" || row.type === "tax") excelRow.font = { italic: true, name: "Inter" };
+  const totalReferences = [];
+  for (const stage of model.stages) {
+    const stageRow = sheet.addRow([stage.name, null]);
+    stageRow.font = { bold: true, name: "Inter" };
+    const firstTaskRow = stageRow.number + 1;
+    for (const task of stage.rows) {
+      const taskRow = sheet.addRow([`  ${task.name}`, moneyValue(task.exportedAmount)]);
+      taskRow.getCell(2).numFmt = '#,##0.00" ₽"';
+    }
+    const lastTaskRow = sheet.rowCount;
+    const stageCell = stageRow.getCell(2);
+    stageCell.value = { formula: `SUM(B${firstTaskRow}:B${lastTaskRow})` };
+    stageCell.numFmt = '#,##0.00" ₽"';
+    totalReferences.push(stageCell.address);
+  }
+  for (const row of model.separateRows) {
+    const separateRow = sheet.addRow([row.label, moneyValue(row.amount)]);
+    separateRow.font = { italic: true, name: "Inter" };
+    separateRow.getCell(2).numFmt = '#,##0.00" ₽"';
+    totalReferences.push(separateRow.getCell(2).address);
   }
   sheet.addRow([]);
-  const totalRow = sheet.addRow(["ИТОГО", moneyValue(model.summary.total)]);
+  const totalRow = sheet.addRow(["ИТОГО", { formula: `SUM(${totalReferences.join(",")})` }]);
   totalRow.font = { bold: true, size: 13, name: "Inter" }; totalRow.getCell(2).numFmt = '#,##0.00" ₽"';
   sheet.eachRow((row) => row.eachCell((cell) => { cell.font = { name: "Inter", ...(cell.font || {}) }; }));
   return workbook;

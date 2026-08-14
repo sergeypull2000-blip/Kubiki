@@ -73,6 +73,7 @@ export function TaskBlock({ task, stageId, dispatch, taskDict, taskFeatured,
           {task.collapsed ? <ChevronRight size={14} strokeWidth={1.5} /> : <ChevronDown size={14} strokeWidth={1.5} />}
         </button>
         <SuggestInput className="kb-input kb-input-medium kb-task-name" value={task.name}
+          title={task.name || "Название задачи"}
           dictionary={taskDict || []} featured={taskFeatured} placeholder="Название задачи…"
           onChange={(v) => onPatch({ name: v })} />
         {task.executors.length === 0 ? (

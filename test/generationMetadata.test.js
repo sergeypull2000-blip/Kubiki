@@ -40,11 +40,13 @@ test("client metadata does not change the enumerable estimate JSON schema", () =
 test("endpoint keeps estimate body unchanged and Project persists only display metadata", () => {
   const endpoint = readFileSync(new URL("../api/generate-estimate.js", import.meta.url), "utf8");
   const kubiki = readFileSync(new URL("../src/kubiki.jsx", import.meta.url), "utf8");
+  const store = readFileSync(new URL("../src/store.js", import.meta.url), "utf8");
   const workspace = readFileSync(new URL("../src/components/Workspace.jsx", import.meta.url), "utf8");
   assert.match(endpoint, /setHeader\("X-Kubiki-Generation-Metadata"/);
   assert.match(endpoint, /body: result\.estimate/);
   assert.match(endpoint, /json\(response\.body\)/);
-  assert.match(kubiki, /project\.metadata = \{ \.\.\.project\.metadata, aiGeneration: meta\.generationMetadata \}/);
+  assert.match(kubiki, /makeProjectFromEstimate\(stages, meta\)/);
+  assert.match(store, /project\.metadata = \{ \.\.\.project\.metadata, aiGeneration: meta\.generationMetadata \}/);
   assert.match(workspace, /Использованы знания студии/);
   assert.doesNotMatch(workspace, /performerSnapshot|phone|telegram|email/i);
 });

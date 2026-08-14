@@ -11,7 +11,7 @@ import {
   validateExportModelTotals,
 } from "../src/exportEstimate.js";
 import { executorFinancialCommission, projectFinancialCommission, projectTaxBreakdown, projectTotalWithTax } from "../src/calculations.js";
-import { buildExcelWorkbook, buildExcelRows } from "../src/excelExport.js";
+import { buildExcelWorkbook } from "../src/excelExport.js";
 
 const task = (id, name, directCost, markupOverride = null) => ({ id, name, directCost, markupOverride, executors: [] });
 const project = (patch = {}) => ({
@@ -150,18 +150,37 @@ test("PDF, Excel и preview получают один ExportEstimateModel без
   assert.doesNotMatch(source, /projectTaxAmount|projectVatAmount|projectMarkupAmount|taskPrice|projectTotalWithTax/);
 });
 
-test("все денежные Excel cells являются числами с рублёвым number format", () => {
-  const model = buildExportEstimateModel(project(), { markupPresentation: "separate_line", taxPresentation: "separate_line" });
+test("Excel leaf amounts are numeric while Stage subtotals and grand total are dynamic formulas", () => {
+  const source = project({ stages: [
+    { id: "stage-one", name: "Stage One", tasks: [task("one", "Task One", 100), task("two", "Task Two", 200)] },
+    { id: "stage-two", name: "Stage Two", tasks: [task("three", "Task Three", 300), task("four", "Task Four", 400)] },
+  ] });
+  const model = buildExportEstimateModel(source, { markupPresentation: "distributed", taxPresentation: "distributed" });
   const workbook = buildExcelWorkbook(model);
   const sheet = workbook.worksheets[0];
-  const expectedMoneyCells = buildExcelRows(model).rows.length + 1;
   const moneyCells = [];
   sheet.eachRow((row) => {
     const cell = row.getCell(2);
     if (cell.numFmt?.includes("₽")) moneyCells.push(cell);
   });
-  assert.equal(moneyCells.length, expectedMoneyCells);
-  assert.ok(moneyCells.every((cell) => typeof cell.value === "number" && Number.isFinite(cell.value)));
+  const formulaCells = moneyCells.filter((cell) => typeof cell.value === "object" && cell.value?.formula);
+  const numericCells = moneyCells.filter((cell) => typeof cell.value === "number");
+  assert.equal(formulaCells.length, model.stages.length + 1);
+  assert.equal(numericCells.length, model.stages.flatMap((stage) => stage.rows).length + model.separateRows.length);
+  assert.ok(numericCells.every((cell) => Number.isFinite(cell.value)));
+  for (const stage of model.stages) {
+    const subtotal = formulaCells.find((cell) => sheet.getRow(cell.row).getCell(1).value === stage.name);
+    assert.match(subtotal.value.formula, /^SUM\(B\d+:B\d+\)$/);
+  }
+  const grandTotal = formulaCells.at(-1).value.formula;
+  assert.ok(formulaCells.slice(0, -1).every((cell) => grandTotal.includes(cell.address)));
+  const grandTotalReferences = grandTotal.slice(4, -1).split(",");
+  assert.equal(grandTotalReferences.length, model.stages.length + model.separateRows.length);
+  const taskRows = new Set(model.stages.flatMap((stage) => stage.rows).map((taskRow) => `  ${taskRow.name}`));
+  const taskCells = numericCells.filter((cell) => taskRows.has(sheet.getRow(cell.row).getCell(1).value));
+  assert.ok(taskCells.every((cell) => !grandTotalReferences.includes(cell.address)));
+  assert.equal(workbook.calcProperties.calcMode, "auto");
+  assert.equal(workbook.calcProperties.fullCalcOnLoad, true);
 });
 
 test("Executor name и role получают гибкую ширину, ellipsis и полный title", () => {
@@ -172,6 +191,15 @@ test("Executor name и role получают гибкую ширину, ellipsis
   assert.match(styles, /\.kb-tag-name,\.kb-tag-role\{[^}]*flex:1 1 220px;[^}]*min-width:0;[^}]*max-width:280px/);
   assert.match(styles, /\.kb-erow-tags\{[^}]*min-width:0/);
   assert.match(styles, /\.kb-tag-val,\.kb-tag-placeholder\{[^}]*overflow:hidden; text-overflow:ellipsis/);
+});
+
+test("Task title uses available flex width and exposes the full value through title", () => {
+  const component = readFileSync(new URL("../src/components/Task.jsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../src/styles.js", import.meta.url), "utf8");
+  assert.match(component, /title=\{task\.name \|\| "Название задачи"\}/);
+  assert.match(styles, /\.kb-task-head > \.kb-autocomplete\{[^}]*flex:1 1 auto;[^}]*min-width:0/);
+  assert.match(styles, /\.kb-task-name\{[^}]*width:100%;[^}]*min-width:0;[^}]*max-width:none;[^}]*text-overflow:ellipsis/);
+  assert.doesNotMatch(styles, /\.kb-task-name\{[^}]*max-width:300px/);
 });
 
 test("настройка брендинга доступна из модалки экспорта и используется обоими форматами", () => {

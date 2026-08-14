@@ -26,6 +26,17 @@ export const makeStage = (preset) => ({
 });
 export const makeProject = () => ({ id: uid(), name: "Новый проект", dataVersion: PROJECT_DATA_VERSION, stages: [], globalMarkup: 25, markupMode: "embedded", tax: { type: "osno", percent: "", visible: true }, vat: { percent: "" }, branding: { logo: "", studioName: "", contacts: "" }, exportSettings: { ...DEFAULT_EXPORT_SETTINGS } });
 
+export function makeProjectFromEstimate(stages, meta = {}) {
+  const project = makeProject();
+  project.createdAt = new Date().toISOString();
+  project.stages = stages;
+  if (Number.isFinite(meta.globalMarkup)) project.globalMarkup = meta.globalMarkup;
+  const previewName = typeof meta.projectName === "string" ? meta.projectName.trim() : "";
+  if (previewName) project.name = previewName;
+  if (meta.generationMetadata) project.metadata = { ...project.metadata, aiGeneration: meta.generationMetadata };
+  return normalizeProject(project);
+}
+
 /** Normalize persisted or external project data for safe runtime use. */
 export function normalizeProject(project) {
   const source = project && typeof project === "object" && !Array.isArray(project) ? project : {};

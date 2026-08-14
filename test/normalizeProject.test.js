@@ -1,9 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PROJECT_DATA_VERSION, makeProject, normalizeProject } from "../src/store.js";
+import { PROJECT_DATA_VERSION, makeProject, makeProjectFromEstimate, normalizeProject } from "../src/store.js";
 
 test("new project has the canonical data version", () => {
   assert.equal(makeProject().dataVersion, PROJECT_DATA_VERSION);
+});
+
+test("Initial estimate materialization persists the edited preview project name", () => {
+  const stages = [{ id: "stage", name: "Stage", tasks: [] }];
+  const generated = makeProjectFromEstimate(stages, { projectName: "  Edited Campaign Name  " });
+  assert.equal(generated.name, "Edited Campaign Name");
+  assert.deepEqual(generated.stages, stages);
+  const reloaded = normalizeProject(JSON.parse(JSON.stringify(generated)));
+  assert.equal(reloaded.name, "Edited Campaign Name");
 });
 
 test("normalizeProject(undefined) returns a safe project", () => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { makeProject, normalizeProject } from "./store.js";
+import { makeProject, makeProjectFromEstimate, normalizeProject } from "./store.js";
 import { Dashboard } from "./components/Dashboard.jsx";
 import { Workspace } from "./components/Workspace.jsx";
 import { KnowledgeBasePage } from "./components/KnowledgeBasePage.jsx";
@@ -427,17 +427,11 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     setCurrentId(p.id);
   };
   const createProjectFromEstimate = (stages, meta) => {
-    const project = makeProject();
-    project.createdAt = new Date().toISOString();
-    project.stages = stages;
-    if (meta && Number.isFinite(meta.globalMarkup)) project.globalMarkup = meta.globalMarkup;
-    if (meta?.projectName) project.name = meta.projectName;
-    if (meta?.generationMetadata) project.metadata = { ...project.metadata, aiGeneration: meta.generationMetadata };
-    const normalized = normalizeProject(project);
+    const normalized = makeProjectFromEstimate(stages, meta);
     replaceProjects([...projectsRef.current, normalized]);
     scheduleProjectSave(normalized, 0);
     setProjectSource(null);
-    setCurrentId(project.id);
+    setCurrentId(normalized.id);
   };
   const deleteProject = async (id) => {
     if (!window.confirm("Удалить проект?")) return;

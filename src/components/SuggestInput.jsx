@@ -4,7 +4,7 @@ import { useOutsideClose } from "../hooks.js";
 /* ============================================================
    Автоподсказка (для названия задачи и для «Специализации»)
    ============================================================ */
-export function SuggestInput({ value, onChange, onCommit, dictionary, featured, placeholder, className, autoFocus }) {
+export function SuggestInput({ value, onChange, onCommit, dictionary, featured, placeholder, className, autoFocus, title }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
   const typing = value.trim().length > 0;
@@ -19,6 +19,7 @@ export function SuggestInput({ value, onChange, onCommit, dictionary, featured, 
         className={className || "kb-input"}
         placeholder={placeholder}
         value={value}
+        title={title}
         autoFocus={autoFocus}
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}

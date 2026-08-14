@@ -481,7 +481,8 @@ export const CSS = `
 .kb-task-collapse{flex-shrink:0}
 /* п.13: короче поля названий этапа/задачи, свободная зона head кликабельна для выделения */
 .kb-stage-head .kb-input-flex{flex:0 1 320px; margin-right:auto}
-.kb-task-name{flex:0 1 300px !important; max-width:300px; margin-right:auto}
+.kb-task-head > .kb-autocomplete{flex:1 1 auto; min-width:0; margin-right:auto}
+.kb-task-name{width:100%; min-width:0; max-width:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 /* п.8: «Новый кубик» */
 .kb-newcube{width:100%; justify-content:flex-start; color:var(--text-muted)}
 .kb-newcube:hover{color:var(--text)}
