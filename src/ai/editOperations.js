@@ -186,7 +186,7 @@ function applyOne(project, operation, context) {
       if (!performerWasExplicitlyRequested(performer, instruction, selectedSources, operation.source)) fail("performer_not_explicit", "Performer не был прямо указан пользователем", operation);
       if (operation.source.kind !== "performer" || operation.source.id !== performer.id) fail("invalid_source", "Операция Performer должна ссылаться на подтверждённый источник", operation);
       requireNewId(idPool, "executors", operation.value.executorId, usedIds, index, operation);
-      const executor = buildExecutorFromPerformer(performer); executor.id = operation.value.executorId;
+      const executor = buildExecutorFromPerformer(performer, { inheritFinancials: operation.value.inheritFinancials !== false }); executor.id = operation.value.executorId;
       for (const tag of executor.tags) { const replacement = idPool.tags.find((tagId) => !usedIds.has(tagId) && !index.allIds.has(tagId)); if (!replacement) fail("id_pool_exhausted", "Не хватило выданных tag id", operation); usedIds.add(replacement); tag.id = replacement; }
       return { ...project, stages: replaceAt(project.stages, stage.id, (item) => ({ ...item, tasks: replaceAt(item.tasks, task.id, (entry) => ({ ...entry, executors: [...entry.executors, executor] })) })) };
     }

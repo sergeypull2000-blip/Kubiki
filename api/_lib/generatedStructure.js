@@ -24,7 +24,7 @@ export function resolveGeneratedStructure({ draft, performers, prior = null, ans
 }
 
 const money = (value) => String(Math.round(Number(String(value).replace(/\s/g, ""))));
-export function compileGeneratedStructure({ resolved, request, project, performers }) {
+export function compileGeneratedStructure({ resolved, request, project, performers, pricingPolicy = {} }) {
   const operations = [], used = { stages: 0, tasks: 0, executors: 0, tags: 0 };
   const take = (kind) => { const value = request.idPool[kind]?.[used[kind]++]; if (!value) throw new AiEditValidationError("id_pool_exhausted", `Недостаточно ${kind} id`); return value; };
   const takeExplicitTag = () => { const pool = request.idPool.tags || [], value = pool[pool.length - 1 - used.tags++]; if (!value) throw new AiEditValidationError("id_pool_exhausted", "Недостаточно tags id"); return value; };
@@ -40,7 +40,7 @@ export function compileGeneratedStructure({ resolved, request, project, performe
       if (draft.type === "performer_binding") {
         const binding = resolved.bindings.find((item) => item.stageIndex === stageIndex && item.taskIndex === taskIndex && item.executorIndex === executorIndex);
         if (!binding) throw new AiEditValidationError("performer_unresolved", "Performer binding не разрешён");
-        add("executor.addFromPerformer", taskId, { executorId: take("executors"), performerId: binding.performerId }, "Добавить подтверждённого Performer", { kind: "performer", id: binding.performerId, name: displayName(performers.find((item) => item.id === binding.performerId)) });
+        add("executor.addFromPerformer", taskId, { executorId: take("executors"), performerId: binding.performerId, ...(pricingPolicy.performerRateMode === "leave_blank" ? { inheritFinancials: false } : {}) }, "Добавить подтверждённого Performer", { kind: "performer", id: binding.performerId, name: displayName(performers.find((item) => item.id === binding.performerId)) });
         return;
       }
       const executorId = take("executors"), roleTagId = takeExplicitTag();

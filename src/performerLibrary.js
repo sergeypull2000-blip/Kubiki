@@ -55,16 +55,16 @@ export function buildPerformerFromExecutor(executor) {
     defaultUnit: paymentUnit(payment.type), defaultTaxRate: getTag(executor, "tax")?.value });
 }
 export const performerSnapshot = (performer) => ({ name: performerDisplayName(performer), primaryRole: performer.primaryRole, paymentType: performer.defaultPaymentType, rate: performer.defaultRate, unit: performer.defaultUnit, taxRate: performer.defaultTaxRate, commission: performer.defaultCommission, legalStatus: performer.legalStatus });
-export function buildExecutorFromPerformer(input) {
+export function buildExecutorFromPerformer(input, { inheritFinancials = true } = {}) {
   const performer = normalizePerformer(input), name = performerDisplayName(performer), tags = [];
   if (performer.primaryRole) tags.push(makeTag("role", performer.primaryRole));
   if (name) tags.push(makeTag("name", name));
-  if (performer.defaultPaymentType) { const payment = makeTag("payment", performer.defaultPaymentType); if (["fix_task", "hourly", "shift"].includes(performer.defaultPaymentType)) payment.payment.rate = String(performer.defaultRate ?? ""); tags.push(payment); }
+  if (inheritFinancials && performer.defaultPaymentType) { const payment = makeTag("payment", performer.defaultPaymentType); if (["fix_task", "hourly", "shift"].includes(performer.defaultPaymentType)) payment.payment.rate = String(performer.defaultRate ?? ""); tags.push(payment); }
   if (performer.defaultTaxRate != null) tags.push(makeTag("tax", String(performer.defaultTaxRate)));
   if (performer.specializations[0]) tags.push(makeTag("spec", performer.specializations[0]));
   if (performer.grade) tags.push(makeTag("grade", performer.grade));
   if (performer.software[0]) tags.push(makeTag("soft", performer.software[0]));
-  return { id: uid(), tags, amount: performer.defaultPaymentType === "fix_total" ? String(performer.defaultRate ?? "") : "", performerId: performer.id, performerSnapshot: performerSnapshot(performer) };
+  return { id: uid(), tags, amount: inheritFinancials && performer.defaultPaymentType === "fix_total" ? String(performer.defaultRate ?? "") : "", performerId: performer.id, performerSnapshot: performerSnapshot(performer) };
 }
 export function addPerformerToTask(project, stageId, taskId, performer) {
   if (!performer || !project?.stages?.some((stage) => stage.id === stageId && stage.tasks?.some((task) => task.id === taskId))) return project;

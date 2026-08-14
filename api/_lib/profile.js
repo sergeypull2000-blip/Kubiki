@@ -9,7 +9,9 @@ export const PROFILE_SYSTEM_PROMPT = `Ты анализируешь бриф к�
 Извлекай бюджет только если сумма и характер ограничения явно указаны в одном из этих блоков. Не придумывай и не оценивай бюджет. hard означает строгий потолок (например, «не больше», «уложиться», «ограничить»), target — мягкий ориентир (например, «около», «ориентир»), none — бюджет не указан. amount — целое число денежных единиц без маркапа, налогов и каких-либо пересчётов.
 
 Схема:
-{"projectTypes":[],"deliverables":[],"disciplines":[],"pipelineStages":[],"taskTerms":[],"roleTerms":[],"styleTerms":[],"formats":[],"platforms":[],"constraints":[],"keywords":[],"complexity":"unknown","uncertainty":[],"language":"ru","budget":{"amount":null,"currency":null,"mode":"none"}}
+{"projectTypes":[],"deliverables":[],"disciplines":[],"pipelineStages":[],"taskTerms":[],"roleTerms":[],"styleTerms":[],"formats":[],"platforms":[],"constraints":[],"keywords":[],"complexity":"unknown","uncertainty":[],"language":"ru","budget":{"amount":null,"currency":null,"mode":"none"},"pricingMode":"estimate_missing","performerRateMode":"inherit_defaults"}
+
+pricingMode: estimate_missing по умолчанию; leave_missing_blank только при явном требовании пользователя не заполнять отсутствующие цены/ставки. Явно указанные суммы не считаются отсутствующими. performerRateMode: inherit_defaults, кроме leave_missing_blank; при leave_missing_blank ставь leave_blank, если пользователь отдельно явно не попросил использовать ставку Performer из базы.
 
 Для массивов используй короткие содержательные строки, не более 12 значений в каждом. complexity: low, medium, high или unknown.`;
 
@@ -24,6 +26,9 @@ export function normalizeProfile(value) {
   }
   profile.complexity = ["low", "medium", "high", "unknown"].includes(value.complexity) ? value.complexity : "unknown";
   profile.language = cleanItem(value.language).slice(0, 12) || "unknown";
+  profile.pricingMode = value.pricingMode === undefined ? "estimate_missing" : ["estimate_missing", "leave_missing_blank"].includes(value.pricingMode) ? value.pricingMode : null;
+  profile.performerRateMode = value.performerRateMode === undefined ? (profile.pricingMode === "leave_missing_blank" ? "leave_blank" : "inherit_defaults") : ["inherit_defaults", "leave_blank"].includes(value.performerRateMode) ? value.performerRateMode : null;
+  if (!profile.pricingMode || !profile.performerRateMode || profile.pricingMode === "estimate_missing" && profile.performerRateMode === "leave_blank") return null;
   const budget = value.budget;
   if (budget == null) {
     profile.budget = { amount: null, currency: null, mode: "none" };
@@ -47,6 +52,6 @@ export function fallbackProfile(brief) {
   const keywords = [...new Set(String(brief).toLocaleLowerCase("ru-RU").replace(/ё/g, "е").match(/[\p{L}\p{N}][\p{L}\p{N}+-]{3,}/gu) || [])].slice(0, MAX_ITEMS);
   return normalizeProfile(Object.fromEntries([
     ...LIST_FIELDS.map((field) => [field, field === "keywords" ? keywords : []]),
-    ["complexity", "unknown"], ["language", "unknown"], ["budget", { amount: null, currency: null, mode: "none" }],
+    ["complexity", "unknown"], ["language", "unknown"], ["budget", { amount: null, currency: null, mode: "none" }], ["pricingMode", "estimate_missing"], ["performerRateMode", "inherit_defaults"],
   ]));
 }

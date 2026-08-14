@@ -109,15 +109,15 @@ async function generateStructurePlan({ request, project, auth, settings, request
   if (!draft) { console.info({ event: "generation_response_validation", requestId: request.requestId, success: false, diagnostic: { reason: "normalized_structure_rejected" } }); return { status: 502, body: { error: "Модель вернула некорректную структуру сметы", code: "ai_semantic_invalid_schema" } }; }
   const resolved = resolveGeneratedStructure({ draft, performers });
   console.info({ event: "generation_performer_resolution", requestId: request.requestId, success: !resolved.unresolvedSlots.length, diagnostic: { reason: resolved.unresolvedSlots.length ? "unresolved_slots" : "resolved", unresolvedCount: resolved.unresolvedSlots.length } });
-  if (resolved.unresolvedSlots.length) return generatedClarificationResponse(request, resolved);
-  try { const body = compileGeneratedStructure({ resolved, request, project, performers }); console.info({ event: "generation_compile", requestId: request.requestId, success: true, diagnostic: { reason: "compiled" } }); console.info({ event: "generation_response_validation", requestId: request.requestId, success: true, diagnostic: { reason: "diff_validated" } }); return { status: 200, body }; }
+  if (resolved.unresolvedSlots.length) return generatedClarificationResponse(request, resolved, result.profile);
+  try { const body = compileGeneratedStructure({ resolved, request, project, performers, pricingPolicy: result.profile }); console.info({ event: "generation_compile", requestId: request.requestId, success: true, diagnostic: { reason: "compiled" } }); console.info({ event: "generation_response_validation", requestId: request.requestId, success: true, diagnostic: { reason: "diff_validated" } }); return { status: 200, body }; }
   catch (error) { console.info({ event: "generation_compile", requestId: request.requestId, success: false, diagnostic: { reason: "compile_failed", code: typeof error?.code === "string" ? error.code : "unknown" } }); if (error instanceof AiEditSemanticCompileError || error instanceof AiEditSemanticPlanError || error instanceof Error && error.code) return { status: 422, body: { error: error.message, code: error.code || "ai_compile_invalid_generated_structure" } }; throw error; }
 }
 
-function generatedClarificationResponse(request, resolved) {
+function generatedClarificationResponse(request, resolved, pricingPolicy = {}) {
   const slot = resolved.unresolvedSlots[0];
   const continuationToken = signAiEditContinuation({ kind: "generated_structure", projectId: request.projectId, baseRevision: request.baseRevision, scope: request.scope,
-    generatedDraft: resolved.draft, unresolvedSlots: resolved.unresolvedSlots, slotValues: resolved.slotValues });
+    generatedDraft: resolved.draft, unresolvedSlots: resolved.unresolvedSlots, slotValues: resolved.slotValues, pricingPolicy });
   return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope,
     question: slot.question, ...(slot.choices?.length ? { choices: slot.choices } : {}), continuationToken } };
 }
@@ -144,8 +144,8 @@ async function continueSemanticPlan({ request, project, auth }) {
     try {
       const performers = await loadOwnPerformersForEdit(auth.client, auth.user.id);
       const resolved = resolveGeneratedStructure({ draft, performers, prior: pending, answer: request.continuation.answer, selectedSource: request.continuation.source });
-      if (resolved.unresolvedSlots.length) return generatedClarificationResponse(request, resolved);
-      return { status: 200, body: compileGeneratedStructure({ resolved, request, project, performers }) };
+      if (resolved.unresolvedSlots.length) return generatedClarificationResponse(request, resolved, pending.pricingPolicy);
+      return { status: 200, body: compileGeneratedStructure({ resolved, request, project, performers, pricingPolicy: pending.pricingPolicy }) };
     } catch (error) {
       if (error instanceof Error && error.code) return { status: 422, body: { error: error.message, code: error.code } };
       throw error;

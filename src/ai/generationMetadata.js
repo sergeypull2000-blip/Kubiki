@@ -6,7 +6,9 @@ export function normalizeGenerationMetadata(value) {
   const knowledgeNames = [...new Set((Array.isArray(value.knowledgeNames) ? value.knowledgeNames : [])
     .map((name) => typeof name === "string" ? name.trim().replace(/\s+/g, " ").slice(0, 80) : "")
     .filter(Boolean))].slice(0, MAX_NAMES);
-  return { version: 1, ...(generatedAt ? { generatedAt } : {}), knowledgeNames, profileFallbackUsed: Boolean(value.profileFallbackUsed) };
+  const pricingMode = ["estimate_missing", "leave_missing_blank"].includes(value.pricingMode) ? value.pricingMode : null;
+  const performerRateMode = ["inherit_defaults", "leave_blank"].includes(value.performerRateMode) ? value.performerRateMode : null;
+  return { version: 1, ...(generatedAt ? { generatedAt } : {}), knowledgeNames, profileFallbackUsed: Boolean(value.profileFallbackUsed), ...(pricingMode && performerRateMode ? { pricingMode, performerRateMode } : {}) };
 }
 
 export function decodeGenerationMetadataHeader(value) {

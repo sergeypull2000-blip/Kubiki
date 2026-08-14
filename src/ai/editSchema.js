@@ -81,7 +81,7 @@ function operationValueIsValid(operation) {
     case "executor.delete": return value === undefined;
     case "task.add": return exactKeys(value, ["taskId", "name", "beforeTaskId"]) && id(value.taskId) && text(value.name, 160) && nullableId(value.beforeTaskId);
     case "executor.addAnonymous": return exactKeys(value, ["executorId", "roleTagId"]) && id(value.executorId) && id(value.roleTagId);
-    case "executor.addFromPerformer": return exactKeys(value, ["executorId", "performerId"]) && id(value.executorId) && id(value.performerId);
+    case "executor.addFromPerformer": return exactKeys(value, ["executorId", "performerId"], ["inheritFinancials"]) && id(value.executorId) && id(value.performerId) && (value.inheritFinancials === undefined || typeof value.inheritFinancials === "boolean");
     case "executor.replacePerformer": return exactKeys(value, ["performerId"]) && id(value.performerId);
     case "executor.payment.setType": return exactKeys(value, ["type"]) && typeof value.type === "string";
     case "executor.payment.setRate":

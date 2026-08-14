@@ -6,7 +6,7 @@ function displayName(type, item) {
   return item?.name || "";
 }
 
-export function buildGenerationMetadata({ shortlist, profileFallbackUsed, now = () => new Date() } = {}) {
+export function buildGenerationMetadata({ shortlist, profileFallbackUsed, profile, now = () => new Date() } = {}) {
   const names = [];
   for (const type of ENTITY_ORDER) {
     for (const item of Array.isArray(shortlist?.[type]) ? shortlist[type] : []) {
@@ -16,7 +16,7 @@ export function buildGenerationMetadata({ shortlist, profileFallbackUsed, now = 
     }
     if (names.length === MAX_DISPLAY_NAMES) break;
   }
-  return { version: 1, generatedAt: now().toISOString(), knowledgeNames: names, profileFallbackUsed: Boolean(profileFallbackUsed) };
+  return { version: 1, generatedAt: now().toISOString(), knowledgeNames: names, profileFallbackUsed: Boolean(profileFallbackUsed), ...(profile ? { pricingMode: profile.pricingMode, performerRateMode: profile.performerRateMode } : {}) };
 }
 
 export function serializeGenerationMetadata(metadata) {

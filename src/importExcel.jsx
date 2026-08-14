@@ -168,7 +168,7 @@ function useEstimateEditor(performers = []) {
     const meta = {
       ...(clean.projectName ? { projectName: clean.projectName } : {}),
     };
-    try { return { ok: true, stages: stagesFromGeneratedEstimate(clean, performers), meta }; }
+    try { return { ok: true, stages: stagesFromGeneratedEstimate(clean, performers, parsed.__generationPolicy || {}), meta }; }
     catch (error) { return { ok: false, message: error.message }; }
   };
 
@@ -401,7 +401,7 @@ export function GenerateEstimateModal({ description, performers = [], onClose, o
   const run = () => {
     setStep("parsing");
     llmGenerateEstimate(description)
-      .then((raw) => { setGenerationMetadata(raw.__generationMetadata || null); editor.load(validateParsed(raw)); setStep("preview"); })
+      .then((raw) => { const metadata = raw.__generationMetadata || null; setGenerationMetadata(metadata); const valid = validateParsed(raw); valid.__generationPolicy = metadata || {}; editor.load(valid); setStep("preview"); })
       .catch((e) => { setErrorMsg(e.message || "Не удалось собрать смету."); setStep("error"); });
   };
 
