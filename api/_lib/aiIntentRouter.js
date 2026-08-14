@@ -4,13 +4,16 @@ const clean = (value) => String(value || "").normalize("NFKC").toLocaleLowerCase
 const GENERATION_OBJECT = /(?:смет\p{L}*|структур\p{L}*|этап\p{L}*|стади\p{L}*)/iu;
 const GENERATION_ACTION = /(?:сдела\p{L}*|собер\p{L}*|собра\p{L}*|созда\p{L}*|сгенер\p{L}*)/iu;
 const EDIT_ACTION = /(?:добав\p{L}*|переимен\p{L}*|удал\p{L}*|замен\p{L}*|измен\p{L}*|увелич\p{L}*|уменьш\p{L}*|перемест\p{L}*)/iu;
-const NESTED_RELATION = /(?:задач\p{L}*|исполнител\p{L}*|дела\p{L}*|модел\p{L}*|рису\p{L}*|свет\p{L}*|визуализ\p{L}*|раскадров\p{L}*|концепц\p{L}*)/iu;
+
+const words = (value) => value.match(/[\p{L}\p{N}]+/gu)?.length || 0;
 
 function isConfidentHierarchicalCreation(value) {
   if (!/(?:добав\p{L}*|созда\p{L}*)/iu.test(value) || !GENERATION_OBJECT.test(value)) return false;
-  const clauses = value.split(/[;.!?\n]+/).filter((item) => item.trim()).length;
-  const stageMentions = value.match(/(?:этап\p{L}*|стади\p{L}*)/giu)?.length || 0;
-  return NESTED_RELATION.test(value) && (clauses > 1 || stageMentions > 1 || /\bс\s+задач/iu.test(value));
+  const colonTail = value.includes(":") ? value.slice(value.indexOf(":") + 1) : "";
+  const nestedRelations = (colonTail || value).split(/[,;.!?\n]+/).filter((item) => words(item) >= 2).length;
+  const contentTail = value.match(/(?:^|[^\p{L}\p{N}])с\s+([^;:.!?\n]+)/iu)?.[1] || "";
+  const coordinatedContents = contentTail.includes(",") && /(?:^|[^\p{L}\p{N}])и(?:$|[^\p{L}\p{N}])/iu.test(contentTail) && words(contentTail) >= 3;
+  return nestedRelations >= (colonTail ? 2 : 3) || coordinatedContents;
 }
 
 export function routeAiIntentDeterministically(instruction) {

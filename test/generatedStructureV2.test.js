@@ -139,5 +139,8 @@ test("ExecutorDraft branches retain strict field boundaries and can be mixed", (
 
 test("router keeps atomic Stage edit but sends hierarchical creation to generation", () => {
   assert.equal(routeAiIntentDeterministically("Добавь этап Пост").kind, "edit_existing");
+  assert.equal(routeAiIntentDeterministically("Добавь этап Продакшн: Аня моделит, Гриша делает свет, Элла визуализацию.").kind, "generate_structure");
+  assert.equal(routeAiIntentDeterministically("Добавь этап Продакшн с моделингом, светом и рендером").kind, "generate_structure");
+  assert.equal(routeAiIntentDeterministically("Добавь этап Съёмка, оператор снимает, режиссёр контролирует, продюсер координирует").kind, "generate_structure");
   assert.equal(routeAiIntentDeterministically("Добавь этап Продакшн с задачами моделинг и свет; Аня моделит, Гриша делает свет").kind, "generate_structure");
 });
