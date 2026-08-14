@@ -77,6 +77,27 @@ test("custom GeneratedStructure role has identical Initial and Global semantics"
   assert.equal(global.operations.filter((operation) => operation.type === "executor.addFromPerformer").length, 0);
 });
 
+test("unnamed role and explicitly named person materialize identically in Initial and Global", () => {
+  const fixture = {
+    schemaVersion: 2, kind: "generated_structure", generationScope: "fragment", warnings: [],
+    stages: [{ name: "S", tasks: [{ name: "T", executors: [
+      { type: "anonymous_unnamed", role: "Графический дизайнер" },
+      { type: "anonymous_named", name: "Миша", role: "3D-моделер" },
+    ] }] }],
+  };
+  const parsed = parseGeneratedStructure(fixture), initial = stagesFromGeneratedEstimate(parsed)[0].tasks[0].executors;
+  assert.equal(initial[0].tags.some((tag) => tag.key === "name"), false);
+  assert.equal(initial[0].tags.find((tag) => tag.key === "role").value, "Графический дизайнер");
+  assert.equal(initial[1].tags.find((tag) => tag.key === "name").value, "Миша");
+  const request = { requestId: "r", baseRevision: "rev", scope: { kind: "project", projectId: "p" }, instruction: "Нужен графический дизайнер; Миша делает моделинг", knowledge: { selectedSources: [] }, idPool: {
+    stages: ["s"], tasks: ["t"], executors: ["e1", "e2"], tags: Array.from({ length: 8 }, (_, index) => `g${index}`),
+  } };
+  const operations = compileGeneratedStructure({ resolved: resolveGeneratedStructure({ draft: parsed, performers: [] }), request, project: { id: "p", stages: [] }, performers: [] }).operations;
+  assert.equal(operations.some((operation) => operation.targetId === "e1" && operation.value?.key === "name"), false);
+  assert.equal(operations.find((operation) => operation.value?.executorId === "e1" && operation.type === "executor.tag.update").value.value, "Графический дизайнер");
+  assert.equal(operations.find((operation) => operation.targetId === "e2" && operation.value?.key === "name").value.value, "Миша");
+});
+
 test("Performer binding and ordinary Executor coexist and unsafe model fields are rejected", () => {
   const mixed = { schemaVersion: 2, kind: "generated_structure", generationScope: "fragment", projectName: "P", warnings: [], stages: [{ name: "S", tasks: [{ name: "T", executors: [
     { type: "performer_binding", key: "m", performerName: "Миша" }, { type: "anonymous_named", name: "Аня", compensation: 1000 },

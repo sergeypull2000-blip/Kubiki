@@ -15,6 +15,20 @@ test("generation profile exposes a bounded financial policy", () => {
   assert.equal(parseProfile(JSON.stringify({ ...lists, pricingMode: "invent", performerRateMode: "leave_blank" })), null);
 });
 
+test("generation contract separates an unnamed profession from an explicitly named person", async () => {
+  for (const [brief, draft, expectedType, expectedName] of [
+    ["нужен графический дизайнер", { type: "anonymous_unnamed", role: "Графический дизайнер" }, "anonymous_unnamed", undefined],
+    ["Миша делает дизайн", { type: "anonymous_named", name: "Миша", role: "Графический дизайнер" }, "anonymous_named", "Миша"],
+  ]) {
+    const calls = [], responses = [profile("estimate_missing"), JSON.stringify(estimate("fragment", [draft]))];
+    const result = await runEstimateGeneration({ brief, systemPrompt: "SYSTEM", requestModel: async (messages) => { calls.push(messages); return responses.shift(); } });
+    assert.match(calls[1][1].content, /anonymous_named допустим только когда имя конкретного человека, команды или компании явно присутствует/);
+    assert.match(calls[1][1].content, /Никогда не копируй профессию или role в name/);
+    assert.equal(result.estimate.stages[0].tasks[0].executors[0].type, expectedType);
+    assert.equal(result.estimate.stages[0].tasks[0].executors[0].name, expectedName);
+  }
+});
+
 test("default and explicit blank pricing policies reach whole_project and fragment generation", async () => {
   for (const [scope, mode, drafts] of [
     ["whole_project", "estimate_missing", [{ type: "anonymous_named", name: "A", paymentType: "fix_total", compensation: 120000 }]],
