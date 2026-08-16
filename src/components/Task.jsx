@@ -9,7 +9,7 @@ import { ExecutorRow } from "./Executor.jsx";
 /* ============================================================
    Задача
    ============================================================ */
-export function TaskBlock({ task, stageId, dispatch, taskDict, taskFeatured,
+export function TaskBlock({ task, taskNumber, stageId, dispatch, taskDict, taskFeatured,
   activeTaskId, activeExecutorId, onActivateTask, onActivateExecutor,
   onPatch, onRemove,
   onSaveTaskTemplate, onSaveExecutorToPerformer,
@@ -65,7 +65,7 @@ export function TaskBlock({ task, stageId, dispatch, taskDict, taskFeatured,
   const onTaskMouseDown = (e) => { e.stopPropagation(); onActivateTask(stageId, task.id); };
 
   return (
-    <div className={"kb-task" + depthClass + (isActive ? " kb-task-active" : "") + (isOver ? " kb-task-over" : "") + (isTaskOver ? " kb-task-reorder-over" : "") + (isDragging ? " kb-task-dragging" : "")}
+    <div className={"kb-task" + depthClass + (task.collapsed ? " kb-task-collapsed" : "") + (isActive ? " kb-task-active" : "") + (isOver ? " kb-task-over" : "") + (isTaskOver ? " kb-task-reorder-over" : "") + (isDragging ? " kb-task-dragging" : "")}
       onMouseDown={onTaskMouseDown} onContextMenu={(event) => { event.stopPropagation(); onAiContext?.(event, { kind: "task", stageId, taskId: task.id, label: task.name || "Задача" }); }} {...taskDropHandlers}>
       <div className="kb-task-head" {...dragHandlers} {...dropHandlers} title="Перетащите строку, чтобы переставить задачу"
         onMouseDownCapture={(event) => { event.currentTarget.draggable = !event.target.closest("input, textarea, button, select"); }}
@@ -75,6 +75,7 @@ export function TaskBlock({ task, stageId, dispatch, taskDict, taskFeatured,
           title={task.collapsed ? "Развернуть задачу" : "Свернуть задачу"}>
           {task.collapsed ? <ChevronRight size={14} strokeWidth={1.5} /> : <ChevronDown size={14} strokeWidth={1.5} />}
         </button>
+        <span className="kb-entity-index kb-task-index">{taskNumber}</span>
         <div className="kb-title-edit kb-task-title-edit" onMouseDown={onTaskMouseDown}>
           {editingName ? <SuggestInput className="kb-input kb-input-medium kb-task-name" value={nameDraft}
             title={nameDraft || "Название задачи"} dictionary={taskDict || []} featured={taskFeatured} placeholder="Название задачи…"

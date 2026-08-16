@@ -57,6 +57,7 @@ export const CSS = `
 /* п.2: содержимое шапки рабочей зоны выровнено по той же ширине/центру,
    что и .kb-layout ниже — лого и «ИТОГО» оказываются точно над панелями */
 .kb-header-inner{display:flex; align-items:center; gap:12px; width:100%; max-width:var(--layout-max); margin:0 auto}
+.kb-header-min .kb-header-inner{max-width:none; margin:0}
 .kb-brand{display:flex; flex-direction:column; line-height:1.2}
 .kb-brand-name{font-weight:var(--fw-semibold); font-size:var(--fs-lg); letter-spacing:-.02em}
 .kb-brand-sub{font-size:var(--fs-2xs); color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin-top:2px; font-weight:var(--fw-medium)}
@@ -135,7 +136,7 @@ export const CSS = `
    полю, а не растянуты по краям широкого экрана */
 .kb-layout{display:flex; align-items:stretch; height:calc(100vh - 60px); overflow:hidden; width:100%; min-width:0}
 .kb-panel-shell{position:relative; flex:0 0 auto; min-width:0; display:flex; overflow:visible}
-.kb-panel-shell-left{min-width:210px; max-width:380px}.kb-panel-shell-right{min-width:250px; max-width:440px}
+.kb-panel-shell-left{min-width:210px; max-width:320px}.kb-panel-shell-right{min-width:250px; max-width:360px}
 .kb-panel-shell>.kb-palette,.kb-panel-shell>.kb-rightpanel{width:100%; min-width:0}
 .kb-panel-resizer{position:absolute; z-index:20; top:0; bottom:0; width:9px; cursor:col-resize; touch-action:none}
 .kb-panel-resizer::after{content:""; position:absolute; top:0; bottom:0; left:4px; width:1px; background:transparent; transition:background .12s}
@@ -184,7 +185,7 @@ export const CSS = `
 .kb-grip:active{cursor:grabbing}
 .kb-stage-icon{color:var(--text-faint); flex-shrink:0}
 .kb-stage-name{font-size:15.5px; font-weight:var(--fw-semibold); letter-spacing:-.01em}
-.kb-stage-body{padding:5px 10px 5px 12px; margin-left:11px; border-left:1px solid var(--line-strong)}
+.kb-stage-body{padding:5px 10px 5px 12px; margin-left:0}
 .kb-stage-task-count{flex-shrink:0; color:var(--text-faint); font-size:var(--fs-xs); white-space:nowrap}
 .kb-dropzone-over{background:var(--accent-soft); outline:1.5px dashed var(--accent); outline-offset:-4px; border-radius:5px}
 
@@ -194,21 +195,27 @@ export const CSS = `
 .kb-sum-task{font-size:var(--fs-sm); font-weight:var(--fw-medium); color:var(--text-muted); min-width:104px}
 /* быстрый ввод стоимости задачи напрямую, пока нет исполнителей */
 .kb-task-directcost{display:inline-flex; align-items:center; justify-content:flex-end; gap:4px}
-.kb-task-directcost-input{max-width:88px; font-size:var(--fs-sm); font-weight:var(--fw-medium)}
+.kb-task-directcost-input{font-size:var(--fs-sm); font-weight:var(--fw-medium)}
+.kb-task-directcost-input,.kb-input-num.kb-amount-input{width:88px; min-width:88px; max-width:88px; flex-shrink:0}
 .kb-task-directcost-cur{color:var(--text-faint)}
 
 /* task */
-.kb-task{padding:3px 7px; border:1px solid var(--line); border-radius:6px; background:#F3F6FA; transition:background .12s; margin-bottom:6px; min-width:0}
-.kb-task-depth-empty,.kb-task-depth-empty.kb-task-active{background:#F3F6FA}
-.kb-task-depth-executors,.kb-task-depth-executors.kb-task-active{background:#F3F6FA}
-.kb-task-active{background:inherit; border-color:var(--accent); box-shadow:0 0 0 1px var(--accent)}
-.kb-task-active > .kb-task-body{border-left-color:var(--accent)}
+.kb-task{padding:0 0 8px; border:1px solid var(--line-strong); border-radius:9px; background:#F1F4F8; transition:background .12s,border-color .12s,box-shadow .12s; margin-bottom:8px; min-width:0; overflow:visible}
+.kb-task-collapsed{padding-bottom:0}
+.kb-task-depth-empty,.kb-task-depth-empty.kb-task-active{background:#F1F4F8}
+.kb-task-depth-executors,.kb-task-depth-executors.kb-task-active{background:#F1F4F8}
+.kb-task-active{background:inherit; border-color:var(--accent); box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent)}
 /* вся задача — зона приёма исполнителя: подсвечивается целиком (п.1) */
-.kb-task-over{background:var(--accent-soft); outline:1.5px dashed var(--accent); outline-offset:2px; border-radius:6px}
-.kb-task-over > .kb-task-body{border-left-color:var(--accent)}
-.kb-task-head{display:flex; align-items:center; gap:7px; min-height:31px; min-width:0}
+.kb-task-over{background:var(--accent-soft); outline:1.5px dashed var(--accent); outline-offset:2px; border-radius:9px}
+.kb-task-head{display:flex; align-items:center; gap:7px; min-height:32px; min-width:0; padding:3px 10px; border-bottom:1px solid var(--line); border-radius:8px 8px 0 0; background:color-mix(in srgb,var(--surface) 62%,transparent)}
+.kb-task-collapsed .kb-task-head{border-bottom:0; border-radius:8px}
 .kb-task-name{flex:1}
-.kb-task-body{padding:2px 0 0 16px; border-left:1px solid var(--line-strong); margin:1px 0 1px 6px; min-height:3px; min-width:0}
+.kb-task-body{padding:7px 9px 0; margin:0; min-height:3px; min-width:0}
+.kb-task-body > .kb-add-btn{display:flex; width:100%; min-height:35px; justify-content:flex-start; margin:0; padding:6px 8px; border:1px solid transparent; border-radius:5px}
+.kb-task-body > .kb-add-btn:hover{border-color:color-mix(in srgb,var(--line-strong) 72%,transparent); background:rgba(255,255,255,.48); color:var(--text)}
+.kb-entity-index{flex:0 0 auto; color:var(--text-muted); font-variant-numeric:tabular-nums; white-space:nowrap}
+.kb-stage-index{font-size:var(--fs-sm); font-weight:var(--fw-semibold)}
+.kb-task-index{font-size:var(--fs-xs); font-weight:var(--fw-medium)}
 .kb-title-edit{display:flex; align-items:center; gap:4px; min-width:0; margin-right:auto}
 .kb-stage-title-edit{flex:0 1 420px}.kb-task-title-edit{flex:1 1 auto}
 .kb-title-text{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text)}
@@ -225,33 +232,37 @@ export const CSS = `
 
 
 /* executor row — заметность через структуру (отступ, размер), не через цвет */
-.kb-erow-group{padding:1px 4px 1px 7px; border-radius:6px; background:#FFFFFF; transition:background .12s; cursor:default; border:1px solid transparent}
-.kb-erow-group + .kb-erow-group{margin-top:3px; border-top-color:var(--line)}
+.kb-erow-group{padding:2px 4px 2px 7px; border-radius:5px; background:#FFFFFF; transition:background .12s; cursor:default; border:1px solid var(--line)}
+.kb-erow-group + .kb-erow-group{margin-top:3px}
 .kb-erow-group:hover{background:#FFFFFF}
 /* активная строка — только чуть тёмный фон, без цветной черты и рамки */
-.kb-erow-group-active{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); cursor:grab}
+.kb-erow-group-active{box-shadow:inset 0 0 0 1px var(--accent); cursor:grab}
 .kb-erow-group-active:active{cursor:grabbing}
 .kb-erow-dragging{opacity:.45}
 /* приём тега/кубика — тончайшая нейтральная рамка, не акцентная */
-.kb-erow-group-over{background:var(--surface-sunken); border-color:var(--line)}
+.kb-erow-group-over{background:var(--surface-sunken); box-shadow:inset 0 0 0 1px var(--line)}
 /* новый исполнитель сразу появляется на постоянном белом фоне */
 .kb-erow-flash{background:#FFFFFF}
 .kb-erow{display:flex; align-items:center; gap:7px}
-.kb-erow-tags{flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding:1px 0}
+.kb-erow-tags{flex:1; min-width:0; min-height:27px; display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding:1px 0}
 .kb-erow-amount{flex-shrink:0; min-width:104px; display:flex; justify-content:flex-end; align-items:center; gap:6px}
 .kb-erow-taxed{white-space:nowrap; user-select:text; cursor:text}
 .kb-erow-sum{font-size:var(--fs-xs); font-weight:var(--fw-regular); color:var(--text-muted); font-variant-numeric:tabular-nums; white-space:nowrap}
 .kb-erow-sum-muted{color:var(--text-faint)}
 .kb-erow-sum-strong{font-size:var(--fs-sm); font-weight:var(--fw-medium); color:var(--text)}
 .kb-amount-input{text-align:right; font-size:var(--fs-sm); font-weight:var(--fw-medium)}
-.kb-input-num.kb-amount-input{max-width:92px}
 .kb-erow-del{flex-shrink:0}
 
 /* tag chip on executor */
 .kb-tag{position:relative; display:inline-flex; align-items:center; gap:5px; border:1px solid var(--line-strong);
-  border-radius:5px; padding:3px 5px 3px 7px; background:var(--surface); font-size:var(--fs-xs); width:156px; flex:0 0 156px; min-width:156px; max-width:156px;
+  border-radius:5px; padding:3px 5px 3px 7px; background:var(--surface); font-size:var(--fs-xs); width:120px; flex:0 0 120px; min-width:120px; max-width:120px;
   transition:border-color .12s, background .12s, color .12s}
-.kb-tag-name,.kb-tag-role{width:auto; flex:1 1 220px; min-width:0; max-width:280px}
+.kb-tag-role,.kb-tag-name{width:132px; flex-basis:132px; min-width:132px; max-width:132px}
+.kb-tag-payment{width:132px; flex-basis:132px; min-width:132px; max-width:132px}
+.kb-tag-tax{width:104px; flex-basis:104px; min-width:104px; max-width:104px}
+.kb-tag-grade{width:92px; flex-basis:92px; min-width:92px; max-width:92px}
+.kb-tag-spec{width:132px; flex-basis:132px; min-width:132px; max-width:132px}
+.kb-tag-soft{width:120px; flex-basis:120px; min-width:120px; max-width:120px}
 .kb-tag:hover{border-color:var(--accent); background:var(--accent-soft)}
 .kb-tag:hover .kb-tag-ic{color:var(--accent)}
 .kb-tag:hover .kb-tag-val{color:var(--accent)}

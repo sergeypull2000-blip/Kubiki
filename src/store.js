@@ -19,7 +19,7 @@ export const makeTag = (key, value = "") => {
   if (key === "payment") tag.payment = { type: value || "", rate: "", units: "", hours: "", shifts: "" };
   return tag;
 };
-export const makeExecutor = () => ({ id: uid(), tags: [makeTag("role")], amount: "", performerId: null, performerSnapshot: null });
+export const makeExecutor = () => ({ id: uid(), tags: [makeTag("role"), makeTag("payment")], amount: "", performerId: null, performerSnapshot: null });
 export const makeTask = () => ({ id: uid(), name: "", executors: [], markupOverride: null, collapsed: false, directCost: null });
 export const makeStage = (preset) => ({
   id: uid(), presetKey: preset.key, name: preset.name, tasks: [], collapsed: false,

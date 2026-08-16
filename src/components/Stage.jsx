@@ -74,7 +74,7 @@ export function CanvasDropZone({ isEmpty, onDropStage, onAddStage }) {
 /* ============================================================
    Этап
    ============================================================ */
-export function StageCard({ stage, dispatch, activeStageId, activeTaskId, activeExecutorId,
+export function StageCard({ stage, stageNumber, dispatch, activeStageId, activeTaskId, activeExecutorId,
   onActivateStage, onActivateTask, onActivateExecutor, onRemove,
   onSaveStageTemplate, onSaveTaskTemplate, onSaveExecutorToPerformer,
   stageTemplates, onApplyStageTemplate, taskTemplates, onApplyTaskTemplate,
@@ -143,6 +143,7 @@ export function StageCard({ stage, dispatch, activeStageId, activeTaskId, active
           {stage.collapsed ? <ChevronRight size={15} strokeWidth={1.5} /> : <ChevronDown size={15} strokeWidth={1.5} />}
         </button>
         <StageIcon size={15} strokeWidth={1.5} className="kb-stage-icon" />
+        <span className="kb-entity-index kb-stage-index">{stageNumber}.</span>
         <div className="kb-title-edit kb-stage-title-edit" onMouseDown={onStageMouseDown}>
           {editingName ? <StageNameInput value={nameDraft} onType={setNameDraft}
             onPick={(preset) => { setNameDraft(preset.name); patchStage({ name: preset.name, presetKey: preset.key }); setEditingName(false); }}
@@ -165,8 +166,9 @@ export function StageCard({ stage, dispatch, activeStageId, activeTaskId, active
 
       {!stage.collapsed && (
         <div className={"kb-stage-body" + (isOverTask ? " kb-dropzone-over" : "")} {...taskDropHandlers}>
-          {stage.tasks.map((t) => (
+          {stage.tasks.map((t, taskIndex) => (
             <TaskBlock key={t.id} task={t} stageId={stage.id} dispatch={dispatch}
+              taskNumber={`${stageNumber}.${taskIndex + 1}`}
               taskDict={stageTaskDictionary(stage.presetKey)}
               taskFeatured={stageFeaturedTasks(stage.presetKey)}
               activeTaskId={activeTaskId} activeExecutorId={activeExecutorId}

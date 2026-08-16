@@ -9,7 +9,7 @@ import { SuggestInput } from "./SuggestInput.jsx";
 
 // «Ядро» строки исполнителя — всегда на виду, пока исполнитель выделен.
 // Остальные кубики (роль, специализация, грейд, софт) — по требованию, через «+».
-const CORE_TAG_KEYS = ["role", "name", "payment", "tax"];
+const CORE_TAG_KEYS = ["role", "payment"];
 const EXECUTOR_TAG_ORDER = ["role", "name", "payment", "tax", "spec", "grade", "soft"];
 const tagOrder = (key) => { const index = EXECUTOR_TAG_ORDER.indexOf(key); return index < 0 ? EXECUTOR_TAG_ORDER.length : index; };
 
@@ -81,7 +81,7 @@ function ExecutorTag({ tag, onSetValue, onSetPayment, onRemove, isOpen, onOpenCh
   const restoreTagDraggable = () => { if (wrapRef.current) wrapRef.current.draggable = true; };
 
   const displayValue = () => {
-    if (def.kind === "payment") return tag.payment?.type ? PAYMENT_LABEL[tag.payment.type] : "";
+    if (def.kind === "payment") return tag.payment?.type === "fix_total" ? "Фикс. ставка" : tag.payment?.type ? PAYMENT_LABEL[tag.payment.type] : "";
     if (def.kind === "tax") return tag.value ? `Налог ${tag.value}%` : "";
     return tag.value;
   };
@@ -154,7 +154,7 @@ function ExecutorTag({ tag, onSetValue, onSetPayment, onRemove, isOpen, onOpenCh
         </button>
       )}
 
-      {filled && (
+      {(filled || !CORE_TAG_KEYS.includes(tag.key)) && (
         <button type="button" className="kb-tag-x" onClick={onRemove} title="Убрать тег">
           <X size={10} strokeWidth={2} />
         </button>
@@ -280,7 +280,7 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
         }
       }
     } else if (prevActive.current === true) {
-      const filled = executor.tags.filter(isTagFilled);
+      const filled = executor.tags.filter((tag) => CORE_TAG_KEYS.includes(tag.key) || isTagFilled(tag));
       if (filled.length !== executor.tags.length) onPatch({ tags: filled });
     }
     prevActive.current = active;
@@ -301,6 +301,15 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
     setTags((tags) => tags.map((t) => (t.id === tagId ? { ...t, value } : t)));
   const setTagPayment = (tagId, patch) =>
     setTags((tags) => tags.map((t) => (t.id === tagId ? { ...t, payment: { ...(t.payment || {}), ...patch } } : t)));
+  const setAmount = (value) => {
+    if (hasPay) { onPatch({ amount: value }); return; }
+    const payment = { type: "fix_total", rate: "", units: "", hours: "", shifts: "" };
+    const hasPaymentTag = executor.tags.some((tag) => tag.key === "payment");
+    const tags = hasPaymentTag
+      ? executor.tags.map((tag) => tag.key === "payment" ? { ...tag, payment } : tag)
+      : [...executor.tags, { ...makeTag("payment"), payment }];
+    onPatch({ amount: value, tags });
+  };
   // ядро (имя/тип оплаты/налог) — очищаем, слот остаётся на строке, пока
   // исполнитель выделен; доп. кубик — убираем совсем, освобождая место в «+»
   const removeTag = (tagId) => {
@@ -370,17 +379,15 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
           )}
 
           {/* «+» — доп. кубики (роль/специализация/грейд/софт), справа от «Налог» */}
-          {active && (
-            <AddCubeButton usedKeys={usedKeys}
-              onAddCube={(payload) => { setTags((tags) => applyTagToExecutor(tags, payload)); onActivate(); }} />
-          )}
+          <AddCubeButton usedKeys={usedKeys}
+            onAddCube={(payload) => { setTags((tags) => applyTagToExecutor(tags, payload)); onActivate(); }} />
         </div>
 
         <div className="kb-erow-amount">
-          {isFix ? (
+          {isFix || !hasPay ? (
             <>
               <input className="kb-input kb-input-num kb-amount-input" value={executor.amount} placeholder="0"
-                onChange={(e) => onPatch({ amount: e.target.value })} onMouseDown={(e) => e.stopPropagation()} />
+                onChange={(e) => setAmount(e.target.value)} onMouseDown={(e) => e.stopPropagation()} />
               {taxPct > 0 && <span className="kb-erow-sum kb-erow-sum-strong kb-erow-taxed" title="Сумма с налогом — можно выделить и скопировать" onMouseDown={(e) => e.stopPropagation()}>{fmt(sum)} ₽</span>}
             </>
           ) : (

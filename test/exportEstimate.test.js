@@ -221,7 +221,8 @@ test("Executor name и role получают гибкую ширину, ellipsis
   const styles = readFileSync(new URL("../src/styles.js", import.meta.url), "utf8");
   assert.match(component, /kb-tag-\$\{tag\.key\}/);
   assert.match(component, /title=\{\["name", "role"\]\.includes\(tag\.key\)/);
-  assert.match(styles, /\.kb-tag-name,\.kb-tag-role\{[^}]*flex:1 1 220px;[^}]*min-width:0;[^}]*max-width:280px/);
+  assert.match(styles, /\.kb-tag-role,\.kb-tag-name\{[^}]*width:132px;[^}]*flex-basis:132px;[^}]*min-width:132px;[^}]*max-width:132px/);
+  assert.match(styles, /\.kb-tag-payment\{[^}]*width:132px;[^}]*flex-basis:132px/);
   assert.match(styles, /\.kb-erow-tags\{[^}]*min-width:0/);
   assert.match(styles, /\.kb-tag-val,\.kb-tag-placeholder\{[^}]*overflow:hidden; text-overflow:ellipsis/);
 });

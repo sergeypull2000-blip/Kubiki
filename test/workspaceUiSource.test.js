@@ -9,7 +9,9 @@ test("workspace uses edge-to-edge flex center and bounded panel resizers", async
   assert.match(styles, /\.kb-layout\{[^}]*width:100%; min-width:0/);
   assert.doesNotMatch(styles, /\.kb-layout\{[^}]*max-width/);
   assert.match(styles, /\.kb-canvas-inner\{width:100%; min-width:0/);
-  assert.match(workspace, /side === "left" \? \[210, 380\] : \[250, 440\]/);
+  assert.match(workspace, /const LEFT_PANEL_RANGE = \[210, 320\]/);
+  assert.match(workspace, /const RIGHT_PANEL_RANGE = \[250, 360\]/);
+  assert.match(workspace, /side === "left" \? LEFT_PANEL_RANGE : RIGHT_PANEL_RANGE/);
   assert.match(workspace, /kb-panel-resizer-left/);
   assert.match(workspace, /kb-panel-resizer-right/);
 });
@@ -38,20 +40,40 @@ test("estimate depth backgrounds derive only from existing task and executor col
   assert.match(styles, /\.kb-stage-depth-empty\{background:#FFFFFF\}/);
   assert.match(styles, /\.kb-stage-depth-tasks\{background:#FFFFFF\}/);
   assert.match(styles, /\.kb-stage-depth-executors\{background:#FFFFFF\}/);
-  assert.match(styles, /\.kb-task-depth-empty[^}]*background:#F3F6FA/);
-  assert.match(styles, /\.kb-task-depth-executors[^}]*background:#F3F6FA/);
+  assert.match(styles, /\.kb-task-depth-empty[^}]*background:#F1F4F8/);
+  assert.match(styles, /\.kb-task-depth-executors[^}]*background:#F1F4F8/);
   assert.match(styles, /\.kb-erow-group\{[^}]*background:#FFFFFF/);
   assert.match(styles, /\.kb-erow-flash\{background:#FFFFFF\}/);
   assert.doesNotMatch(styles, /@keyframes kbFlash/);
-  assert.match(styles, /\.kb-erow-group \+ \.kb-erow-group\{margin-top:3px; border-top-color:var\(--line\)\}/);
+  assert.match(styles, /\.kb-erow-group \+ \.kb-erow-group\{margin-top:3px\}/);
 });
 
 test("estimate hierarchy uses compact vertical rhythm and visible indentation lines", async () => {
   const styles = await source("src/styles.js");
   assert.match(styles, /\.kb-stage\{[^}]*border:1px solid var\(--line-strong\)[^}]*margin-bottom:14px/);
   assert.match(styles, /\.kb-stage-head\{[^}]*min-height:38px; padding:6px 11px/);
-  assert.match(styles, /\.kb-stage-body\{[^}]*border-left:1px solid var\(--line-strong\)/);
-  assert.match(styles, /\.kb-task\{[^}]*padding:3px 7px[^}]*margin-bottom:6px/);
-  assert.match(styles, /\.kb-task-body\{[^}]*border-left:1px solid var\(--line-strong\)/);
-  assert.match(styles, /\.kb-task-active\{[^}]*border-color:var\(--accent\); box-shadow:0 0 0 1px var\(--accent\)/);
+  assert.doesNotMatch(styles, /\n\.kb-stage-body\{[^}]*border-left/);
+  assert.match(styles, /\.kb-task\{[^}]*padding:0 0 8px; border:1px solid var\(--line-strong\); border-radius:9px[^}]*margin-bottom:8px/);
+  assert.match(styles, /\.kb-task-body\{[^}]*padding:7px 9px 0; margin:0/);
+  assert.doesNotMatch(styles, /\n\.kb-task-body\{[^}]*border-left/);
+  assert.match(styles, /\.kb-task-active\{[^}]*border-color:var\(--accent\)[^}]*box-shadow:0 0 0 1px color-mix/);
+});
+
+test("stage and task numbering derives from render order without numbering executors", async () => {
+  const [workspace, stage, task] = await Promise.all([
+    source("src/components/Workspace.jsx"), source("src/components/Stage.jsx"), source("src/components/Task.jsx"),
+  ]);
+  assert.match(workspace, /project\.stages\.map\(\(s, stageIndex\)/);
+  assert.match(workspace, /stageNumber=\{stageIndex \+ 1\}/);
+  assert.match(stage, /taskNumber=\{`\$\{stageNumber\}\.\$\{taskIndex \+ 1\}`\}/);
+  assert.match(stage, /kb-stage-index/);
+  assert.match(task, /kb-task-index/);
+  assert.doesNotMatch(await source("src/components/Executor.jsx"), /kb-entity-index/);
+});
+
+test("tasks and executors render as compact bordered rows inside a stage", async () => {
+  const styles = await source("src/styles.js");
+  assert.match(styles, /\.kb-task-head\{[^}]*border-bottom:1px solid var\(--line\)/);
+  assert.match(styles, /\.kb-erow-group\{[^}]*border-radius:5px[^}]*border:1px solid var\(--line\)/);
+  assert.match(styles, /\.kb-erow-group-active\{box-shadow:inset 0 0 0 1px var\(--accent\)/);
 });

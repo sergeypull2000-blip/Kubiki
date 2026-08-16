@@ -21,12 +21,16 @@ import { sortQuickAccessItems } from "../quickAccess.js";
 import { createTaskTemplate, createStageTemplate, cloneTaskTemplate, cloneStageTemplate } from "../templates.js";
 import { useOutsideClose } from "../hooks.js";
 
+const LEFT_PANEL_RANGE = [210, 320];
+const RIGHT_PANEL_RANGE = [250, 360];
+const clampPanelWidth = (value, [min, max], fallback) => Math.min(max, Math.max(min, Number(value) || fallback));
+
 /* ============================================================
    Рабочая зона
    ============================================================ */
 export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onOpenAiSettings, onSignOut, userAccount, aiGenerationReady = false, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange, onRequestAiEdit, onCancelAiEdit, onApplyAiEdit, onUndoAiEdit, canUndoAiEdit = false }) {
-  const [leftPanelWidth, setLeftPanelWidth] = useState(() => Number(localStorage.getItem("kb-workspace-left-width")) || 248);
-  const [rightPanelWidth, setRightPanelWidth] = useState(() => Number(localStorage.getItem("kb-workspace-right-width")) || 288);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(() => clampPanelWidth(localStorage.getItem("kb-workspace-left-width"), LEFT_PANEL_RANGE, 248));
+  const [rightPanelWidth, setRightPanelWidth] = useState(() => clampPanelWidth(localStorage.getItem("kb-workspace-right-width"), RIGHT_PANEL_RANGE, 288));
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
   // в Клайне можно persist'ить в localStorage.
   const [importFile, setImportFile] = useState(null);
@@ -66,7 +70,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
     event.preventDefault(); event.stopPropagation();
     const startX = event.clientX;
     const startWidth = side === "left" ? leftPanelWidth : rightPanelWidth;
-    const [min, max] = side === "left" ? [210, 380] : [250, 440];
+    const [min, max] = side === "left" ? LEFT_PANEL_RANGE : RIGHT_PANEL_RANGE;
     const onMove = (moveEvent) => {
       const delta = (moveEvent.clientX - startX) * (side === "left" ? 1 : -1);
       const width = Math.min(max, Math.max(min, startWidth + delta));
@@ -106,7 +110,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
     if (!onRequestAiEdit || editingTemplate) return;
     event.preventDefault();
     setGlobalAiOpen(false);
-    setLocalAiPopover({ x: Math.max(12, Math.min(event.clientX, window.innerWidth - 380)), y: Math.max(12, Math.min(event.clientY, window.innerHeight - 420)), context });
+    setLocalAiPopover({ x: event.clientX, y: event.clientY, context });
   };
   const localScope = (context) => ({ projectId: project.id, kind: context.kind, stageId: context.stageId, ...(context.taskId ? { taskId: context.taskId } : {}), ...(context.executorId ? { executorId: context.executorId } : {}) });
   const closeGlobalAi = () => {
@@ -453,8 +457,9 @@ const toggleAllCollapsed = () =>
                 </>
               ) : (
                 <>
-                  {project.stages.map((s) => (
+                  {project.stages.map((s, stageIndex) => (
                     <StageCard key={s.id} stage={s} dispatch={dispatch}
+                      stageNumber={stageIndex + 1}
                       activeStageId={activeStageId} activeTaskId={activeTaskId}
                       activeExecutorId={activeExecutorId}
                       onActivateStage={activateStage}
