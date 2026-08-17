@@ -22,15 +22,29 @@ function App() {
       if (nextSession) setAuthError('')
     })
 
+    // Страховка: если проверка сессии зависнет (проблемы со storage/сетью),
+    // не показываем бесконечный белый экран — через 5с всё равно показываем
+    // экран входа.
+    const failSafe = setTimeout(() => {
+      if (!isMounted) return
+      setIsCheckingSession(false)
+    }, 5000)
+
     supabase.auth.getSession().then(({ data, error }) => {
       if (!isMounted) return
+      clearTimeout(failSafe)
       setSession(data.session)
       if (error) setAuthError('Не удалось проверить сессию. Попробуйте войти снова.')
+      setIsCheckingSession(false)
+    }).catch(() => {
+      if (!isMounted) return
+      clearTimeout(failSafe)
       setIsCheckingSession(false)
     })
 
     return () => {
       isMounted = false
+      clearTimeout(failSafe)
       subscription.unsubscribe()
     }
   }, [])

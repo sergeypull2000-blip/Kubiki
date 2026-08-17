@@ -24,6 +24,8 @@ import { useOutsideClose } from "../hooks.js";
 const LEFT_PANEL_RANGE = [210, 320];
 const RIGHT_PANEL_RANGE = [250, 360];
 const clampPanelWidth = (value, [min, max], fallback) => Math.min(max, Math.max(min, Number(value) || fallback));
+const AI_LAUNCHER_PANEL_WIDTH = 840; // фиксированная ширина всплывающего окна «Ai Global» (2× исходной)
+
 
 /* ============================================================
    Рабочая зона
@@ -48,14 +50,14 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
   const globalAiSubmitRef = useRef(null);
   const globalAiBoundaryRef = useRef(null);
   const canvasInnerRef = useRef(null);
-  const [aiAnchor, setAiAnchor] = useState({ right: 12, width: 430 });
+  const [aiAnchor, setAiAnchor] = useState({ right: 12, width: AI_LAUNCHER_PANEL_WIDTH });
   useOutsideClose(profileRef, profileOpen ? () => setProfileOpen(false) : null);
   useEffect(() => {
     const canvasInner = canvasInnerRef.current;
     if (!canvasInner) return;
     const update = () => {
       const rect = canvasInner.getBoundingClientRect();
-      setAiAnchor({ right: Math.max(0, window.innerWidth - rect.right), width: Math.max(320, rect.width) });
+      setAiAnchor({ right: Math.max(0, window.innerWidth - (rect.left + rect.width / 2) - AI_LAUNCHER_PANEL_WIDTH / 2), width: AI_LAUNCHER_PANEL_WIDTH });
     };
     update();
     const observer = new ResizeObserver(update);
@@ -491,7 +493,7 @@ const toggleAllCollapsed = () =>
             {!editingTemplate && onRequestAiEdit && project.stages.length > 0 && <div ref={globalAiBoundaryRef} className="kb-ai-launcher-wrap" style={{ right: aiAnchor.right, "--kb-ai-panel-width": `${aiAnchor.width}px` }}>
               {globalAiOpen && <AiEditTechnicalModal variant="launcher" closing={globalAiClosing} submitRef={globalAiSubmitRef} outsideBoundaryRef={globalAiBoundaryRef} scope={globalScope} contextLabel="Вся смета" onRequest={onRequestAiEdit} onCancelRequest={onCancelAiEdit} onApply={onApplyAiEdit} onUndo={onUndoAiEdit} canUndo={canUndoAiEdit} onClose={closeGlobalAi} />}
               {canUndoAiEdit && !globalAiOpen && <button type="button" className="kb-ai-undo-chip" onClick={onUndoAiEdit}>Undo AI</button>}
-              <button type="button" className={`kb-ai-launcher${globalAiOpen && !globalAiClosing ? " is-open" : ""}`} aria-label={globalAiOpen ? "Предпросмотр изменений" : "Открыть AI-ассистента"} onClick={() => { setLocalAiPopover(null); if (globalAiOpen) globalAiSubmitRef.current?.(); else setGlobalAiOpen(true); }}><ArrowUp size={18} strokeWidth={1.8} /></button>
+              <button type="button" className={`kb-ai-launcher${globalAiOpen && !globalAiClosing ? " is-open" : ""}`} aria-label={globalAiOpen ? "Предпросмотр изменений" : "Открыть AI-ассистента"} onClick={() => { setLocalAiPopover(null); if (globalAiOpen) globalAiSubmitRef.current?.(); else setGlobalAiOpen(true); }}><ArrowUp size={20} strokeWidth={1.8} /></button>
             </div>}
           </main>
           <div className="kb-panel-shell kb-panel-shell-right" style={{ width: rightPanelWidth }}>

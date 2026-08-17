@@ -8,6 +8,35 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Страховка от «белого экрана»: если модуль упал до того, как React
+      // смонтировался (например, не заданы переменные окружения Supabase),
+      // показываем текст ошибки прямо на странице вместо пустого экрана.
+      (function () {
+        function esc(s) {
+          return String(s).replace(/[&<>]/g, function (c) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c];
+          });
+        }
+        function show(msg) {
+          var el = document.getElementById("root");
+          if (el && !el.firstChild) {
+            el.innerHTML =
+              '<div style="max-width:640px;margin:48px auto;padding:20px;font-family:system-ui,sans-serif;border:1px solid #e3c3c0;border-radius:8px;background:#fff5f4;color:#9f2e25;line-height:1.5;word-break:break-word">' +
+              '<strong style="display:block;margin-bottom:8px">Kubiki не загрузился</strong>' +
+              esc(msg) +
+              "</div>";
+          }
+        }
+        window.addEventListener("error", function (e) {
+          show((e && e.message) || (e && e.error && e.error.message) || "Неизвестная ошибка");
+        });
+        window.addEventListener("unhandledrejection", function (e) {
+          var r = e && e.reason;
+          show((r && r.message) || r || "Неизвестная ошибка");
+        });
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
