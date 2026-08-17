@@ -6,6 +6,7 @@ import {
   taskPrice,
   taskSum,
 } from "./calculations.js";
+import { normalizePresentationSettings } from "./exportSettings.js";
 
 export const EXPORT_SETTINGS_VERSION = 1;
 export const DEFAULT_EXPORT_SETTINGS = Object.freeze({
@@ -20,12 +21,15 @@ const fromMinor = (amount) => amount / 100;
 
 export function normalizeExportSettings(settings) {
   const source = settings && typeof settings === "object" ? settings : {};
-  return {
+  const base = {
     version: EXPORT_SETTINGS_VERSION,
     markupPresentation: PRESENTATIONS.has(source.markupPresentation) ? source.markupPresentation : DEFAULT_EXPORT_SETTINGS.markupPresentation,
     taxPresentation: PRESENTATIONS.has(source.taxPresentation) ? source.taxPresentation : DEFAULT_EXPORT_SETTINGS.taxPresentation,
   };
+  return ["branding", "typography", "content", "service"].some((key) => key in source) ? { ...base, ...normalizePresentationSettings(source) } : base;
 }
+
+const formatDate = (value) => { const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || ""); return match ? `${match[3]}.${match[2]}.${match[1]}` : ""; };
 
 export function getEligibleExportTasks(project) {
   return (project?.stages || []).flatMap((stage, stageIndex) =>
@@ -91,7 +95,7 @@ export function validateExportModelTotals(model) {
 }
 
 export function buildExportEstimateModel(project, rawSettings = project?.exportSettings) {
-  const settings = normalizeExportSettings(rawSettings);
+  const settings = { ...normalizeExportSettings(rawSettings), ...normalizePresentationSettings(rawSettings) };
   const flat = getEligibleExportTasks(project);
   const baseTotalMinor = toMinor(projectSum(project));
   const baseAllocations = allocateMoneyProportionally(baseTotalMinor, flat.map(({ task }) => ({ weight: Math.max(0, taskSum(task)) })))
@@ -151,6 +155,11 @@ export function buildExportEstimateModel(project, rawSettings = project?.exportS
       distributedMarkupAmount: fromMinor(item.distributedMarkupMinor), distributedMarkupAmountMinor: item.distributedMarkupMinor,
       distributedTaxAmount: fromMinor(distributedTaxMinor), distributedTaxAmountMinor: distributedTaxMinor,
       distributedTaxBreakdown, exportedAmount: fromMinor(exportedAmountMinor), exportedAmountMinor,
+      comment: settings.content.showComments ? String(item.task.exportComment || "") : "",
+      performers: [],
+      number: `${item.stageIndex + 1}.${item.taskIndex + 1}`,
+      color: settings.content.rowColorOverrides[String(item.task.id)] || settings.branding.colors.task,
+      textColor: settings.branding.colors.taskText,
     };
     const rows = rowsByStage.get(item.stage.id) || [];
     rows.push(row); rowsByStage.set(item.stage.id, rows);
@@ -160,7 +169,7 @@ export function buildExportEstimateModel(project, rawSettings = project?.exportS
     const rows = rowsByStage.get(stage.id) || [];
     const baseSubtotalMinor = rows.reduce((sum, row) => sum + row.baseAmountMinor, 0);
     const exportedSubtotalMinor = rows.reduce((sum, row) => sum + row.exportedAmountMinor, 0);
-    return { id: stage.id, name: stage.name || "Этап", rows, baseSubtotal: fromMinor(baseSubtotalMinor), baseSubtotalMinor, exportedSubtotal: fromMinor(exportedSubtotalMinor), exportedSubtotalMinor };
+    return { id: stage.id, number: String((project?.stages || []).indexOf(stage) + 1), name: stage.name || "Этап", color: settings.content.rowColorOverrides[String(stage.id)] || settings.branding.colors.stage, textColor: settings.branding.colors.stageText, rows, baseSubtotal: fromMinor(baseSubtotalMinor), baseSubtotalMinor, exportedSubtotal: fromMinor(exportedSubtotalMinor), exportedSubtotalMinor };
   });
   const separateRows = [
     ...(markupSeparate && markupMinor !== 0 ? [buildSeparateMarkupRow(markupMinor, {
@@ -171,8 +180,18 @@ export function buildExportEstimateModel(project, rawSettings = project?.exportS
   ];
   const totalMinor = toMinor(projectTotalWithTax(project));
   const model = {
-    version: 1, settings, projectId: project?.id, projectName: project?.name || "Проект", brand: project?.branding || {},
+    version: 2, settings, projectId: project?.id, projectName: project?.name || "Проект",
+    proposal: { title: project?.exportMetadata?.title || project?.name || "Коммерческое предложение", startDate: project?.exportMetadata?.startDate || "", endDate: project?.exportMetadata?.endDate || "", durationDays: project?.exportMetadata?.durationDays || "", createdAt: project?.exportMetadata?.createdAt || new Date().toISOString().slice(0, 10), validUntil: project?.exportMetadata?.validUntil || "", producer: project?.exportMetadata?.producer || "", artDirector: project?.exportMetadata?.artDirector || "", supervisor: project?.exportMetadata?.supervisor || "" },
+    brand: { ...settings.branding, logoUrl: project?.exportLogoUrl || "" },
+    typography: settings.typography,
+    serviceBlocks: [
+      settings.service.validUntil && formatDate(project?.exportMetadata?.validUntil) ? `Коммерческое предложение действительно до ${formatDate(project.exportMetadata.validUntil)}` : "",
+      settings.service.copyrightIncluded ? "Стоимость передачи исключительного авторского права включена в итоговую стоимость" : "",
+      settings.service.confidential ? "Конфиденциально" : "",
+      settings.service.customEnabled ? settings.service.customText : "",
+    ].filter(Boolean),
     stages, separateRows, warnings,
+    display: { markupPresentation: settings.markupPresentation, taxPresentation: settings.taxPresentation, showComments: settings.content.showComments, performerVisibility: settings.content.performerVisibility },
     summary: {
       baseSubtotal: fromMinor(baseTotalMinor), baseSubtotalMinor: baseTotalMinor,
       markupAmount: fromMinor(markupMinor), markupAmountMinor: markupMinor,

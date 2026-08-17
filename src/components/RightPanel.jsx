@@ -195,7 +195,7 @@ function PropertiesPanel({ project, activeStageId, activeTaskId, activeExecutorI
 }
 
 /* Правая панель: Вид · Маркап · Свойства · Экспорт. */
-export function RightPanel({ project, dispatch, activeStageId, activeTaskId, activeExecutorId }) {
+export function RightPanel({ project, dispatch, userId, activeStageId, activeTaskId, activeExecutorId }) {
   const globalMarkup = project.globalMarkup ?? 0;
   return (
     <aside className="kb-rightpanel">
@@ -231,7 +231,7 @@ export function RightPanel({ project, dispatch, activeStageId, activeTaskId, act
 
       <section className="kb-rp-sec">
         <div className="kb-rp-title">Экспорт</div>
-        <ExportPanel project={project} dispatch={dispatch} />
+        <ExportPanel project={project} dispatch={dispatch} userId={userId} />
       </section>
     </aside>
   );

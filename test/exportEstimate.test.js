@@ -238,10 +238,10 @@ test("Task title uses available flex width and exposes the full value through ti
 
 test("настройка брендинга доступна из модалки экспорта и используется обоими форматами", () => {
   const source = readFileSync(new URL("../src/exportFiles.jsx", import.meta.url), "utf8");
-  assert.match(source, /aria-label="Настроить брендинг сметы"/);
-  assert.match(source, /<BrandingSettings branding=\{project\.branding\}/);
-  assert.match(source, /buildExcelWorkbook\(model, addExcelLogo\)/);
-  assert.match(source, /model\.brand\?\.logo/);
+  assert.match(source, /title="Загрузить логотип"/);
+  assert.match(source, /exportProfileRepository\.uploadLogo/);
+  assert.match(source, /buildExcelWorkbook\(\{ \.\.\.model, brand: \{ \.\.\.model\.brand, logoUrl \} \}, addExcelLogo\)/);
+  assert.match(source, /model\.brand\.logoUrl/);
 });
 
 test("legacy external estimate сохраняется, но не влияет на runtime export", () => {

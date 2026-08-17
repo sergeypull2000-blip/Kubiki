@@ -356,7 +356,7 @@ const toggleAllCollapsed = () =>
   });
 
   const rightPanel = (
-    <RightPanel project={project} dispatch={dispatch}
+    <RightPanel project={project} dispatch={dispatch} userId={userAccount?.id}
       activeStageId={activeStageId} activeTaskId={activeTaskId} activeExecutorId={activeExecutorId} />
   );
   const accountControl = <div className="kb-profile kb-profile-sidebar" ref={profileRef}>

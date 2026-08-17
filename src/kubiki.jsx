@@ -704,7 +704,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
           performers={performers} onSavePerformer={savePerformer}
           quickAccess={quickAccess} onToggleQuickAccessPin={toggleQuickAccessPin} onRemoveQuickAccess={removeQuickAccessByItem}
           onOpenAiSettings={() => setAiSettingsOpen(true)}
-          userAccount={{ displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }}
+          userAccount={{ id: userId, displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }}
           aiGenerationReady={aiGenerationReady}
           onSignOut={handleSignOut}
         />
@@ -714,7 +714,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
           performers={performers} onSavePerformer={savePerformer}
           quickAccess={quickAccess} onToggleQuickAccessPin={toggleQuickAccessPin} onRemoveQuickAccess={removeQuickAccessByItem} onSignOut={handleSignOut}
           onOpenAiSettings={() => setAiSettingsOpen(true)}
-          userAccount={{ displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }}
+          userAccount={{ id: userId, displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }}
           aiGenerationReady={aiGenerationReady}
           taskTemplates={templateLibrary.taskTemplates} stageTemplates={templateLibrary.stageTemplates}
           onTaskTemplatesChange={handleTaskTemplatesChange} onStageTemplatesChange={handleStageTemplatesChange}

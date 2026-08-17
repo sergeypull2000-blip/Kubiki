@@ -5,12 +5,16 @@ const moneyValue = (value) => {
   if (!Number.isFinite(numeric)) throw new TypeError("Excel money value must be finite");
   return numeric;
 };
+const excelColor = (value, fallback) => `FF${String(value || fallback).replace("#", "").toUpperCase()}`;
 
 export function buildExcelRows(model) {
   const rows = [];
   for (const stage of model.stages) {
-    rows.push({ type: "stage", label: stage.name, amount: stage.exportedSubtotal });
-    for (const task of stage.rows) rows.push({ type: "task", label: task.name, amount: task.exportedAmount, sourceTaskId: task.sourceTaskId });
+    rows.push({ type: "stage", label: stage.name, amount: stage.exportedSubtotal, color: stage.color });
+    for (const task of stage.rows) {
+      rows.push({ type: "task", number: task.number, label: task.name, amount: task.exportedAmount, sourceTaskId: task.sourceTaskId, comment: task.comment, color: task.color });
+      for (const performer of task.performers) rows.push({ ...performer, label: performer.label });
+    }
   }
   for (const row of model.separateRows) rows.push({ type: row.type, label: row.label, amount: row.amount });
   return { rows, total: model.summary.total };
@@ -20,28 +24,39 @@ export function buildExcelWorkbook(model, addLogo) {
   const workbook = new ExcelJS.Workbook();
   workbook.calcProperties = { calcMode: "auto", fullCalcOnLoad: true, forceFullCalc: true };
   const sheet = workbook.addWorksheet("Смета", { views: [{ showGridLines: false }] });
-  sheet.columns = [{ width: 60 }, { width: 20 }];
+  const showComments = model.settings?.content?.showComments;
+  sheet.columns = [{ width: 48 }, { width: 20 }, ...(showComments ? [{ width: 32 }] : [])];
   const brand = model.brand || {};
-  if (brand.logo && addLogo) addLogo(workbook, sheet, brand.logo);
-  if (brand.studioName) { sheet.addRow([brand.studioName, ""]); sheet.mergeCells("A1:B1"); }
-  if (brand.contacts) { sheet.addRow([brand.contacts, ""]); sheet.mergeCells(`A${sheet.rowCount}:B${sheet.rowCount}`); }
-  sheet.addRow([model.projectName, ""]); sheet.mergeCells(`A${sheet.rowCount}:B${sheet.rowCount}`);
-  sheet.getCell(`A${sheet.rowCount}`).font = { bold: true, size: 15, name: "Inter" };
+  if (brand.logoUrl && addLogo) addLogo(workbook, sheet, brand.logoUrl);
+  if (brand.companyName) { sheet.addRow([brand.companyName]); sheet.mergeCells(1, 1, 1, sheet.columnCount); }
+  const contacts = [brand.phone, brand.email, brand.website].filter(Boolean).join(" · ");
+  if (contacts) { sheet.addRow([contacts]); sheet.mergeCells(sheet.rowCount, 1, sheet.rowCount, sheet.columnCount); }
+  sheet.addRow([model.proposal?.title || model.projectName]); sheet.mergeCells(sheet.rowCount, 1, sheet.rowCount, sheet.columnCount);
+  sheet.getCell(`A${sheet.rowCount}`).font = { bold: true, size: model.typography?.title?.size || 15, name: brand.fontFamily || "Roboto" };
   sheet.addRow([new Date().toLocaleDateString("ru-RU"), ""]); sheet.addRow([]);
   const totalReferences = [];
   const derivedBaseReferences = [];
   let derivedBaseAmount = 0;
   for (const stage of model.stages) {
     const stageRow = sheet.addRow([stage.name, null]);
-    stageRow.font = { bold: true, name: "Inter" };
-    const firstTaskRow = stageRow.number + 1;
+    stageRow.font = { bold: true, size: model.typography?.stage?.size || 11, name: brand.fontFamily || "Roboto", color: { argb: excelColor(stage.textColor ?? brand.colors?.stageText, "#1A2230") } };
+    stageRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: excelColor(stage.color, "#EEF2F7") } };
+    const taskReferences = [];
     for (const task of stage.rows) {
-      const taskRow = sheet.addRow([`  ${task.name}`, moneyValue(task.exportedAmount)]);
+      const taskRow = sheet.addRow([`${task.number}  ${task.name}`, moneyValue(task.exportedAmount), ...(showComments ? [task.comment || ""] : [])]);
       taskRow.getCell(2).numFmt = '#,##0.00" ₽"';
+      taskRow.font = { size: model.typography?.task?.size || 10, name: brand.fontFamily || "Roboto", color: { argb: excelColor(task.textColor ?? brand.colors?.taskText, "#1A2230") } };
+      taskRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: excelColor(task.color, "#FFFFFF") } };
+      taskReferences.push(taskRow.getCell(2).address);
+      for (const performer of task.performers || []) {
+        const performerRow = sheet.addRow([`    ${performer.number}  ${performer.label}`, moneyValue(performer.amount), ...(showComments ? [""] : [])]);
+        performerRow.getCell(2).numFmt = '#,##0.00" ₽"';
+        performerRow.font = { size: model.typography?.task?.size || 10, name: brand.fontFamily || "Roboto", color: { argb: "64748B" } };
+      }
     }
-    const lastTaskRow = sheet.rowCount;
     const stageCell = stageRow.getCell(2);
-    stageCell.value = { formula: `SUM(B${firstTaskRow}:B${lastTaskRow})` };
+    const hasPerformerRows = stage.rows.some((task) => task.performers?.length);
+    stageCell.value = { formula: hasPerformerRows ? `SUM(${taskReferences.join(",")})` : `SUM(${taskReferences[0]}:${taskReferences.at(-1)})` };
     stageCell.numFmt = '#,##0.00" ₽"';
     totalReferences.push(stageCell.address);
     derivedBaseReferences.push(stageCell.address);
@@ -61,7 +76,9 @@ export function buildExcelWorkbook(model, addLogo) {
   }
   sheet.addRow([]);
   const totalRow = sheet.addRow(["ИТОГО", { formula: `SUM(${totalReferences.join(",")})` }]);
-  totalRow.font = { bold: true, size: 13, name: "Inter" }; totalRow.getCell(2).numFmt = '#,##0.00" ₽"';
-  sheet.eachRow((row) => row.eachCell((cell) => { cell.font = { name: "Inter", ...(cell.font || {}) }; }));
+  totalRow.font = { bold: true, size: model.typography?.total?.size || 13, name: brand.fontFamily || "Roboto", color: { argb: excelColor(model.settings?.branding?.colors?.totalText, "#1A2230") } }; totalRow.getCell(2).numFmt = '#,##0.00" ₽"';
+  totalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: excelColor(model.settings?.branding?.colors?.total, "#E8EEF7") } };
+  for (const serviceText of model.serviceBlocks || []) { const row = sheet.addRow([serviceText]); sheet.mergeCells(row.number, 1, row.number, sheet.columnCount); row.font = { size: model.typography?.service?.size || 8, name: brand.fontFamily || "Roboto" }; }
+  sheet.eachRow((row) => row.eachCell((cell) => { cell.font = { name: brand.fontFamily || "Roboto", ...(cell.font || {}) }; }));
   return workbook;
 }
