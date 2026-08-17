@@ -158,6 +158,46 @@ test("preset create/load/update/duplicate/delete survives a new repository insta
   assert.equal((await createExportPresetsRepository(client).list("u")).length, 1);
 });
 
+test("arbitrary custom hex colors reach the canonical model and Excel", () => {
+  const model = buildExportEstimateModel(project({ branding: { colors: { stage: "#0a2b4c", stageText: "#7f3fbf", task: "#123abc", taskText: "#dd22ee", total: "#99dd11", totalText: "#334455" } } }));
+  assert.equal(model.brand.colors.stage, "#0a2b4c");
+  assert.equal(model.stages[0].color, "#0a2b4c");
+  assert.equal(model.stages[0].textColor, "#7f3fbf");
+  assert.equal(model.stages[0].rows[0].color, "#123abc");
+  assert.equal(model.stages[0].rows[0].textColor, "#dd22ee");
+
+  const sheet = buildExcelWorkbook(model).worksheets[0];
+  const stageRow = sheet.findRow(sheet.getColumn(1).values.findIndex((value) => value === "Stage"));
+  assert.equal(stageRow.fill.fgColor.argb, "FF0A2B4C");
+  assert.equal(stageRow.font.color.argb, "FF7F3FBF");
+});
+
+test("preset create/duplicate/reload preserves arbitrary custom colors", async () => {
+  const rows = [];
+  const client = { from: () => {
+    const state = { op: "select", payload: null, filters: [] };
+    const execute = () => { let found = rows.filter((row) => state.filters.every(([key, value]) => row[key] === value)); if (state.op === "insert") { const row = { id: `p${rows.length + 1}`, created_at: "a", updated_at: "a", ...state.payload }; rows.push(row); found = [row]; } if (state.op === "update") { found.forEach((row) => Object.assign(row, state.payload)); } if (state.op === "delete") { for (const row of [...found]) rows.splice(rows.indexOf(row), 1); } return structuredClone(found); };
+    const builder = { select: () => builder, eq: (key, value) => { state.filters.push([key, value]); return builder; }, order: () => builder, insert: (payload) => { state.op = "insert"; state.payload = payload; return builder; }, update: (payload) => { state.op = "update"; state.payload = payload; return builder; }, delete: () => { state.op = "delete"; return builder; }, single: async () => ({ data: execute()[0], error: null }), then: (resolve) => resolve({ data: execute(), error: null }) };
+    return builder;
+  } };
+  const repo = createExportPresetsRepository(client);
+  await repo.create("u", "Custom", { branding: { colors: { stage: "#0a2b4c", stageText: "#7f3fbf", task: "#123abc", taskText: "#dd22ee", total: "#99dd11", totalText: "#334455" } } });
+  await repo.duplicate("u", (await repo.list("u"))[0]);
+  for (const item of await createExportPresetsRepository(client).list("u")) {
+    assert.deepEqual(item.settings.branding.colors, { stage: "#0a2b4c", task: "#123abc", total: "#99dd11", stageText: "#7f3fbf", taskText: "#dd22ee", totalText: "#334455", accent: "#1A2230", text: "#1A2230" });
+  }
+});
+
+test("branded color picker exposes HSV area, hue slider and HEX, without native color input", async () => {
+  const source = await readFile(new URL("../src/exportFiles.jsx", import.meta.url), "utf8");
+  assert.match(source, /kb-color-sv/);
+  assert.match(source, /kb-color-hue/);
+  assert.match(source, /kb-color-hex-field/);
+  assert.match(source, /kb-color-quick/);
+  assert.match(source, /hsvToHex/);
+  assert.doesNotMatch(source, /type=["']color["']/);
+});
+
 test("migration has owner CRUD RLS, explicit grants and private bounded logo storage", async () => {
   const sql = await readFile(new URL("../supabase/migrations/20260816000000_create_branded_export.sql", import.meta.url), "utf8");
   for (const table of ["studio_export_profiles", "export_presets"]) for (const operation of ["select", "insert", "update", "delete"]) assert.match(sql, new RegExp(`${table}_${operation}_own`));

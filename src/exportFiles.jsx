@@ -1,11 +1,12 @@
 /* eslint-disable react/only-export-components */
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import pdfMake from "pdfmake/build/pdfmake.js";
 import pdfFonts from "pdfmake/build/vfs_fonts.js";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Loader2, UploadCloud, X } from "lucide-react";
 import { fmt } from "./utils.js";
 import { buildExportEstimateModel, normalizeExportSettings } from "./exportEstimate.js";
 import { useOutsideClose } from "./hooks.js";
+import { clamp, hexToRgb, hsvToHex, normalizeHex, rgbToHsv } from "./color.js";
 import { buildExcelRows, buildExcelWorkbook } from "./excelExport.js";
 import { exportPresetsRepository } from "./repositories/exportPresetsRepository.js";
 import { normalizePresentationSettings } from "./exportSettings.js";
@@ -105,18 +106,119 @@ function RadioBlock({ title, value, onChange }) {
   );
 }
 
-function ColorRow({ value, onChange, ariaLabel }) {
+const SWATCHES = [
+  // Нейтральный ряд: белый → светлый серый → серый → тёмный серый → чёрный
+  "#ffffff", "#d9d9d9", "#a6a6a6", "#737373", "#404040", "#000000",
+  // Красный и оранжевый: светлый / базовый / тёмный
+  "#ff9999", "#ff0000", "#990000", "#ffcc99", "#ff9900", "#995c00",
+  // Жёлтый и зелёный: светлый / базовый / тёмный
+  "#ffff99", "#ffff00", "#cccc00", "#99ff99", "#00ff00", "#009900",
+  // Бирюзовый и голубой: светлый / базовый / тёмный
+  "#66cccc", "#008080", "#004d4d", "#ccffff", "#00ffff", "#009999",
+  // Синий и фиолетовый: светлый / базовый / тёмный
+  "#9999ff", "#0000ff", "#000099", "#cc99ff", "#800080", "#4d004d",
+  // Пурпурный и коричневый: светлый / базовый / тёмный
+  "#ff99ff", "#ff00ff", "#990099", "#d2a679", "#996633", "#4d331a",
+];
+
+/* Авто-flip попапа цвета: измеряем anchor и ближайший scroll-контейнер
+   (settings pane). Если снизу не хватает места, а сверху больше — открываем
+   вверх; иначе — вниз. Горизонталь left/right не затрагиваем. */
+function colorPopPlacement(anchor, pop) {
+  const anchorRect = anchor.getBoundingClientRect();
+  let node = anchor.parentElement;
+  while (node && node !== document.body) {
+    const overflowY = getComputedStyle(node).overflowY;
+    if (overflowY === "auto" || overflowY === "scroll" || overflowY === "hidden" || overflowY === "overlay") break;
+    node = node.parentElement;
+  }
+  const bounds = node && node !== document.body ? node.getBoundingClientRect() : null;
+  const spaceBelow = bounds ? bounds.bottom - anchorRect.bottom : window.innerHeight - anchorRect.bottom;
+  const spaceAbove = bounds ? anchorRect.top - bounds.top : anchorRect.top;
+  return pop.offsetHeight <= spaceBelow || spaceAbove <= spaceBelow ? "bottom" : "top";
+}
+
+function ColorRow({ value, onChange, ariaLabel, align = "left" }) {
   const [text, setText] = useState(value);
+  const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState("bottom");
+  const wrapRef = useRef(null);
+  const popRef = useRef(null);
   useEffect(() => setText(value), [value]);
+  useOutsideClose(wrapRef, () => setOpen(false));
+  useLayoutEffect(() => {
+    if (!open) return;
+    if (wrapRef.current && popRef.current) setPlacement(colorPopPlacement(wrapRef.current, popRef.current));
+  }, [open]);
   const commit = (next) => {
     setText(next);
-    const normalized = String(next || "").trim().replace(/^#/, "");
-    if (/^[0-9a-fA-F]{6}$/.test(normalized)) onChange(`#${normalized.toLowerCase()}`);
+    const normalized = normalizeHex(next);
+    if (normalized) onChange(normalized);
   };
   return (
     <>
-      <input type="color" value={value} aria-label={ariaLabel} onChange={(event) => onChange(event.target.value)} />
+      <span className="kb-export-color-swatch" ref={wrapRef}>
+        <button type="button" className="kb-export-color-swatch-btn" style={{ background: value }} aria-label={ariaLabel} aria-expanded={open} onClick={() => setOpen((current) => !current)} />
+        {open && (
+          <span ref={popRef} className={"kb-color-pop is-" + placement + (align === "right" ? " is-right" : "")}>
+            <ColorPicker value={value} hexText={text} onChange={onChange} onHexText={commit} />
+          </span>
+        )}
+      </span>
       <input className="kb-input kb-export-color-hex" value={text} onChange={(event) => commit(event.target.value)} spellCheck={false} aria-label={`${ariaLabel} (HEX)`} />
+    </>
+  );
+}
+
+function ColorPicker({ value, hexText, onChange, onHexText }) {
+  const svRef = useRef(null);
+  const hueRef = useRef(null);
+  const hsv = rgbToHsv(hexToRgb(value));
+
+  const pick = (event, kind) => {
+    const el = kind === "sv" ? svRef.current : hueRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+    if (kind === "sv") {
+      const y = clamp((event.clientY - rect.top) / rect.height, 0, 1);
+      onChange(hsvToHex({ h: hsv.h, s: x, v: 1 - y }));
+    } else {
+      onChange(hsvToHex({ h: Math.round(x * 360) % 360, s: hsv.s, v: hsv.v }));
+    }
+  };
+
+  const drag = (kind) => (event) => {
+    event.preventDefault();
+    pick(event, kind);
+    const move = (moveEvent) => pick(moveEvent, kind);
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+  };
+
+  return (
+    <>
+      <div className="kb-color-sv" ref={svRef} title="Насыщенность и яркость" style={{ background: `linear-gradient(to top, #000, rgba(0,0,0,0)), linear-gradient(to right, #fff, hsl(${hsv.h}, 100%, 50%))` }} onPointerDown={drag("sv")}>
+        <span className="kb-color-thumb" style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }} />
+      </div>
+      <div className="kb-color-hue" ref={hueRef} title="Оттенок" onPointerDown={drag("hue")}>
+        <span className="kb-color-thumb" style={{ left: `${(hsv.h / 360) * 100}%` }} />
+      </div>
+      <label className="kb-color-hex-field">
+        <span>HEX</span>
+        <input className="kb-input" value={hexText} onChange={(event) => onHexText(event.target.value)} spellCheck={false} aria-label="HEX" />
+      </label>
+      <span className="kb-color-quick">
+        {SWATCHES.map((color) => (
+          <button key={color} type="button" className={"kb-color-cell" + (color.toLowerCase() === value.toLowerCase() ? " is-active" : "")} style={{ background: color }} aria-label={color} title={color} onClick={() => onChange(color)} />
+        ))}
+      </span>
     </>
   );
 }
@@ -245,7 +347,7 @@ function PresentationControls({ draft, onChange, project, dispatch, userId, logo
             <Fragment key={key}>
               <span className="kb-export-color-entity">{label}</span>
               <ColorRow value={draft.branding.colors[key]} onChange={(value) => patch("branding", { colors: { ...draft.branding.colors, [key]: value } })} ariaLabel={`${label} — фон`} />
-              <ColorRow value={draft.branding.colors[`${key}Text`]} onChange={(value) => patch("branding", { colors: { ...draft.branding.colors, [`${key}Text`]: value } })} ariaLabel={`${label} — текст`} />
+              <ColorRow align="right" value={draft.branding.colors[`${key}Text`]} onChange={(value) => patch("branding", { colors: { ...draft.branding.colors, [`${key}Text`]: value } })} ariaLabel={`${label} — текст`} />
             </Fragment>
           ))}
         </div>
