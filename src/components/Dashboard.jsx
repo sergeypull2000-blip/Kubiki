@@ -5,6 +5,11 @@ import { projectSum } from "../calculations.js";
 import { AppTopNavigation } from "./AppTopNavigation.jsx";
 import { createProjectTemplate } from "../templates.js";
 import LeftPanel from "./LeftPanel.jsx";
+import { AccountControl } from "./AccountControl.jsx";
+
+const DASH_SIDEBAR_MIN = 200;
+const DASH_SIDEBAR_MAX = 340;
+const DASH_SIDEBAR_DEFAULT = 240;
 
 function isToday(dateStr) {
   if (!dateStr) return false;
@@ -130,16 +135,40 @@ function NewProjectCard({ onCreate }) {
   </div>;
 }
 
-export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, aiGenerationReady = false, onDelete, projectTemplates, onTemplatesChange, categories, onCategoriesChange, openCategoryIds, onOpenCategoryIdsChange, onEditTemplate, onToggleFavorite, onRenameProject, onSectionChange, onOpenAiSettings, onSignOut }) {
+export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, aiGenerationReady = false, onDelete, projectTemplates, onTemplatesChange, categories, onCategoriesChange, openCategoryIds, onOpenCategoryIdsChange, onEditTemplate, onToggleFavorite, onRenameProject, onSectionChange, onOpenAiSettings, onSignOut, userAccount }) {
   const [activeNav, setActiveNav] = useState("all");
   const [toast, setToast] = useState("");
   const [sourceModal, setSourceModal] = useState(null);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const stored = Number(localStorage.getItem("kb-dashboard-sidebar-width"));
+    return stored >= DASH_SIDEBAR_MIN && stored <= DASH_SIDEBAR_MAX ? stored : DASH_SIDEBAR_DEFAULT;
+  });
 
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 1800);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => { localStorage.setItem("kb-dashboard-sidebar-width", String(sidebarWidth)); }, [sidebarWidth]);
+
+  const beginSidebarResize = useCallback((event) => {
+    event.preventDefault(); event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    const onMove = (moveEvent) => {
+      setSidebarWidth(Math.min(DASH_SIDEBAR_MAX, Math.max(DASH_SIDEBAR_MIN, startWidth + (moveEvent.clientX - startX))));
+    };
+    const onUp = () => {
+      document.body.classList.remove("kb-is-panel-resizing");
+      window.removeEventListener("pointermove", onMove);
+    };
+    document.body.classList.add("kb-is-panel-resizing");
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }, [sidebarWidth]);
+
+  const accountControl = <AccountControl userAccount={userAccount} onOpenAiSettings={onOpenAiSettings} onSignOut={onSignOut} />;
 
   useEffect(() => {
     const categoryIds = new Set(categories.map((category) => category.id));
@@ -178,13 +207,15 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, ai
     }).map(({ project }) => project);
   const visibleTemplates = activeCategory ? templates.filter((template) => template.folderId === activeCategory.id) : [];
 
-  return <div className="kb-root">
-    <AppTopNavigation activeSection="projects" onSectionChange={onSectionChange} onOpenAiSettings={onOpenAiSettings} onSignOut={onSignOut} />
+  return <div className="kb-root kb-root-dash">
+    <AppTopNavigation activeSection="projects" onSectionChange={onSectionChange} onOpenAiSettings={onOpenAiSettings} onSignOut={onSignOut} edge hideAccountActions />
     <div className="kb-dashboard-layout">
       <LeftPanel activeNav={activeNav} onNavChange={setActiveNav} categories={categories} onCategoriesChange={onCategoriesChange}
         openCategoryIds={openCategoryIds} onOpenCategoryIdsChange={onOpenCategoryIdsChange}
         templates={templates} onMoveTemplate={moveTemplate} onDeleteCategory={deleteCategory}
-        onRenameTemplate={renameTemplate} onDeleteTemplate={deleteTemplate} />
+        onRenameTemplate={renameTemplate} onDeleteTemplate={deleteTemplate}
+        width={sidebarWidth} accountControl={accountControl} />
+      <div className="kb-dash-resizer" role="separator" aria-label="Изменить ширину панели" aria-orientation="vertical" onPointerDown={beginSidebarResize} />
       <main className="kb-dashboard"><div className="kb-board">
         {activeCategory ? (visibleTemplates.length ? visibleTemplates.map((template) =>
           <EntityCard key={template.id} item={template} template onOpen={onCreate} onDelete={deleteTemplate} onEdit={onEditTemplate} onRename={renameTemplate} />

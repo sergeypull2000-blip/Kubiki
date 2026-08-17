@@ -733,7 +733,8 @@ export default function KubikiApp({ userId, user, onSignOut }) {
           onTemplatesChange={handleTemplatesChange} onEditTemplate={setEditingTemplateId}
           categories={templateLibrary.categories} onCategoriesChange={(categories) => replaceTemplateLibrary((library) => ({ ...library, categories }))}
           openCategoryIds={templateLibrary.metadata.openCategoryIds || ["new"]} onOpenCategoryIdsChange={(openCategoryIds) => replaceTemplateLibrary((library) => ({ ...library, metadata: { ...library.metadata, openCategoryIds } }))}
-          onToggleFavorite={toggleFavorite} onRenameProject={renameProject} onSectionChange={setActiveSection} onOpenAiSettings={() => setAiSettingsOpen(true)} onSignOut={handleSignOut} />
+          onToggleFavorite={toggleFavorite} onRenameProject={renameProject} onSectionChange={setActiveSection} onOpenAiSettings={() => setAiSettingsOpen(true)} onSignOut={handleSignOut}
+          userAccount={{ id: userId, displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }} />
       )}
     </>
   );

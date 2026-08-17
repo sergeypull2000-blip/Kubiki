@@ -23,19 +23,21 @@ function QuickItem({ item, performer, onApply, onPin, onRemove }) {
   const name = [performer.firstName, performer.lastName].filter(Boolean).join(" ").trim();
   const label = name || performer.primaryRole || "Исполнитель";
   return <div className={`kb-template-item kb-performer-item${isDragging ? " kb-chip-dragging" : ""}`} {...dragHandlers} onClick={() => onApply(item)} title="Перетащите или нажмите, чтобы добавить в задачу">
-    <UserRound size={13} strokeWidth={1.5} /><span className="kb-template-item-name">{label}</span>
+    <UserRound size={15} strokeWidth={1.5} /><span className="kb-template-item-name">{label}</span>
     {performer.defaultRate != null && <span className="kb-template-item-sum">{fmt(performer.defaultRate)} ₽</span>}
-    <button className={`kb-performer-item-action${item.pinned ? " is-active" : ""}`} title={item.pinned ? "Открепить" : "Закрепить"} onClick={(e) => { e.stopPropagation(); onPin(item); }}><Pin size={11} fill={item.pinned ? "currentColor" : "none"} /></button>
-    <button className="kb-performer-item-action" title="Удалить из быстрого доступа" onClick={(e) => { e.stopPropagation(); onRemove(item); }}><Trash2 size={11} /></button>
+    <button className={`kb-performer-item-action${item.pinned ? " is-active" : ""}`} title={item.pinned ? "Открепить" : "Закрепить"} onClick={(e) => { e.stopPropagation(); onPin(item); }}><Pin size={12} fill={item.pinned ? "currentColor" : "none"} /></button>
+    <button className="kb-performer-item-action" title="Удалить из быстрого доступа" onClick={(e) => { e.stopPropagation(); onRemove(item); }}><Trash2 size={12} /></button>
   </div>;
 }
 
 export function PalettePanel({ taskTemplates = [], stageTemplates = [], quickAccessItems = [], onCreatePerformer, onApplyQuickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onApplyTaskTemplate, onApplyStageTemplate, onRemoveTaskTemplate, onRemoveStageTemplate, accountControl }) {
   return <aside className="kb-palette">
-    <PaletteSection title="Этапы" templates={stageTemplates} dndType={DND_TYPES.STAGE} payloadKey="templateStageId" fallback="Этап" onApply={onApplyStageTemplate} onRemove={onRemoveStageTemplate} />
-    <PaletteSection title="Задачи" templates={taskTemplates} dndType={DND_TYPES.TASK} payloadKey="templateTaskId" fallback="Задача" onApply={onApplyTaskTemplate} onRemove={onRemoveTaskTemplate} />
-    <div className="kb-palette-section kb-performer-quick"><div className="kb-palette-title"><span>Исполнители</span><button className="kb-icon-btn-small" onClick={onCreatePerformer} title="Создать карточку исполнителя"><Plus size={13} /></button></div>
-      <div className="kb-palette-items">{quickAccessItems.map(({ item, performer }) => <QuickItem key={item.id} item={item} performer={performer} onApply={onApplyQuickAccess} onPin={onToggleQuickAccessPin} onRemove={onRemoveQuickAccess} />)}{!quickAccessItems.length && <div className="kb-template-empty">Здесь пока нет исполнителей</div>}</div>
+    <div className="kb-palette-scroll">
+      <PaletteSection title="Этапы" templates={stageTemplates} dndType={DND_TYPES.STAGE} payloadKey="templateStageId" fallback="Этап" onApply={onApplyStageTemplate} onRemove={onRemoveStageTemplate} />
+      <PaletteSection title="Задачи" templates={taskTemplates} dndType={DND_TYPES.TASK} payloadKey="templateTaskId" fallback="Задача" onApply={onApplyTaskTemplate} onRemove={onRemoveTaskTemplate} />
+      <div className="kb-palette-section kb-performer-quick"><div className="kb-palette-title"><span>Исполнители</span><button className="kb-icon-btn-small" onClick={onCreatePerformer} title="Создать карточку исполнителя"><Plus size={13} /></button></div>
+        <div className="kb-palette-items">{quickAccessItems.map(({ item, performer }) => <QuickItem key={item.id} item={item} performer={performer} onApply={onApplyQuickAccess} onPin={onToggleQuickAccessPin} onRemove={onRemoveQuickAccess} />)}{!quickAccessItems.length && <div className="kb-template-empty">Здесь пока нет исполнителей</div>}</div>
+      </div>
     </div>
     <div className="kb-palette-foot">{accountControl || "Палитра этапов, задач и исполнителей"}</div>
   </aside>;
@@ -63,7 +65,7 @@ export function loadDashboardCategories() {
   } catch { return DEFAULT_CATEGORIES; }
 }
 
-export default function LeftPanel({ activeNav, onNavChange, categories = [], onCategoriesChange, openCategoryIds = ["new"], onOpenCategoryIdsChange, templates = [], onMoveTemplate, onDeleteCategory, onRenameTemplate, onDeleteTemplate }) {
+export default function LeftPanel({ activeNav, onNavChange, categories = [], onCategoriesChange, openCategoryIds = ["new"], onOpenCategoryIdsChange, templates = [], onMoveTemplate, onDeleteCategory, onRenameTemplate, onDeleteTemplate, width, accountControl }) {
   const [addingFolder, setAddingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [openFolders, setOpenFolders] = useState(() => new Set(openCategoryIds));
@@ -86,7 +88,8 @@ export default function LeftPanel({ activeNav, onNavChange, categories = [], onC
     setEditingId(null);
   };
 
-  return <aside className="kb-dash-sidebar">
+  return <aside className="kb-dash-sidebar" style={width ? { width } : undefined}>
+    <div className="kb-dash-sidebar-scroll">
     <div className="kb-dash-nav-section-label">Проекты</div>
     {[{ id: "all", name: "Все проекты" }, { id: "recent", name: "Последние" }, { id: "favorites", name: "Избранное" }].map((item) => <button type="button" key={item.id} className={`kb-dash-nav-item${activeNav === item.id ? " kb-dash-nav-item-active" : ""}`} onClick={() => onNavChange(item.id)}><span>{item.name}</span></button>)}
     <div className="kb-dash-nav-divider" />
@@ -104,5 +107,7 @@ export default function LeftPanel({ activeNav, onNavChange, categories = [], onC
       </div>;
     })}
     <div className="kb-dash-nav-new-row">{addingFolder ? <div style={{ display: "flex", gap: 4, alignItems: "center" }}><input className="kb-dash-nav-input" value={newFolderName} onChange={(event) => setNewFolderName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addFolder(); if (event.key === "Escape") { setAddingFolder(false); setNewFolderName(""); } }} placeholder="Название категории" autoFocus style={{ flex: 1 }} /><button type="button" className="kb-icon-btn-small" onClick={addFolder} title="Сохранить"><Check size={13} /></button><button type="button" className="kb-icon-btn-small" onClick={() => { setAddingFolder(false); setNewFolderName(""); }} title="Отмена"><X size={13} /></button></div> : <button type="button" className="kb-dash-nav-new-btn" onClick={() => setAddingFolder(true)}><Plus size={13} />Новая категория</button>}</div>
+    </div>
+    {accountControl && <div className="kb-dash-sidebar-foot">{accountControl}</div>}
   </aside>;
 }

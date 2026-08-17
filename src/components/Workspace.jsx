@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ArrowUp, ChevronsUp, ChevronsDown, LogOut, Sparkles, ChevronDown } from "lucide-react";
+import { ArrowUp, ChevronsUp, ChevronsDown } from "lucide-react";
 import { fmt } from "../utils.js";
 import { projectSum } from "../calculations.js";
 import { CUSTOM_STAGE } from "../constants.js";
@@ -19,13 +19,11 @@ import { globalAiEditScope } from "../ai/editScope.js";
 import { addPerformerToTask, buildPerformerFromExecutor, linkExecutorToPerformer, normalizePerformer } from "../performerLibrary.js";
 import { sortQuickAccessItems } from "../quickAccess.js";
 import { createTaskTemplate, createStageTemplate, cloneTaskTemplate, cloneStageTemplate } from "../templates.js";
-import { useOutsideClose } from "../hooks.js";
+import { AccountControl } from "./AccountControl.jsx";
 
 const LEFT_PANEL_RANGE = [210, 320];
 const RIGHT_PANEL_RANGE = [250, 360];
 const clampPanelWidth = (value, [min, max], fallback) => Math.min(max, Math.max(min, Number(value) || fallback));
-const AI_LAUNCHER_PANEL_WIDTH = 840; // фиксированная ширина всплывающего окна «Ai Global» (2× исходной)
-
 
 /* ============================================================
    Рабочая зона
@@ -45,19 +43,16 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
   const [globalAiOpen, setGlobalAiOpen] = useState(false);
   const [globalAiClosing, setGlobalAiClosing] = useState(false);
   const [localAiPopover, setLocalAiPopover] = useState(null);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const profileRef = useRef(null);
   const globalAiSubmitRef = useRef(null);
   const globalAiBoundaryRef = useRef(null);
   const canvasInnerRef = useRef(null);
-  const [aiAnchor, setAiAnchor] = useState({ right: 12, width: AI_LAUNCHER_PANEL_WIDTH });
-  useOutsideClose(profileRef, profileOpen ? () => setProfileOpen(false) : null);
+  const [aiAnchor, setAiAnchor] = useState({ right: 12, width: 0 });
   useEffect(() => {
     const canvasInner = canvasInnerRef.current;
     if (!canvasInner) return;
     const update = () => {
       const rect = canvasInner.getBoundingClientRect();
-      setAiAnchor({ right: Math.max(0, window.innerWidth - (rect.left + rect.width / 2) - AI_LAUNCHER_PANEL_WIDTH / 2), width: AI_LAUNCHER_PANEL_WIDTH });
+      setAiAnchor({ right: Math.max(0, window.innerWidth - (rect.left + rect.width)), width: Math.max(0, rect.width) });
     };
     update();
     const observer = new ResizeObserver(update);
@@ -361,17 +356,7 @@ const toggleAllCollapsed = () =>
     <RightPanel project={project} dispatch={dispatch} userId={userAccount?.id}
       activeStageId={activeStageId} activeTaskId={activeTaskId} activeExecutorId={activeExecutorId} />
   );
-  const accountControl = <div className="kb-profile kb-profile-sidebar" ref={profileRef}>
-    <button type="button" className="kb-profile-trigger kb-profile-row" onClick={() => setProfileOpen((value) => !value)} aria-expanded={profileOpen} aria-haspopup="menu">
-      <span className="kb-profile-avatar">{(userAccount?.displayName || userAccount?.accountLabel || "K").trim().charAt(0).toUpperCase()}</span>
-      <span className="kb-profile-row-copy"><strong>{userAccount?.displayName || "Аккаунт Kubiki"}</strong><small>{userAccount?.accountLabel || "Авторизованный пользователь"}</small></span>
-      <ChevronDown size={13} />
-    </button>
-    {profileOpen && <div className="kb-profile-menu kb-profile-menu-up" role="menu">
-      {onOpenAiSettings && <button type="button" role="menuitem" onClick={() => { setProfileOpen(false); onOpenAiSettings(); }}><Sparkles size={15} />Персонализация ИИ</button>}
-      <button type="button" role="menuitem" onClick={onSignOut}><LogOut size={15} />Выйти</button>
-    </div>}
-  </div>;
+  const accountControl = <AccountControl userAccount={userAccount} onOpenAiSettings={onOpenAiSettings} onSignOut={onSignOut} />;
 
   return (
     <div className="kb-root kb-root-workspace">

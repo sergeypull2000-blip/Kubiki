@@ -187,11 +187,12 @@ test("Workspace exposes profile dropdown, floating global launcher and direct lo
   const workspace = readFileSync(new URL("../src/components/Workspace.jsx", import.meta.url), "utf8");
   const modal = readFileSync(new URL("../src/components/AiEditTechnicalModal.jsx", import.meta.url), "utf8");
   const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const account = readFileSync(new URL("../src/components/AccountControl.jsx", import.meta.url), "utf8");
   const localRows = ["Stage.jsx", "Task.jsx", "Executor.jsx"].map((name) => readFileSync(new URL(`../src/components/${name}`, import.meta.url), "utf8")).join("\n");
   assert.match(app, /user=\{session\.user\}/);
-  assert.match(workspace, /kb-profile-trigger/); assert.match(workspace, /userAccount\?\.accountLabel/);
-  assert.match(workspace, /kb-profile-menu/); assert.match(workspace, /Персонализация ИИ/); assert.match(workspace, /Выйти/);
-  assert.match(workspace, /accountControl=\{accountControl\}/); assert.match(workspace, /kb-profile-sidebar/);
+  assert.match(account, /kb-profile-trigger/); assert.match(account, /userAccount\?\.accountLabel/);
+  assert.match(account, /kb-profile-menu/); assert.match(account, /Персонализация ИИ/); assert.match(account, /Выйти/);
+  assert.match(workspace, /accountControl=\{accountControl\}/); assert.match(account, /kb-profile-sidebar/);
   assert.doesNotMatch(workspace, /className="kb-ai-settings-open"[^>]*>Изменить с AI/);
   assert.match(workspace, /project\.stages\.length > 0/); assert.match(workspace, /kb-ai-launcher/); assert.match(workspace, /variant="launcher"[^>]*scope=\{globalScope\}/);
   assert.match(modal, /kb-import-panel kb-import-panel-unified kb-ai-launcher-prompt/);
