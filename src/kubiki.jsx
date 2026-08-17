@@ -722,8 +722,8 @@ export default function KubikiApp({ userId, user, onSignOut }) {
           onUndoAiEdit={undoCurrentAiEdit} canUndoAiEdit={aiUndoVersion >= 0 && aiUndoRef.current.has(currentProject.id)} />
       ) : activeSection === APP_SECTIONS.KNOWLEDGE_BASE ? (
         <KnowledgeBasePage performers={performers} performerState={performerState} performerMessage={performerMessage} onRetryPerformers={() => setPerformerRetry((value) => value + 1)} quickAccess={quickAccess} onSectionChange={setActiveSection}
-          onSavePerformer={savePerformer} onToggleQuickAccess={togglePerformerQuickAccess} onDeletePerformer={deletePerformerCard}
-          onOpenAiSettings={() => setAiSettingsOpen(true)} onSignOut={handleSignOut} />
+          onSavePerformer={savePerformer} onToggleQuickAccess={togglePerformerQuickAccess} onDeletePerformer={deletePerformerCard} />
+
       ) : (
         <Dashboard projects={projects} onOpen={setCurrentId} onCreate={createProject} onDelete={deleteProject}
           onImport={(file, description) => setProjectSource({ file, description })}

@@ -14,7 +14,7 @@ body {
 .kb-profile { position: relative; }
 .kb-profile-trigger { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid #d9dce5; border-radius: 50%; background: #fff; cursor: pointer; }
 .kb-profile-trigger:hover { border-color: #a9b6d5; background: #f7f9fd; }
-.kb-profile-avatar { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(145deg, #2867e8, #1747a9); color: white; font-size: 13px; font-weight: 600; }
+.kb-profile-avatar { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(145deg, #2867e8, #1747a9); color: white; font-size: 15px; font-weight: 600; }
 .kb-profile-avatar-large { width: 38px; height: 38px; flex: 0 0 38px; font-size: 15px; }
 .kb-profile-menu { position: absolute; z-index: 1300; top: calc(100% + 8px); right: 0; width: 260px; padding: 7px; border: 1px solid #dfe2e9; border-radius: 13px; background: #fff; box-shadow: 0 16px 45px rgba(24, 31, 48, .18); animation: kb-menu-in .14s ease-out; }
 .kb-profile-account { display: flex; gap: 10px; align-items: center; padding: 9px 8px 12px; border-bottom: 1px solid #eceef3; margin-bottom: 5px; }
@@ -25,7 +25,7 @@ body {
 .kb-profile-menu > button { display: flex; gap: 9px; align-items: center; width: 100%; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: #252b38; text-align: left; cursor: pointer; }
 .kb-profile-menu > button:hover { background: #f2f4f8; }
 .kb-profile-sidebar { width: 100%; }
-.kb-profile-row { display: flex; width: 100%; height: auto; min-height: 52px; padding: 8px 9px; gap: 9px; border: 0; border-radius: 8px; text-align: left; }
+.kb-profile-row { display: flex; width: 100%; height: auto; min-height: 64px; padding: 10px 11px; gap: 9px; border: 0; border-radius: 8px; text-align: left; }
 .kb-profile-row-copy { display: grid; min-width: 0; flex: 1; gap: 1px; }
 .kb-profile-row-copy strong, .kb-profile-row-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kb-profile-row-copy strong { font-size: 13px; color: #27303f; }

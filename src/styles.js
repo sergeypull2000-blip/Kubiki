@@ -543,7 +543,7 @@ export const CSS = `
 .kb-tpl-add{display:inline-flex; align-items:center; gap:5px; width:100%; justify-content:flex-start; margin-top:4px; padding:6px 8px; border:1px dashed var(--line-strong); border-radius:6px; background:none; color:var(--text-muted); font:inherit; font-size:11.5px; cursor:pointer}
 .kb-tpl-add:hover{color:var(--text); border-color:var(--text-faint)}
 .kb-tpl-soon{color:var(--accent); font-weight:var(--fw-medium)}
-.kb-palette-foot{flex:0 0 auto; margin-top:0; padding:14px 14px 4px; font-size:11px; color:var(--text-faint); line-height:1.45; border-top:1px solid var(--line)}
+.kb-palette-foot{flex:0 0 auto; margin-top:0; padding:14px; font-size:11px; color:var(--text-faint); line-height:1.45; border-top:1px solid var(--line)}
 .kb-brand-logo-sq{width:56px; height:56px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px dashed var(--line-strong); border-radius:8px; background:var(--surface-sunken); color:var(--text-muted); cursor:pointer; overflow:hidden}
 .kb-brand-logo-lbl{font-size:10px}
 .kb-brand-input{width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:6px; background:var(--surface); font-size:var(--fs-sm)}
