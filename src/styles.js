@@ -16,8 +16,8 @@ export const CSS = `
   --accent:#5B8DEF;
   --accent-soft:#EEF4FE;
 
-  --fs-2xs:10px; --fs-xs:11px; --fs-sm:12.5px; --fs-base:13px;
-  --fs-md:14.5px; --fs-lg:17px; --fs-xl:23px;
+  --fs-2xs:11px; --fs-xs:12px; --fs-sm:13.5px; --fs-base:14px;
+  --fs-md:15.5px; --fs-lg:17px; --fs-xl:23px;
   --fw-regular:400; --fw-medium:500; --fw-semibold:600;
 
   /* п.2: общая ширина группы «палитра + рабочее поле + правая панель» —
@@ -154,7 +154,7 @@ export const CSS = `
 /* palette accordion */
 .kb-palette-section{padding-bottom:4px; margin-bottom:6px}
 .kb-palette-title{width:100%; display:flex; align-items:center; justify-content:space-between; background:none; border:none;
-  cursor:pointer; padding:8px 6px; font-size:11px; font-weight:var(--fw-semibold); text-transform:none; letter-spacing:normal; color:var(--text)}
+  cursor:pointer; padding:8px 6px; font-size:12px; font-weight:var(--fw-semibold); text-transform:none; letter-spacing:normal; color:var(--text)}
 .kb-palette-title:hover{color:var(--text)}
 .kb-chevron{transition:transform .15s; color:var(--text-faint); flex-shrink:0}
 .kb-chevron-open{transform:rotate(180deg)}
@@ -184,14 +184,14 @@ export const CSS = `
 .kb-grip:hover{color:var(--text-muted); background:var(--accent-soft)}
 .kb-grip:active{cursor:grabbing}
 .kb-stage-icon{color:var(--text-faint); flex-shrink:0}
-.kb-stage-name{font-size:15.5px; font-weight:var(--fw-semibold); letter-spacing:-.01em}
+.kb-stage-name{font-size:16.5px; font-weight:var(--fw-semibold); letter-spacing:-.01em}
 .kb-stage-body{padding:5px 10px 5px 12px; margin-left:0}
 .kb-stage-task-count{flex-shrink:0; color:var(--text-faint); font-size:var(--fs-xs); white-space:nowrap}
 .kb-dropzone-over{background:var(--accent-soft); outline:1.5px dashed var(--accent); outline-offset:-4px; border-radius:5px}
 
 /* иерархия сумм: все выровнены по правому краю, вес/размер = уровень */
 .kb-sum{font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right; margin-left:auto}
-.kb-sum-stage{font-size:15px; font-weight:var(--fw-semibold); color:var(--text); letter-spacing:-.01em; min-width:104px}
+.kb-sum-stage{font-size:16px; font-weight:var(--fw-semibold); color:var(--text); letter-spacing:-.01em; min-width:104px}
 .kb-sum-task{font-size:var(--fs-sm); font-weight:var(--fw-medium); color:var(--text-muted); min-width:104px}
 /* быстрый ввод стоимости задачи напрямую, пока нет исполнителей */
 .kb-task-directcost{display:inline-flex; align-items:center; justify-content:flex-end; gap:4px}
@@ -219,7 +219,7 @@ export const CSS = `
 .kb-title-edit{display:flex; align-items:center; gap:4px; min-width:0; margin-right:auto}
 .kb-stage-title-edit{flex:0 1 420px}.kb-task-title-edit{flex:1 1 auto}
 .kb-title-text{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text)}
-.kb-stage-title-text{font-size:15.5px; font-weight:var(--fw-semibold); letter-spacing:-.01em}
+.kb-stage-title-text{font-size:16.5px; font-weight:var(--fw-semibold); letter-spacing:-.01em}
 .kb-task-title-text{font-size:var(--fs-base); font-weight:var(--fw-medium)}
 .kb-title-edit-btn{display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; padding:3px; border:0; border-radius:4px; background:transparent; color:var(--text-faint); cursor:pointer; opacity:.48; transition:opacity .12s,color .12s,background .12s}
 .kb-stage-head:hover .kb-title-edit-btn,.kb-task-head:hover .kb-title-edit-btn,.kb-title-edit-btn:focus-visible{opacity:1;color:var(--text-muted)}
@@ -456,19 +456,19 @@ export const CSS = `
 .kb-rp-grow{flex:1; min-height:0; overflow-y:auto}
 .kb-rp-sec{padding:16px 18px; border-bottom:1px solid var(--line)}
 .kb-rp-sec:last-child{border-bottom:none}
-.kb-rp-title{font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); font-weight:var(--fw-semibold); margin-bottom:10px}
+.kb-rp-title{font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); font-weight:var(--fw-semibold); margin-bottom:10px}
 .kb-viewtoggle-full{width:100%} .kb-viewtoggle-full .kb-viewtoggle-btn{flex:1}
 .kb-rp-markup{margin-top:0}
 .kb-rp-markup .kb-markup-input{max-width:56px}
 
 /* ---- свойства ---- */
 .kb-props{display:flex; flex-direction:column; gap:6px}
-.kb-props-kind{font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-faint)}
+.kb-props-kind{font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-faint)}
 .kb-props-name{font-size:var(--fs-md); font-weight:var(--fw-semibold); color:var(--text); line-height:1.3}
-.kb-props-meta{font-size:12px; color:var(--text-muted)}
+.kb-props-meta{font-size:13px; color:var(--text-muted)}
 .kb-props-figure{font-size:20px; font-weight:var(--fw-semibold); color:var(--text); font-variant-numeric:tabular-nums; margin:2px 0 6px}
-.kb-props-sub{font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-faint); margin-top:8px}
-.kb-props-row{display:flex; justify-content:space-between; gap:10px; font-size:13px; color:var(--text); padding:4px 0; border-bottom:1px solid var(--line)}
+.kb-props-sub{font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-faint); margin-top:8px}
+.kb-props-row{display:flex; justify-content:space-between; gap:10px; font-size:14px; color:var(--text); padding:4px 0; border-bottom:1px solid var(--line)}
 .kb-props-row:last-child{border-bottom:none}
 .kb-props-row span:first-child{color:var(--text-muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .kb-props-row span:last-child{font-variant-numeric:tabular-nums; white-space:nowrap}
@@ -503,9 +503,9 @@ export const CSS = `
 .kb-person-taskname{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
 .kb-person-taskcube{flex-shrink:0; white-space:nowrap}
 .kb-person-cellsum{flex-shrink:0; font-variant-numeric:tabular-nums; white-space:nowrap; margin-left:8px}
-.kb-props-sub-toggle{display:flex; align-items:center; justify-content:space-between; width:100%; background:none; border:none; padding:0; margin-top:8px; cursor:pointer; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-faint); font-weight:var(--fw-semibold)}
+.kb-props-sub-toggle{display:flex; align-items:center; justify-content:space-between; width:100%; background:none; border:none; padding:0; margin-top:8px; cursor:pointer; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-faint); font-weight:var(--fw-semibold)}
 .kb-props-sub-toggle .kb-person-chev{color:var(--text-muted)}
-.kb-props-section-title,.kb-props-sub-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;background:none;border:none;padding:0;margin:2px 0 5px;font-size:11px;font-weight:var(--fw-semibold);text-transform:none;letter-spacing:normal;color:var(--text);text-align:left}.kb-props-section-toggle,.kb-props-sub-toggle{cursor:pointer;margin-top:16px}.kb-props-section-toggle:hover,.kb-props-sub-toggle:hover{color:var(--text)}.kb-props-row-nested span:first-child{padding-left:8px;color:var(--text-faint)}
+.kb-props-section-title,.kb-props-sub-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;background:none;border:none;padding:0;margin:2px 0 5px;font-size:12px;font-weight:var(--fw-semibold);text-transform:none;letter-spacing:normal;color:var(--text);text-align:left}.kb-props-section-toggle,.kb-props-sub-toggle{cursor:pointer;margin-top:16px}.kb-props-section-toggle:hover,.kb-props-sub-toggle:hover{color:var(--text)}.kb-props-row-nested span:first-child{padding-left:8px;color:var(--text-faint)}
 .kb-task-collapse{flex-shrink:0}
 /* п.13: короче поля названий этапа/задачи, свободная зона head кликабельна для выделения */
 .kb-stage-head .kb-input-flex{flex:0 1 320px; margin-right:auto}
@@ -874,4 +874,15 @@ export const CSS = `
 .kb-export-logo-row{display:flex;align-items:center;gap:10px}.kb-export-logo{flex:none;width:80px;height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px dashed var(--line-strong);border-radius:6px;background:var(--surface-sunken);color:var(--text-muted);cursor:pointer;overflow:hidden;font-size:11px}.kb-export-logo:hover{border-color:var(--accent);color:var(--accent)}
 .kb-export-modal-actions{display:flex;justify-content:flex-end;align-items:center;gap:8px;padding:14px 18px}.kb-export-modal-actions .kb-export-go2{width:auto;margin:0}
 @media(max-width:820px){.kb-export-modal{height:calc(100vh - 24px)}.kb-export-modal-body{grid-template-columns:1fr;overflow-y:auto}.kb-export-preview-pane{min-height:320px;overflow:visible;border-right:0;border-bottom:1px solid var(--line)}.kb-export-settings-pane{overflow:visible}.kb-export-preview{min-height:300px}}
+@media (min-width: 2000px) {
+  :root {
+    --fs-2xs: 11.5px; --fs-xs: 13px; --fs-sm: 14.5px;
+    --fs-base: 15px; --fs-md: 16.5px;
+  }
+  .kb-stage-name, .kb-stage-title-text { font-size: 17.5px; }
+  .kb-sum-stage { font-size: 17px; }
+  .kb-dashboard { max-width: 1360px; }
+  .kb-board { grid-template-columns: repeat(auto-fill, minmax(186px, 1fr)); }
+  .kb-knowledge-page { width: min(1180px, calc(100% - 48px)); }
+}
 `;
