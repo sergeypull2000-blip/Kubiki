@@ -14,7 +14,7 @@ export function PerformerLibraryItem({ performer, inQuickAccess, onEdit, onToggl
   const rate = performer.defaultRate == null ? "" : Number(performer.defaultRate).toLocaleString("ru-RU");
   return <article className="kb-performer-card" onClick={() => onEdit(performer)}>
     <div className="kb-performer-card-main"><strong>{title}</strong>{name && performer.primaryRole && <span>{performer.primaryRole}</span>}
-      <small>{[payment, rate && `${rate} ${performer.defaultUnit || "₽"}`, performer.legalStatus].filter(Boolean).join(" · ")}</small></div>
+      <small>{[payment, rate].filter(Boolean).join(" · ")}</small></div>
     {contact(performer) && <div className="kb-performer-contact">{performer.email ? <Mail size={14} /> : <Phone size={14} />}<span>{contact(performer)}</span></div>}
     <span className={`kb-quick-status${inQuickAccess ? " is-active" : ""}`}>{inQuickAccess ? "В быстром доступе" : "Только в базе"}</span>
     <div className="kb-performer-actions">
