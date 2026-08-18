@@ -437,7 +437,7 @@ function ExportModal({ project, format, dispatch, userId, onClose, onExport }) {
     setBusy(true);
     try {
       await onExport(model);
-      if (userId) productEventsRepository.track(userId, "export_completed").catch(() => {});
+      if (userId) productEventsRepository.track(userId, "export_completed", {}, { format }).catch(() => {});
     } finally { setBusy(false); }
   };
   return <div className="kb-modal-backdrop" onMouseDown={onClose}>

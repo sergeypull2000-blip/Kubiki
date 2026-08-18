@@ -10,12 +10,13 @@ export const sessionActiveKey = (userId) => `kubiki:session_active:${userId}`;
 export function createProductEventsRepository(client) {
   if (!client) throw new Error("Supabase client is required");
   return {
-    async track(userId, eventType, meta = {}) {
+    async track(userId, eventType, meta = {}, metadata = {}) {
       const result = await client.from("product_events").insert({
         user_id: userId,
         event_type: eventType,
         request_id: meta.requestId || null,
         session_id: meta.sessionId || null,
+        metadata: metadata || {},
       }).select("id,event_type,created_at").single();
       return data(result, "Не удалось записать событие продукта");
     },

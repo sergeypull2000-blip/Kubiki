@@ -150,8 +150,8 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     setWelcomeOpen(false);
     userFlagsRepository.markBetaWelcomeSeen(userId).catch(() => {});
   };
-  const trackProductEvent = (eventType, meta = {}) => {
-    productEventsRepository.track(userId, eventType, meta).catch(() => {});
+  const trackProductEvent = (eventType, meta = {}, metadata = {}) => {
+    productEventsRepository.track(userId, eventType, meta, metadata).catch(() => {});
   };
 
   const storedCurrentProject = projects.find((p) => p.id === currentId) || null;
@@ -464,7 +464,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     replaceProjects([...projectsRef.current, p]);
     scheduleProjectSave(p, 0);
     setCurrentId(p.id);
-    trackProductEvent("project_created");
+    trackProductEvent("project_created", {}, { source: template ? "template" : "blank" });
   };
   const createProjectFromEstimate = (stages, meta) => {
     const normalized = makeProjectFromEstimate(stages, meta);
@@ -472,7 +472,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     scheduleProjectSave(normalized, 0);
     setProjectSource(null);
     setCurrentId(normalized.id);
-    trackProductEvent("project_created");
+    trackProductEvent("project_created", {}, { source: "estimate" });
   };
   const deleteProject = async (id) => {
     if (!window.confirm("Удалить проект?")) return;
@@ -505,7 +505,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     if (!project) throw new Error("Смета не найдена");
     const baseRevision = await projectRevision(project), idPool = createAiEditIdPool(project);
     const payload = createAiEditRequest({ projectId, baseRevision, scope, instruction, knowledge, confirmed, idPool, continuation });
-    productEventsRepository.track(userId, "ai_edit", { requestId: payload.requestId }).catch(() => {});
+    productEventsRepository.track(userId, "ai_edit", { requestId: payload.requestId }, { type: scope?.kind }).catch(() => {});
     const controller = new AbortController(); activeAiEditRequestsRef.current.set(projectId, controller);
     try {
       const response = await requestAiEdit(payload, { signal: controller.signal });
@@ -734,7 +734,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
       {aiGenerationReady && projectSource?.file && <ImportModal file={projectSource.file} instruction={projectSource.description || ""}
         onClose={() => setProjectSource(null)} onConfirm={createProjectFromEstimate} />}
       {aiGenerationReady && projectSource && !projectSource.file && <GenerateEstimateModal description={projectSource.description} performers={performers}
-        onClose={() => setProjectSource(null)} onConfirm={(stages, meta) => { trackProductEvent("ai_generate", { requestId: meta?.requestId || null }); createProjectFromEstimate(stages, meta); }} />}
+        onClose={() => setProjectSource(null)} onConfirm={(stages, meta) => { trackProductEvent("ai_generate", { requestId: meta?.requestId || null }, { source: meta?.generationScope || "whole_project" }); createProjectFromEstimate(stages, meta); }} />}
       {editingTemplateId ? (
         <Workspace
           project={normalizeProject(projectTemplates.find((template) => template.id === editingTemplateId))}
@@ -752,7 +752,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
 
           userAccount={{ id: userId, displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }}
           aiGenerationReady={aiGenerationReady}
-          onTrackAiGenerate={(meta) => trackProductEvent("ai_generate", { requestId: meta?.requestId || null })}
+          onTrackAiGenerate={(meta) => trackProductEvent("ai_generate", { requestId: meta?.requestId || null }, { source: meta?.generationScope || "whole_project" })}
           onSignOut={handleSignOut}
         />
       ) : currentProject ? (
@@ -767,7 +767,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
           aiGenerationReady={aiGenerationReady}
           taskTemplates={templateLibrary.taskTemplates} stageTemplates={templateLibrary.stageTemplates}
           onTaskTemplatesChange={handleTaskTemplatesChange} onStageTemplatesChange={handleStageTemplatesChange}
-          onRequestAiEdit={requestCurrentAiEdit} onCancelAiEdit={cancelCurrentAiEdit} onApplyAiEdit={applyCurrentAiEdit} onTrackAiGenerate={(meta) => trackProductEvent("ai_generate", { requestId: meta?.requestId || null })}
+          onRequestAiEdit={requestCurrentAiEdit} onCancelAiEdit={cancelCurrentAiEdit} onApplyAiEdit={applyCurrentAiEdit} onTrackAiGenerate={(meta) => trackProductEvent("ai_generate", { requestId: meta?.requestId || null }, { source: meta?.generationScope || "whole_project" })}
           onUndoAiEdit={undoCurrentAiEdit} canUndoAiEdit={aiUndoVersion >= 0 && aiUndoRef.current.has(currentProject.id)} />
       ) : activeSection === APP_SECTIONS.KNOWLEDGE_BASE ? (
         <KnowledgeBasePage performers={performers} performerState={performerState} performerMessage={performerMessage} onRetryPerformers={() => setPerformerRetry((value) => value + 1)} quickAccess={quickAccess} onSectionChange={setActiveSection}

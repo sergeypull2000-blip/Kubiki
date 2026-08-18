@@ -1,6 +1,6 @@
 import { authenticateRequest } from "./_lib/auth.js";
-import { MONTHLY_LIMIT_USD, isPricingConfigured } from "./_lib/aiPricing.js";
-import { monthStartUtc } from "./_lib/aiUsage.js";
+import { isPricingConfigured } from "./_lib/aiPricing.js";
+import { monthStartUtc, loadEffectiveLimit } from "./_lib/aiUsage.js";
 
 /* Начало следующего месяца в UTC — дата сброса месячного лимита. */
 function nextMonthStartUtc() {
@@ -25,6 +25,8 @@ export default async function handler(req, res) {
   const auth = await authenticateRequest(req);
   if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
+  const limit = await loadEffectiveLimit(auth.client, auth.user.id);
+
   const result = await auth.client.from("ai_usage_events")
     .select("cost_usd")
     .eq("user_id", auth.user.id)
@@ -33,15 +35,27 @@ export default async function handler(req, res) {
 
   const rows = result.data || [];
   const spentUsd = rows.reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
-  const limitUsd = MONTHLY_LIMIT_USD;
-  const remainingPct = Math.max(0, Math.min(100, Math.round((1 - spentUsd / limitUsd) * 100)));
-  const summary = {
+
+  if (limit.unlimited) {
+    return res.status(200).json({
+      unlimited: true,
+      limitUsd: null,
+      spentUsd,
+      remainingPct: 100,
+      resetsAt: nextMonthStartUtc(),
+      overLimit: false,
+      pricingConfigured: isPricingConfigured(),
+    });
+  }
+
+  const limitUsd = limit.limitUsd;
+  return res.status(200).json({
+    unlimited: false,
     limitUsd,
     spentUsd,
-    remainingPct,
+    remainingPct: Math.max(0, Math.min(100, Math.round((1 - spentUsd / limitUsd) * 100))),
     resetsAt: nextMonthStartUtc(),
     overLimit: spentUsd >= limitUsd,
     pricingConfigured: isPricingConfigured(),
-  };
-  return res.status(200).json(summary);
+  });
 }

@@ -1,4 +1,4 @@
-import { AI_PRICING_VERSION, MONTHLY_LIMIT_USD, estimateCostUsd, UnknownModelError, PricingNotConfiguredError } from "./aiPricing.js";
+import { AI_PRICING_VERSION, DEFAULT_MONTHLY_LIMIT_USD, estimateCostUsd, UnknownModelError, PricingNotConfiguredError } from "./aiPricing.js";
 
 /* Специальная ошибка превышения месячного лимита — мапится в HTTP 429. */
 export class UsageLimitError extends Error {
@@ -10,8 +10,9 @@ export class UsageLimitError extends Error {
   }
 }
 
-/* Приводим произвольную форму data.usage к паре токенов. Поддерживаем
-   как openai-стиль (prompt/completion_tokens), так и имена input/output. */
+/* Приводим произвольную форму data.usage к набору токенов. Поддерживаем
+   как openai-стиль (prompt/completion_tokens), так и имена input/output,
+   а также явные поля cache-hit/cache-miss провайдера. */
 export function extractUsage(data) {
   const usage = data?.usage;
   if (!usage || typeof usage !== "object") return null;
@@ -19,13 +20,34 @@ export function extractUsage(data) {
   const outputTokens = Number(usage.completion_tokens ?? usage.output_tokens ?? 0) || 0;
   if (!inputTokens && !outputTokens) return null;
   const cacheHitTokens = Number(usage.prompt_cache_hit_tokens ?? usage.input_cache_hit_tokens ?? 0) || 0;
-  return { input_tokens: inputTokens, output_tokens: outputTokens, cache_hit_tokens: cacheHitTokens };
+  const cacheMissTokens = Number(usage.prompt_cache_miss_tokens ?? usage.input_cache_miss_tokens ?? (inputTokens - cacheHitTokens)) || 0;
+  return { input_tokens: inputTokens, output_tokens: outputTokens, cache_hit_tokens: cacheHitTokens, cache_miss_tokens: cacheMissTokens };
 }
 
 /* Начало текущего месяца в UTC — окно месячного лимита. */
 export function monthStartUtc() {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+}
+
+/* Эффективный месячный лимит пользователя из ai_usage_limits.
+   Строки нет или ошибка чтения → дефолт DEFAULT_MONTHLY_LIMIT_USD (fail-open).
+   unlimited=true → лимит не применяется (limitUsd = null). */
+export async function loadEffectiveLimit(client, userId) {
+  const fallback = { limitUsd: DEFAULT_MONTHLY_LIMIT_USD, unlimited: false };
+  if (!client || !userId) return fallback;
+  const result = await client.from("ai_usage_limits")
+    .select("monthly_limit_usd, unlimited")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (result.error || !result.data) return fallback;
+  const unlimited = Boolean(result.data.unlimited);
+  const monthlyLimitUsd = Number(result.data.monthly_limit_usd);
+  const valid = Number.isFinite(monthlyLimitUsd) && monthlyLimitUsd >= 0;
+  return {
+    limitUsd: unlimited ? null : (valid ? monthlyLimitUsd : DEFAULT_MONTHLY_LIMIT_USD),
+    unlimited,
+  };
 }
 
 /* Запись использования и проверка лимита. Сервер оперирует от имени
@@ -38,14 +60,16 @@ export function createUsageRecorder({ client, userId }) {
     /* Проверка перед вызовом модели. Fail-open при ошибке чтения;
        бросает UsageLimitError только при уверенном превышении лимита. */
     async assertAllowed() {
+      const limit = await loadEffectiveLimit(client, userId);
+      if (limit.unlimited) return { spentUsd: 0, limitUsd: null, unlimited: true };
       const result = await client.from("ai_usage_events")
         .select("cost_usd")
         .eq("user_id", userId)
         .gte("created_at", monthStartUtc());
-      if (result.error) return { spentUsd: 0, limitUsd: MONTHLY_LIMIT_USD };
+      if (result.error) return { spentUsd: 0, limitUsd: limit.limitUsd, unlimited: false };
       const spentUsd = (result.data || []).reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
-      if (spentUsd >= MONTHLY_LIMIT_USD) throw new UsageLimitError();
-      return { spentUsd, limitUsd: MONTHLY_LIMIT_USD };
+      if (spentUsd >= limit.limitUsd) throw new UsageLimitError();
+      return { spentUsd, limitUsd: limit.limitUsd, unlimited: false };
     },
 
     /* Запись события. Вызывается сразу после получения ответа провайдера,
