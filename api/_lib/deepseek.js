@@ -8,9 +8,12 @@ export class DeepSeekError extends Error {
   constructor(message, { status = 502, code = "deepseek_error" } = {}) { super(message); this.name = "DeepSeekError"; this.status = status; this.code = code; }
 }
 
-export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https://api.deepseek.com/chat/completions", model = "deepseek-v4-flash", timeoutMs = DEEPSEEK_ATTEMPT_TIMEOUT_MS, retries = DEEPSEEK_RETRIES, budget, logger = console.info } = {}) {
+export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https://api.deepseek.com/chat/completions", model = "deepseek-v4-flash", timeoutMs = DEEPSEEK_ATTEMPT_TIMEOUT_MS, retries = DEEPSEEK_RETRIES, budget, usageGate, logger = console.info } = {}) {
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY не задан в переменных окружения Vercel");
-  return async function request(messages, { maxTokens = 4000, retries: requestRetries = retries, stage = "generation" } = {}) {
+  return async function request(messages, { maxTokens = 4000, retries: requestRetries = retries, stage = "generation", requestId = null } = {}) {
+    if (usageGate) {
+      try { await usageGate.assertAllowed(); } catch (error) { if (error?.name === "UsageLimitError") throw error; /* прочие ошибки чтения лимита — fail-open */ }
+    }
     const thinkingMode = stage === "profile" || stage === "generation" || stage === "repair" || stage === "budget_correction" || stage === "ai_edit" || stage === "ai_route" ? "disabled" : "provider_default";
     const requestBody = {
       model,
@@ -55,6 +58,11 @@ export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https:/
           continue;
         }
         const data = await response.json();
+        if (usageGate) {
+          // Записываем использование сразу после ответа провайдера, до валидации
+          // контента: считается и при пустых/битых ответах и при retries/repair.
+          try { await usageGate.record({ model, stage, requestId, data }); } catch {}
+        }
         hasChoices = Array.isArray(data?.choices) && data.choices.length > 0;
         const choice = data?.choices?.[0];
         const message = choice?.message;

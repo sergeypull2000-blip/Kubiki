@@ -28,7 +28,7 @@ const clampPanelWidth = (value, [min, max], fallback) => Math.min(max, Math.max(
 /* ============================================================
    Рабочая зона
    ============================================================ */
-export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onOpenAiSettings, onSignOut, userAccount, aiGenerationReady = false, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange, onRequestAiEdit, onCancelAiEdit, onApplyAiEdit, onUndoAiEdit, canUndoAiEdit = false }) {
+export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onOpenAiSettings, onOpenUsage, onTrackAiGenerate, onSignOut, userAccount, aiGenerationReady = false, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange, onRequestAiEdit, onCancelAiEdit, onApplyAiEdit, onUndoAiEdit, canUndoAiEdit = false }) {
   const [leftPanelWidth, setLeftPanelWidth] = useState(() => clampPanelWidth(localStorage.getItem("kb-workspace-left-width"), LEFT_PANEL_RANGE, 248));
   const [rightPanelWidth, setRightPanelWidth] = useState(() => clampPanelWidth(localStorage.getItem("kb-workspace-right-width"), RIGHT_PANEL_RANGE, 288));
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
@@ -356,7 +356,7 @@ const toggleAllCollapsed = () =>
     <RightPanel project={project} dispatch={dispatch} userId={userAccount?.id}
       activeStageId={activeStageId} activeTaskId={activeTaskId} activeExecutorId={activeExecutorId} />
   );
-  const accountControl = <AccountControl userAccount={userAccount} onOpenAiSettings={onOpenAiSettings} onSignOut={onSignOut} />;
+  const accountControl = <AccountControl userAccount={userAccount} onOpenAiSettings={onOpenAiSettings} onOpenUsage={onOpenUsage} onSignOut={onSignOut} />;
 
   return (
     <div className="kb-root kb-root-workspace">
@@ -366,7 +366,7 @@ const toggleAllCollapsed = () =>
       )}
       {generateDescription && (
         <GenerateEstimateModal description={generateDescription} performers={performers} onClose={() => setGenerateDescription(null)}
-          onConfirm={(stages, meta) => { insertParsedStages(stages, meta); setGenerateDescription(null); }} />
+          onConfirm={(stages, meta) => { onTrackAiGenerate?.(meta); insertParsedStages(stages, meta); setGenerateDescription(null); }} />
       )}
       <header className="kb-header kb-header-min">
         <div className="kb-header-inner">

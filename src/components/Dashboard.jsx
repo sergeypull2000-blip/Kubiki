@@ -135,7 +135,7 @@ function NewProjectCard({ onCreate }) {
   </div>;
 }
 
-export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, aiGenerationReady = false, onDelete, projectTemplates, onTemplatesChange, categories, onCategoriesChange, openCategoryIds, onOpenCategoryIdsChange, onEditTemplate, onToggleFavorite, onRenameProject, onSectionChange, onOpenAiSettings, onSignOut, userAccount }) {
+export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, aiGenerationReady = false, onDelete, projectTemplates, onTemplatesChange, categories, onCategoriesChange, openCategoryIds, onOpenCategoryIdsChange, onEditTemplate, onToggleFavorite, onRenameProject, onSectionChange, onOpenAiSettings, onOpenUsage, onSignOut, userAccount }) {
   const [activeNav, setActiveNav] = useState("all");
   const [toast, setToast] = useState("");
   const [sourceModal, setSourceModal] = useState(null);
@@ -168,7 +168,7 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, ai
     window.addEventListener("pointerup", onUp, { once: true });
   }, [sidebarWidth]);
 
-  const accountControl = <AccountControl userAccount={userAccount} onOpenAiSettings={onOpenAiSettings} onSignOut={onSignOut} />;
+  const accountControl = <AccountControl userAccount={userAccount} onOpenAiSettings={onOpenAiSettings} onOpenUsage={onOpenUsage} onSignOut={onSignOut} />;
 
   useEffect(() => {
     const categoryIds = new Set(categories.map((category) => category.id));

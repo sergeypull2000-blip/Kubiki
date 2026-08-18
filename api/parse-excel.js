@@ -7,6 +7,7 @@
    ============================================================ */
 
 import { authenticateRequest } from "./_lib/auth.js";
+import { createUsageRecorder, UsageLimitError } from "./_lib/aiUsage.js";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const MODEL = "deepseek-v4-flash";
@@ -41,6 +42,9 @@ export default async function handler(req, res) {
   const key = process.env.DEEPSEEK_API_KEY;
   if (!key) return res.status(500).json({ error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" });
 
+  const usage = createUsageRecorder({ client: auth.client, userId: auth.user.id });
+  try { await usage.assertAllowed(); } catch (error) { if (error instanceof UsageLimitError) return res.status(429).json({ error: error.message }); }
+
   const { sheet, filename, instruction } = req.body || {};
   if (!sheet) return res.status(400).json({ error: "Нет sheet в теле запроса" });
 
@@ -72,6 +76,7 @@ export default async function handler(req, res) {
     }
 
     const data = await r.json();
+    await usage.record({ model: MODEL, stage: "import", data }).catch(() => {});
     const choice = data.choices?.[0];
     const raw = choice?.message?.content;
     if (!raw) return res.status(502).json({ error: "DeepSeek вернул пустой ответ" });

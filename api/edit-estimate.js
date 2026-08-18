@@ -1,6 +1,7 @@
 import { authenticateRequest } from "./_lib/auth.js";
 import { loadOwnAiSettings, normalizeServerAiSettings } from "./_lib/aiSettings.js";
 import { createDeepSeekClient, DeepSeekError } from "./_lib/deepseek.js";
+import { createUsageRecorder, UsageLimitError } from "./_lib/aiUsage.js";
 import { buildAiEditMessages } from "./_lib/editPrompt.js";
 import { loadOwnPerformersForEdit, loadOwnProjectForEdit, loadOwnSelectedKnowledge } from "./_lib/editProject.js";
 import { hasExplicitPerformerLibraryIntent, needsClarificationForBareInput } from "./_lib/performerResolver.js";
@@ -33,15 +34,17 @@ export default async function handler(req, res) {
     return res.status(response.status).json(response.body);
   } catch (error) {
     console.error("edit-estimate error", { name: error?.name || "Error", code: error?.code || "unknown" });
+    const usageLimit = error instanceof UsageLimitError;
     const deadline = error instanceof RequestDeadlineError || error?.code === "request_deadline";
-    const status = deadline ? 504 : error instanceof DeepSeekError ? error.status : 500;
-    return res.status(status).json({ error: deadline ? "AI-редактирование не успело завершиться. Попробуйте снова." : error instanceof DeepSeekError ? error.message : "Не удалось подготовить предложение изменений" });
+    const status = usageLimit ? 429 : deadline ? 504 : error instanceof DeepSeekError ? error.status : 500;
+    return res.status(status).json({ error: usageLimit ? error.message : deadline ? "AI-редактирование не успело завершиться. Попробуйте снова." : error instanceof DeepSeekError ? error.message : "Не удалось подготовить предложение изменений" });
   }
 }
 
 async function executeEdit(req, budget) {
   const auth = await authenticateRequest(req);
   if (!auth.ok) return { status: auth.status, body: { error: auth.error } };
+  const usage = createUsageRecorder({ client: auth.client, userId: auth.user.id });
   const parsedRequest = validateAiEditRequest(req.body);
   if (!parsedRequest.ok) return { status: parsedRequest.status, body: { error: parsedRequest.error } };
   const request = parsedRequest.value;
@@ -71,7 +74,7 @@ async function executeEdit(req, budget) {
   }
   const key = process.env.DEEPSEEK_API_KEY;
   if (!key) return { status: 500, body: { error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" } };
-  const requestModel = createDeepSeekClient({ apiKey: key, url: DEEPSEEK_URL, model: MODEL, budget });
+  const requestModel = createDeepSeekClient({ apiKey: key, url: DEEPSEEK_URL, model: MODEL, budget, usageGate: usage });
   const route = await routeAiIntent({ instruction: request.instruction, requestModel });
   if (!route) return { status: 502, body: { error: "Модель вернула некорректный маршрут AI-запроса", code: "ai_route_invalid_schema" } };
   if (route.kind === "clarification") return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, question: route.question } };

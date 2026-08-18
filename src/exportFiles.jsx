@@ -11,6 +11,7 @@ import { buildExcelRows, buildExcelWorkbook } from "./excelExport.js";
 import { exportPresetsRepository } from "./repositories/exportPresetsRepository.js";
 import { normalizePresentationSettings } from "./exportSettings.js";
 import { exportProfileRepository } from "./repositories/exportProfileRepository.js";
+import { productEventsRepository } from "./repositories/productEventsRepository.js";
 
 export { buildExcelRows, buildExcelWorkbook } from "./excelExport.js";
 
@@ -434,7 +435,10 @@ function ExportModal({ project, format, dispatch, userId, onClose, onExport }) {
   const duplicatePreset = async () => { const selected = presets.find((item) => item.id === presetId); if (!userId || !selected) return; try { const copy = await exportPresetsRepository.duplicate(userId, selected); setPresets((items) => [copy, ...items]); setPresetId(copy.id); setPresetName(copy.name); } catch (error) { setPresetError(error.message); } };
   const run = async () => {
     setBusy(true);
-    try { await onExport(model); } finally { setBusy(false); }
+    try {
+      await onExport(model);
+      if (userId) productEventsRepository.track(userId, "export_completed").catch(() => {});
+    } finally { setBusy(false); }
   };
   return <div className="kb-modal-backdrop" onMouseDown={onClose}>
     <div className="kb-export-modal" role="dialog" aria-modal="true" aria-label="Настройки экспорта" onMouseDown={(event) => event.stopPropagation()}>

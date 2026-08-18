@@ -908,4 +908,21 @@ export const CSS = `
   .kb-board { grid-template-columns: repeat(auto-fill, minmax(186px, 1fr)); }
   .kb-knowledge-page { width: min(1180px, calc(100% - 48px)); } .kb-export-modal{width:min(1600px,92vw);height:min(940px,90vh)}
 }
+
+/* ===== Beta readiness ===== */
+.kb-beta-badge{display:inline-flex;align-items:center;margin-left:7px;padding:1px 7px;border-radius:999px;background:var(--accent);color:#fff;font-size:10px;font-weight:var(--fw-semibold);letter-spacing:.03em;line-height:1.6}
+.kb-welcome-overlay{z-index:2000}
+.kb-welcome-modal{width:min(460px,92vw);padding:0}
+.kb-welcome-brand{display:flex;align-items:center;gap:10px;padding:20px 22px 0}.kb-welcome-brand span{font-size:18px;font-weight:var(--fw-semibold);letter-spacing:-.02em}.kb-welcome-brand em{font-style:normal;color:var(--accent);font-size:12px;margin-left:2px}
+.kb-welcome-title{margin:16px 22px 0;font-size:20px;letter-spacing:-.02em}
+.kb-welcome-text{margin:8px 22px 0;color:var(--text-muted);font-size:var(--fs-sm);line-height:1.5}
+.kb-welcome-points{display:flex;flex-direction:column;gap:10px;margin:16px 22px 0}.kb-welcome-points div{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface-sunken)}.kb-welcome-points strong{font-size:var(--fs-sm)}.kb-welcome-points span{color:var(--text-muted);font-size:var(--fs-xs);line-height:1.4}
+.kb-welcome-modal .kb-modal-actions{padding:18px 22px 22px}
+.kb-usage-modal{width:min(440px,92vw)}
+.kb-usage-bar{height:10px;border-radius:999px;background:var(--surface-sunken);border:1px solid var(--line);overflow:hidden}
+.kb-usage-bar-fill{height:100%;background:var(--accent);border-radius:999px;transition:width .3s ease}
+.kb-usage-figures{display:flex;align-items:baseline;gap:8px;margin-top:10px}.kb-usage-figures strong{font-size:20px;letter-spacing:-.02em}.kb-usage-figures span{color:var(--text-muted);font-size:var(--fs-sm)}
+.kb-usage-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}.kb-usage-stats div{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border:1px solid var(--line);border-radius:8px}.kb-usage-stats span{color:var(--text-muted);font-size:var(--fs-xs)}.kb-usage-stats strong{font-size:var(--fs-md)}
+.kb-usage-limit-note{margin-top:12px;padding:8px 10px;border-radius:7px;background:#fff0ef;color:#9f2e25;font-size:var(--fs-xs)}
+
 `;

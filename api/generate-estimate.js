@@ -1,6 +1,7 @@
 import { authenticateRequest } from "./_lib/auth.js";
 import { validateGenerationInput } from "./_lib/brief.js";
 import { createDeepSeekClient, DeepSeekError } from "./_lib/deepseek.js";
+import { createUsageRecorder, UsageLimitError } from "./_lib/aiUsage.js";
 import { runEstimateGeneration } from "./_lib/generationOrchestrator.js";
 import { loadOwnKnowledge } from "./_lib/knowledgeRepository.js";
 import { projectKnowledge } from "./_lib/knowledgeProjection.js";
@@ -558,9 +559,10 @@ export default async function handler(req, res) {
     return res.status(response.status).json(response.body);
   } catch (e) {
     console.error("generate-estimate error", { name: e?.name || "Error", code: e?.code || "unknown" });
+    const isUsageLimit = e instanceof UsageLimitError;
     const isDeadline = e instanceof RequestDeadlineError || e?.code === "request_deadline";
-    const status = isDeadline ? 504 : e instanceof DeepSeekError ? e.status : 500;
-    const error = isDeadline ? "Генерация не успела завершиться. Попробуйте снова." : e instanceof DeepSeekError ? e.message : "Не удалось обработать ответ. Попробуйте снова";
+    const status = isUsageLimit ? 429 : isDeadline ? 504 : e instanceof DeepSeekError ? e.status : 500;
+    const error = isUsageLimit ? e.message : isDeadline ? "Генерация не успела завершиться. Попробуйте снова." : e instanceof DeepSeekError ? e.message : "Не удалось обработать ответ. Попробуйте снова";
     return res.status(status).json({ error });
   }
 }
@@ -570,12 +572,14 @@ async function executeGeneration(req, budget) {
   const auth = await authenticateRequest(req);
   if (!auth.ok) return { status: auth.status, body: { error: auth.error } };
 
+  const usage = createUsageRecorder({ client: auth.client, userId: auth.user.id });
+
   const input = validateGenerationInput(req.body);
   if (!input.ok) return { status: input.status, body: { error: input.error } };
 
   const key = process.env.DEEPSEEK_API_KEY;
   if (!key) return { status: 500, body: { error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" } };
-  const requestModel = createDeepSeekClient({ apiKey: key, url: DEEPSEEK_URL, model: MODEL, budget });
+  const requestModel = createDeepSeekClient({ apiKey: key, url: DEEPSEEK_URL, model: MODEL, budget, usageGate: usage });
 
   const result = await runEstimateGeneration({
       brief: input.brief,

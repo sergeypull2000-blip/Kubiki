@@ -1,10 +1,11 @@
 import { useState, useRef } from "react";
-import { ChevronDown, LogOut, Sparkles } from "lucide-react";
+import { ChevronDown, LogOut, Sparkles, Gauge } from "lucide-react";
 import { useOutsideClose } from "../hooks.js";
 
-/* Переиспользуемая кнопка аккаунта (аватар + имя + меню «Персонализация ИИ» / «Выйти»).
-   Используется в палитре проекта (Workspace) и в левой панели дашборда. */
-export function AccountControl({ userAccount, onOpenAiSettings, onSignOut }) {
+/* Переиспользуемая кнопка аккаунта (аватар + имя + меню «Использование и лимиты» /
+   «Персонализация ИИ» / «Выйти»). Используется в палитре проекта (Workspace)
+   и в левой панели дашборда. */
+export function AccountControl({ userAccount, onOpenAiSettings, onOpenUsage, onSignOut }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
   useOutsideClose(profileRef, profileOpen ? () => setProfileOpen(false) : null);
@@ -15,6 +16,7 @@ export function AccountControl({ userAccount, onOpenAiSettings, onSignOut }) {
       <ChevronDown size={13} />
     </button>
     {profileOpen && <div className="kb-profile-menu kb-profile-menu-up" role="menu">
+      {onOpenUsage && <button type="button" role="menuitem" onClick={() => { setProfileOpen(false); onOpenUsage(); }}><Gauge size={15} />Использование и лимиты</button>}
       {onOpenAiSettings && <button type="button" role="menuitem" onClick={() => { setProfileOpen(false); onOpenAiSettings(); }}><Sparkles size={15} />Персонализация ИИ</button>}
       <button type="button" role="menuitem" onClick={onSignOut}><LogOut size={15} />Выйти</button>
     </div>}

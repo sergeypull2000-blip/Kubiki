@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { supabase } from './supabaseClient.js'
+import { userFlagsRepository } from './repositories/userFlagsRepository.js'
+import { productEventsRepository } from './repositories/productEventsRepository.js'
 
 /* Минимальная длина пароля (совпадает с требованием Supabase). */
 const MIN_PASSWORD_LENGTH = 6
@@ -80,7 +82,11 @@ export function AuthScreen({ mode = 'signin', onPasswordUpdated }) {
       })
       if (error) { setError(describeAuthError(error)); return }
       if (data?.session) {
-        // confirmation выключен → сессия уже есть, App сам переключит на Kubiki
+        // confirmation выключен → сессия уже есть, App сам переключит на Kubiki.
+        // Свежая регистрация: создаём строку user_flags (beta_welcome_seen=false),
+        // чтобы при первом входе показать одноразовое приветствие Beta.
+        userFlagsRepository.ensureFlags(data.session.user.id).catch(() => {})
+        productEventsRepository.track(data.session.user.id, 'signup').catch(() => {})
       } else {
         setNotice('Аккаунт создан. Проверьте почту и подтвердите email, затем войдите.')
         setView('signin')

@@ -19,6 +19,10 @@ import { createTemplateLibraryBackup, hasMeaningfulTemplateLibrary, localTemplat
 import { aiSettingsRepository } from "./repositories/aiSettingsRepository.js";
 import { loadLocalAiSettings, normalizeAiSettings, saveLocalAiSettings } from "./aiSettings.js";
 import { AIPersonalizationModal } from "./components/AIPersonalizationModal.jsx";
+import { WelcomeModal } from "./components/WelcomeModal.jsx";
+import { UsageLimitsModal } from "./components/UsageLimitsModal.jsx";
+import { userFlagsRepository } from "./repositories/userFlagsRepository.js";
+import { productEventsRepository } from "./repositories/productEventsRepository.js";
 import { isAiHydrationReady } from "./ai/hydrationGate.js";
 import { createAiEditIdPool, createAiEditRequest, requestAiEdit } from "./ai/editClient.js";
 import { buildAiEditPreview } from "./ai/editPreview.js";
@@ -115,6 +119,41 @@ export default function KubikiApp({ userId, user, onSignOut }) {
   const [aiSettingsState, setAiSettingsState] = useState("loading");
   const [aiSettingsMessage, setAiSettingsMessage] = useState("");
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
+
+  // product analytics: максимум одно session_active на сессию браузера (скоуп по user_id).
+  useEffect(() => {
+    productEventsRepository.trackSessionActive(userId).catch(() => {});
+  }, [userId]);
+
+  // Приветствие Beta: показываем только при существующей строке user_flags с
+  // beta_welcome_seen=false (true или отсутствие строки — не показываем).
+  // Один повторный запрос закрывает гонку с созданием строки при свежей регистрации.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let flags = await userFlagsRepository.getFlags(userId).catch(() => null);
+      if (cancelled) return;
+      if (!flags) {
+        await new Promise((resolve) => setTimeout(resolve, 700));
+        if (cancelled) return;
+        flags = await userFlagsRepository.getFlags(userId).catch(() => null);
+        if (cancelled) return;
+      }
+      if (flags && flags.beta_welcome_seen === false) setWelcomeOpen(true);
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const handleWelcomeStart = () => {
+    setWelcomeOpen(false);
+    userFlagsRepository.markBetaWelcomeSeen(userId).catch(() => {});
+  };
+  const trackProductEvent = (eventType, meta = {}) => {
+    productEventsRepository.track(userId, eventType, meta).catch(() => {});
+  };
+
   const storedCurrentProject = projects.find((p) => p.id === currentId) || null;
   const currentProject = storedCurrentProject ? normalizeProject(storedCurrentProject) : null;
 
@@ -425,6 +464,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     replaceProjects([...projectsRef.current, p]);
     scheduleProjectSave(p, 0);
     setCurrentId(p.id);
+    trackProductEvent("project_created");
   };
   const createProjectFromEstimate = (stages, meta) => {
     const normalized = makeProjectFromEstimate(stages, meta);
@@ -432,6 +472,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     scheduleProjectSave(normalized, 0);
     setProjectSource(null);
     setCurrentId(normalized.id);
+    trackProductEvent("project_created");
   };
   const deleteProject = async (id) => {
     if (!window.confirm("Удалить проект?")) return;
@@ -464,6 +505,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     if (!project) throw new Error("Смета не найдена");
     const baseRevision = await projectRevision(project), idPool = createAiEditIdPool(project);
     const payload = createAiEditRequest({ projectId, baseRevision, scope, instruction, knowledge, confirmed, idPool, continuation });
+    productEventsRepository.track(userId, "ai_edit", { requestId: payload.requestId }).catch(() => {});
     const controller = new AbortController(); activeAiEditRequestsRef.current.set(projectId, controller);
     try {
       const response = await requestAiEdit(payload, { signal: controller.signal });
@@ -471,7 +513,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
       const current = projectsRef.current.find((item) => item.id === projectId);
       return await buildAiEditPreview({ project: current, response, performers: performersRef.current, idPool, expectedRevision: baseRevision, instruction, selectedSources: payload.knowledge.selectedSources });
     } finally { if (activeAiEditRequestsRef.current.get(projectId) === controller) activeAiEditRequestsRef.current.delete(projectId); }
-  }, [flushProject]);
+  }, [flushProject, userId]);
 
   const cancelCurrentAiEdit = useCallback(() => {
     const controller = activeAiEditRequestsRef.current.get(currentId);
@@ -584,7 +626,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     replacePerformers(next);
     if (!performerSyncEnabledRef.current) { setPerformerMessage("Серверная база ещё не готова. Изменение сохранено локально."); return null; }
     setPerformerState("saving");
-    try { await performerRepository.upsertPerformer(userId, saved); serverPerformerIdsRef.current.add(saved.id); setPerformerState("ready"); setPerformerMessage("Карточка сохранена"); }
+    try { await performerRepository.upsertPerformer(userId, saved); serverPerformerIdsRef.current.add(saved.id); setPerformerState("ready"); setPerformerMessage("Карточка сохранена"); if (!existingId) trackProductEvent("performer_created"); }
     catch (error) { setPerformerState("save-error"); setPerformerMessage(`${error.message}. Локальная копия сохранена.`); return null; }
     if (saved) {
       if (addToQuickAccess) await addQuickAccessForPerformer(saved.id);
@@ -654,6 +696,8 @@ export default function KubikiApp({ userId, user, onSignOut }) {
         </div>
       </div>}
       {aiSettingsOpen && <AIPersonalizationModal settings={aiSettings} state={aiSettingsState} message={aiSettingsMessage} onSave={saveAiSettings} onClose={() => setAiSettingsOpen(false)} />}
+      {welcomeOpen && <WelcomeModal onStart={handleWelcomeStart} />}
+      {usageOpen && <UsageLimitsModal onClose={() => setUsageOpen(false)} />}
       {(templateState === "migration-offer" || templateState === "migrating") && <div className="kb-modal-overlay kb-server-overlay">
         <div className="kb-modal kb-server-card" role="dialog" aria-modal="true" aria-labelledby="template-migration-title">
           <div className="kb-server-title" id="template-migration-title">Перенести библиотеку шаблонов</div>
@@ -690,7 +734,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
       {aiGenerationReady && projectSource?.file && <ImportModal file={projectSource.file} instruction={projectSource.description || ""}
         onClose={() => setProjectSource(null)} onConfirm={createProjectFromEstimate} />}
       {aiGenerationReady && projectSource && !projectSource.file && <GenerateEstimateModal description={projectSource.description} performers={performers}
-        onClose={() => setProjectSource(null)} onConfirm={createProjectFromEstimate} />}
+        onClose={() => setProjectSource(null)} onConfirm={(stages, meta) => { trackProductEvent("ai_generate", { requestId: meta?.requestId || null }); createProjectFromEstimate(stages, meta); }} />}
       {editingTemplateId ? (
         <Workspace
           project={normalizeProject(projectTemplates.find((template) => template.id === editingTemplateId))}
@@ -704,8 +748,11 @@ export default function KubikiApp({ userId, user, onSignOut }) {
           performers={performers} onSavePerformer={savePerformer}
           quickAccess={quickAccess} onToggleQuickAccessPin={toggleQuickAccessPin} onRemoveQuickAccess={removeQuickAccessByItem}
           onOpenAiSettings={() => setAiSettingsOpen(true)}
+          onOpenUsage={() => setUsageOpen(true)}
+
           userAccount={{ id: userId, displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }}
           aiGenerationReady={aiGenerationReady}
+          onTrackAiGenerate={(meta) => trackProductEvent("ai_generate", { requestId: meta?.requestId || null })}
           onSignOut={handleSignOut}
         />
       ) : currentProject ? (
@@ -714,11 +761,13 @@ export default function KubikiApp({ userId, user, onSignOut }) {
           performers={performers} onSavePerformer={savePerformer}
           quickAccess={quickAccess} onToggleQuickAccessPin={toggleQuickAccessPin} onRemoveQuickAccess={removeQuickAccessByItem} onSignOut={handleSignOut}
           onOpenAiSettings={() => setAiSettingsOpen(true)}
+          onOpenUsage={() => setUsageOpen(true)}
+
           userAccount={{ id: userId, displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }}
           aiGenerationReady={aiGenerationReady}
           taskTemplates={templateLibrary.taskTemplates} stageTemplates={templateLibrary.stageTemplates}
           onTaskTemplatesChange={handleTaskTemplatesChange} onStageTemplatesChange={handleStageTemplatesChange}
-          onRequestAiEdit={requestCurrentAiEdit} onCancelAiEdit={cancelCurrentAiEdit} onApplyAiEdit={applyCurrentAiEdit}
+          onRequestAiEdit={requestCurrentAiEdit} onCancelAiEdit={cancelCurrentAiEdit} onApplyAiEdit={applyCurrentAiEdit} onTrackAiGenerate={(meta) => trackProductEvent("ai_generate", { requestId: meta?.requestId || null })}
           onUndoAiEdit={undoCurrentAiEdit} canUndoAiEdit={aiUndoVersion >= 0 && aiUndoRef.current.has(currentProject.id)} />
       ) : activeSection === APP_SECTIONS.KNOWLEDGE_BASE ? (
         <KnowledgeBasePage performers={performers} performerState={performerState} performerMessage={performerMessage} onRetryPerformers={() => setPerformerRetry((value) => value + 1)} quickAccess={quickAccess} onSectionChange={setActiveSection}
@@ -733,7 +782,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
           onTemplatesChange={handleTemplatesChange} onEditTemplate={setEditingTemplateId}
           categories={templateLibrary.categories} onCategoriesChange={(categories) => replaceTemplateLibrary((library) => ({ ...library, categories }))}
           openCategoryIds={templateLibrary.metadata.openCategoryIds || ["new"]} onOpenCategoryIdsChange={(openCategoryIds) => replaceTemplateLibrary((library) => ({ ...library, metadata: { ...library.metadata, openCategoryIds } }))}
-          onToggleFavorite={toggleFavorite} onRenameProject={renameProject} onSectionChange={setActiveSection} onOpenAiSettings={() => setAiSettingsOpen(true)} onSignOut={handleSignOut}
+          onToggleFavorite={toggleFavorite} onRenameProject={renameProject} onSectionChange={setActiveSection} onOpenAiSettings={() => setAiSettingsOpen(true)} onOpenUsage={() => setUsageOpen(true)} onSignOut={handleSignOut}
           userAccount={{ id: userId, displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }} />
       )}
     </>
