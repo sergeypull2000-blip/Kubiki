@@ -6,6 +6,8 @@
    Settings → Environment Variables)
    ============================================================ */
 
+import { authenticateRequest } from "./_lib/auth.js";
+
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const MODEL = "deepseek-v4-flash";
 
@@ -28,10 +30,13 @@ export default async function handler(req, res) {
   // CORS — разрешаем запросы с любого origin (для preview на Vercel)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  const auth = await authenticateRequest(req);
+  if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
   const key = process.env.DEEPSEEK_API_KEY;
   if (!key) return res.status(500).json({ error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" });

@@ -99,8 +99,12 @@ const serializePdfRows = (rows) => rows.map((line, i) => `R${i + 1} | ${line}`).
    (лист Excel или страницы PDF) на этот момент уже сведён к одному и тому же
    строково-табличному виду — дальше пайплайн общий. */
 async function llmParseText(sheetText, filename, instruction = "") {
+  const { supabase } = await import("./supabaseClient.js");
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) throw new Error("Сессия недействительна. Войдите снова.");
   const r = await fetch("/api/parse-excel", {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ sheet: sheetText, filename, instruction }),
   });
   if (!r.ok) {

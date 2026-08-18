@@ -90,6 +90,12 @@ export const CSS = `
 .kb-auth-submit{border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:var(--fs-base);font-weight:var(--fw-medium);padding:9px 14px;border-radius:6px;cursor:pointer;transition:.15s}
 .kb-auth-submit:hover:not(:disabled){filter:brightness(.96)}
 .kb-auth-submit:disabled{cursor:default;opacity:.65}
+.kb-auth-subtext{color:var(--text-muted);font-size:var(--fs-sm);line-height:1.5;margin-top:-10px}
+.kb-auth-notice{color:#1a7f4b;font-size:var(--fs-sm);line-height:1.5;margin-top:-4px}
+.kb-auth-links{display:flex;flex-direction:column;gap:9px;align-items:flex-start;margin-top:-4px}
+.kb-auth-link{border:0;background:none;padding:0;color:var(--accent);font:inherit;font-size:var(--fs-sm);font-weight:var(--fw-medium);cursor:pointer;text-align:left}
+.kb-auth-link:hover{text-decoration:underline}
+
 .kb-total-badge{display:flex; flex-direction:column; align-items:flex-end; gap:2px; line-height:1.2;
   padding:7px 16px; border-radius:9px; background:var(--accent-soft)}
 .kb-total-badge-price{background:var(--accent); }
