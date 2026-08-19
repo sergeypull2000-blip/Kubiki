@@ -338,7 +338,7 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
   // Ловим mousedown в фазе ПЕРЕХВАТА (до дочерних обработчиков со stopPropagation)
   // и, если жмут по интерактиву, выключаем draggable прямо в DOM. Между mousedown
   // и dragstart нет ре-рендера — так надёжнее, чем через React-стейт.
-  const INTERACTIVE_SEL = "input, textarea, select, button, .kb-tag, .kb-addcube, .kb-payinline, .kb-erow-taxed";
+  const INTERACTIVE_SEL = "input, textarea, select, button, .kb-tag, .kb-addcube, .kb-payinline, .kb-erow-taxed, .kb-erow-sum";
   const onRowMouseDownCapture = (e) => {
     if (rowRef.current) rowRef.current.draggable = !e.target.closest(INTERACTIVE_SEL);
   };

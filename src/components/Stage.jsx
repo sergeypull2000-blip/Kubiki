@@ -135,7 +135,7 @@ export function StageCard({ stage, stageNumber, dispatch, activeStageId, activeT
     <div className={"kb-stage" + depthClass + (isActive ? " kb-stage-active" : "") + (isOverReorder ? " kb-stage-over" : "") + (isDragging ? " kb-stage-dragging" : "")}
       {...reorderHandlers} onMouseDown={onStageMouseDown} onContextMenu={(event) => onAiContext?.(event, { kind: "stage", stageId: stage.id, label: stage.name || "Этап" })}>
       <div className="kb-stage-head" {...dragHandlers} title="Перетащите строку, чтобы переставить этап"
-        onMouseDownCapture={(event) => { event.currentTarget.draggable = !event.target.closest("input, textarea, button, select"); }}
+        onMouseDownCapture={(event) => { event.currentTarget.draggable = !event.target.closest("input, textarea, button, select, .kb-sum"); }}
         onMouseUp={(event) => { event.currentTarget.draggable = true; }}>
         <button type="button" className="kb-icon-btn kb-tree-collapse" draggable={false}
           onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); patchStage({ collapsed: !stage.collapsed }); }}

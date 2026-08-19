@@ -22,6 +22,7 @@ import { addPerformerToTask, buildPerformerFromExecutor, linkExecutorToPerformer
 import { sortQuickAccessItems } from "../quickAccess.js";
 import { createTaskTemplate, createStageTemplate, cloneTaskTemplate, cloneStageTemplate } from "../templates.js";
 import { AccountControl } from "./AccountControl.jsx";
+import { BetaBadge } from "./BetaBadge.jsx";
 
 const LEFT_PANEL_RANGE = [210, 320];
 const RIGHT_PANEL_RANGE = [250, 360];
@@ -458,6 +459,7 @@ const toggleAllCollapsed = () =>
       <header className="kb-header kb-header-min">
         <div className="kb-header-inner">
           <LogoMenu onSaveProject={saveProjectFile} onLoadProject={loadProjectFile} />
+          <BetaBadge />
           <nav className="kb-crumbs">
             <button type="button" className="kb-crumb-link" onClick={onBack}>{editingTemplate ? "Шаблоны" : "Проекты"}</button>
             <span className="kb-crumb-sep">/</span>

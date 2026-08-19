@@ -94,3 +94,22 @@ test("task row exposes a comment toggle and inline editor bound to exportComment
   assert.match(task, /kb-task-comment-input/);
   assert.match(styles, /\.kb-task-comment-btn\.is-active\{color:var\(--accent\)\}/);
 });
+
+test("workspace money/number displays stay text-selectable despite reorder drag", async () => {
+  const [task, stage, executor, styles] = await Promise.all([
+    source("src/components/Task.jsx"), source("src/components/Stage.jsx"),
+    source("src/components/Executor.jsx"), source("src/styles.js"),
+  ]);
+  // Суммы задачи/этапа лежат внутри draggable head'ов: mousedown по ним должен
+  // выключать draggable (иначе нативный DnD перехватывает выделение текста).
+  assert.match(task, /closest\("input, textarea, button, select, \.kb-sum"\)/);
+  assert.match(stage, /closest\("input, textarea, button, select, \.kb-sum"\)/);
+  // Сумма исполнителя — та же защита в INTERACTIVE_SEL строки.
+  assert.match(executor, /\.kb-erow-sum/);
+  assert.match(executor, /INTERACTIVE_SEL = "input, textarea, select, button, \.kb-tag, \.kb-addcube, \.kb-payinline, \.kb-erow-taxed, \.kb-erow-sum"/);
+  // Суммы остаются выделяемыми по CSS независимо от draggable-контейнеров.
+  assert.match(styles, /\.kb-sum\{[^}]*user-select:text/);
+  assert.match(styles, /\.kb-erow-sum\{[^}]*user-select:text/);
+  // Верхнее «Итого» — без user-select:none, выделяется как обычный текст.
+  assert.doesNotMatch(styles, /\.kb-total-badge\{[^}]*user-select:none/);
+});

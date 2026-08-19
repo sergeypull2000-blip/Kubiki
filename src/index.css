@@ -31,6 +31,10 @@ body {
 .kb-profile-row-copy strong { font-size: 13px; color: #27303f; }
 .kb-profile-row-copy small { font-size: 11px; color: #818899; }
 .kb-profile-menu-up { top: auto; right: auto; left: 4px; bottom: calc(100% + 7px); width: 232px; transform-origin: bottom left; }
+/* Меню аккаунта якорится через position:fixed (координаты из JS), чтобы
+   его не обрезали overflow:hidden родительских сайдбаров (kb-palette,
+   kb-dash-sidebar). Позиция задаётся инлайн-стилем. */
+.kb-profile-menu-anchored { position: fixed; top: auto; right: auto; bottom: auto; left: auto; }
 
 .kb-canvas { position: relative; }
 .kb-ai-launcher-wrap { position: fixed; z-index: 900; bottom: 69px; width: 54px; height: 54px; }

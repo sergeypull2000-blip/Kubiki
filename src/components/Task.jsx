@@ -69,7 +69,7 @@ export function TaskBlock({ task, taskNumber, stageId, dispatch, taskDict, taskF
     <div className={"kb-task" + depthClass + (task.collapsed ? " kb-task-collapsed" : "") + (isActive ? " kb-task-active" : "") + (isOver ? " kb-task-over" : "") + (isTaskOver ? " kb-task-reorder-over" : "") + (isDragging ? " kb-task-dragging" : "")}
       onMouseDown={onTaskMouseDown} onContextMenu={(event) => { event.stopPropagation(); onAiContext?.(event, { kind: "task", stageId, taskId: task.id, label: task.name || "Задача" }); }} {...taskDropHandlers}>
       <div className="kb-task-head" {...dragHandlers} {...dropHandlers} title="Перетащите строку, чтобы переставить задачу"
-        onMouseDownCapture={(event) => { event.currentTarget.draggable = !event.target.closest("input, textarea, button, select"); }}
+        onMouseDownCapture={(event) => { event.currentTarget.draggable = !event.target.closest("input, textarea, button, select, .kb-sum"); }}
         onMouseUp={(event) => { event.currentTarget.draggable = true; }}>
         <button type="button" className="kb-icon-btn kb-task-collapse" onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); onPatch({ collapsed: !task.collapsed }); }}

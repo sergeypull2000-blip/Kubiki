@@ -85,7 +85,7 @@ export const CSS = `
 .kb-auth-card{width:100%;max-width:360px;display:flex;flex-direction:column;gap:18px;padding:30px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(26,34,48,.06)}
 .kb-auth-heading{font-size:var(--fs-xl);font-weight:var(--fw-semibold);letter-spacing:-.02em}
 .kb-auth-field{display:flex;flex-direction:column;gap:7px;color:var(--text-muted);font-size:var(--fs-sm);font-weight:var(--fw-medium)}
-.kb-auth-field .kb-input{width:100%;font-size:var(--fs-base);color:var(--text)}
+.kb-auth-field .kb-input{width:100%;font-size:var(--fs-base);color:var(--text);border:1px solid var(--line);background:var(--surface);padding:9px 10px;border-radius:6px}
 .kb-auth-error{margin-top:-4px;color:#B42318;font-size:var(--fs-sm)}
 .kb-auth-submit{border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:var(--fs-base);font-weight:var(--fw-medium);padding:9px 14px;border-radius:6px;cursor:pointer;transition:.15s}
 .kb-auth-submit:hover:not(:disabled){filter:brightness(.96)}
@@ -209,7 +209,7 @@ export const CSS = `
 .kb-dropzone-over{background:var(--accent-soft); outline:1.5px dashed var(--accent); outline-offset:-4px; border-radius:5px}
 
 /* иерархия сумм: все выровнены по правому краю, вес/размер = уровень */
-.kb-sum{font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right; margin-left:auto}
+.kb-sum{font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right; margin-left:auto; user-select:text}
 .kb-sum-stage{font-size:16px; font-weight:var(--fw-semibold); color:var(--text); letter-spacing:-.01em; min-width:104px}
 .kb-sum-task{font-size:var(--fs-sm); font-weight:var(--fw-medium); color:var(--text-muted); min-width:104px}
 /* быстрый ввод стоимости задачи напрямую, пока нет исполнителей */
@@ -271,7 +271,7 @@ export const CSS = `
 .kb-erow-tags{flex:1; min-width:0; min-height:27px; display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding:1px 0}
 .kb-erow-amount{flex-shrink:0; min-width:104px; display:flex; justify-content:flex-end; align-items:center; gap:6px}
 .kb-erow-taxed{white-space:nowrap; user-select:text; cursor:text}
-.kb-erow-sum{font-size:var(--fs-xs); font-weight:var(--fw-regular); color:var(--text-muted); font-variant-numeric:tabular-nums; white-space:nowrap}
+.kb-erow-sum{font-size:var(--fs-xs); font-weight:var(--fw-regular); color:var(--text-muted); font-variant-numeric:tabular-nums; white-space:nowrap; user-select:text}
 .kb-erow-sum-muted{color:var(--text-faint)}
 .kb-erow-sum-strong{font-size:var(--fs-sm); font-weight:var(--fw-medium); color:var(--text)}
 .kb-amount-input{text-align:right; font-size:var(--fs-sm); font-weight:var(--fw-medium)}
@@ -922,7 +922,7 @@ export const CSS = `
 .kb-welcome-brand{display:flex;align-items:center;gap:10px;padding:20px 22px 0}.kb-welcome-brand span{font-size:18px;font-weight:var(--fw-semibold);letter-spacing:-.02em}.kb-welcome-brand em{font-style:normal;color:var(--accent);font-size:12px;margin-left:2px}
 .kb-welcome-title{margin:16px 22px 0;font-size:20px;letter-spacing:-.02em}
 .kb-welcome-text{margin:8px 22px 0;color:var(--text-muted);font-size:var(--fs-sm);line-height:1.5}
-.kb-welcome-points{display:flex;flex-direction:column;gap:10px;margin:16px 22px 0}.kb-welcome-points div{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface-sunken)}.kb-welcome-points strong{font-size:var(--fs-sm)}.kb-welcome-points span{color:var(--text-muted);font-size:var(--fs-xs);line-height:1.4}
+.kb-welcome-list{margin:14px 22px 0;display:flex;flex-direction:column;gap:6px}.kb-welcome-list-label{font-size:var(--fs-sm);font-weight:var(--fw-semibold);color:var(--text)}.kb-welcome-list ul{margin:0;padding:0 0 0 18px;display:flex;flex-direction:column;gap:4px;color:var(--text-muted);font-size:var(--fs-sm);line-height:1.45}.kb-welcome-list li::marker{color:var(--accent)}
 .kb-welcome-modal .kb-modal-actions{padding:18px 22px 22px}
 .kb-usage-modal{width:min(440px,92vw)}
 .kb-usage-bar{height:10px;border-radius:999px;background:var(--surface-sunken);border:1px solid var(--line);overflow:hidden}
