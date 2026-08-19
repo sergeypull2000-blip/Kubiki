@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { parseAiEditResponse, validateAiEditRequest } from "../src/ai/editSchema.js";
 import { AiEditValidationError, applyAiEditOperations } from "../src/ai/editOperations.js";
 import { buildAiEditPreview } from "../src/ai/editPreview.js";
-import { projectRevision } from "../src/ai/projectRevision.js";
+import { projectRevision, sheetRevision } from "../src/ai/projectRevision.js";
 import { createAiEditUndoStore } from "../src/ai/editUndo.js";
 import { globalAiEditScope } from "../src/ai/editScope.js";
 import { buildAiEditContinuation } from "../src/ai/editContinuation.js";
@@ -147,16 +147,16 @@ test("replace Performer is direct-only, replaces known data and preserves execut
 });
 
 test("preview is immutable, computes before/after and rejects stale revisions", async () => {
-  const original = project(), snapshot = structuredClone(original), revision = await projectRevision(original), diff = { ...response([operation("task.rename", "t", { name: "Скульптинг" })]), baseRevision: revision };
+  const original = project(), snapshot = structuredClone(original), revision = await sheetRevision(original), diff = { ...response([operation("task.rename", "t", { name: "Скульптинг" })]), baseRevision: revision };
   const preview = await buildAiEditPreview({ project: original, response: diff, idPool: pool(), expectedRevision: revision });
   assert.deepEqual(original, snapshot); assert.equal(preview.kind, "diff"); assert.equal(preview.before.internalCost, 1000); assert.equal(preview.after.tasks, 1);
-  await assert.rejects(() => buildAiEditPreview({ project: { ...original, name: "Changed" }, response: diff, idPool: pool(), expectedRevision: revision }), (error) => error.code === "stale_revision");
+  await assert.rejects(() => buildAiEditPreview({ project: { ...original, stages: [{ ...original.stages[0], tasks: [{ ...original.stages[0].tasks[0], name: "Changed" }] }] }, response: diff, idPool: pool(), expectedRevision: revision }), (error) => error.code === "stale_revision");
 });
 
 test("global tax diff creates add/update operations, preserves amounts and exposes financial preview", async () => {
   const original = project(), task = original.stages[0].tasks[0];
   task.executors.push({ id: "e2", amount: "2000", tags: [{ id: "pay2", key: "payment", value: "fix_total", payment: { type: "fix_total", rate: "", units: "", hours: "", shifts: "" } }, { id: "tax2", key: "tax", value: "3" }] });
-  const revision = await projectRevision(original), diff = { ...response([
+  const revision = await sheetRevision(original), diff = { ...response([
     operation("executor.tag.add", "e", { tagId: "tg-new-1", key: "tax", value: "6" }, undefined, "op-tax-1"),
     operation("executor.tag.update", "tax2", { executorId: "e2", value: "6" }, undefined, "op-tax-2"),
   ]), baseRevision: revision };

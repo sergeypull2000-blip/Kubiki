@@ -1,4 +1,5 @@
 import { indexProject } from "./editOperations.js";
+import { sheetProject } from "../sheets.js";
 
 const normalized = (value) => String(value || "").normalize("NFKC").toLocaleLowerCase("ru-RU").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const same = (a, b) => normalized(a) === normalized(b);
@@ -61,6 +62,7 @@ function scopeContains(project, scope, kind, id) {
 }
 
 export function resolveAiEditSemanticDraft({ semantic, project, scope, performers = [], instruction = "", prior = null, answer = "", selectedSource = null, confirmedPerformerIds = [] }) {
+  project = sheetProject(project, scope?.sheetId);
   if (semantic.kind !== "commands") return { semantic, confirmedTargets: {}, unresolvedSlots: [] };
   const draft = semantic, confirmedTargets = structuredClone(prior?.confirmedTargets || {}), slotValues = { ...(prior?.slotValues || {}) };
   if (prior?.unresolvedSlots?.length && (answer || selectedSource)) {
@@ -114,15 +116,19 @@ export function resolveAiEditSemanticDraft({ semantic, project, scope, performer
       const task = contextualCreationParent(project, scope, "executor") || restoredTask || selectedCandidate || soleStageTask(project, scope);
       if (task) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), task: { kind: "task", id: task.id } };
       else addSlot(index, "task", "task", taskCandidates.length ? scope?.kind === "stage" ? `В какую задачу добавить ${performerLabel}?` : `Куда добавить ${performerLabel}?` : "В выбранном Stage нет Task. Создать Task или выбрать другую?", taskCandidates);
-    } else if (!["stage.create", "executor.createFromPerformer", "executor.setTaxBulk"].includes(command.type) && !command.targetRef) {
-      const kind = command.type.startsWith("stage.") ? "stage" : command.type.startsWith("task.") ? "task" : "executor";
-      const selected = slotValues[`slot-${index}-target`] || command.targetName;
-      const candidates = entities(project, kind, command).filter((item) => scopeContains(project, scope, kind, item.id));
-      const scopedMatches = selected ? candidates.filter((item) => same(item.name, selected)) : [];
-      const soleExecutorInNamedTask = !selected && kind === "executor" && command.taskName && candidates.length === 1 ? candidates[0] : null;
-      const resolved = selectedSourceFor(slotValues[`slot-${index}-target`], project, kind) || scopedMatches.length === 1 && scopedMatches[0] || soleExecutorInNamedTask || !selected && trustedScopeEntity(project, scope, kind) || !selected && scopeEntity(scope, kind);
-      if (resolved) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), target: { kind, id: resolved.id } };
-      else addSlot(index, "target", kind, `Какой ${kind} изменить?`, entities(project, kind, command));
+    } else if (!["stage.create", "executor.createFromPerformer", "executor.setTaxBulk", "estimate.setTargetBudget"].includes(command.type) && !command.targetRef) {
+      if (command.target?.kind === "all_in_scope") {
+        confirmedTargets[index] = { ...(confirmedTargets[index] || {}), target: { kind: "all_in_scope" } };
+      } else {
+        const kind = command.type.startsWith("stage.") ? "stage" : command.type.startsWith("task.") ? "task" : "executor";
+        const selected = slotValues[`slot-${index}-target`] || command.targetName;
+        const candidates = entities(project, kind, command).filter((item) => scopeContains(project, scope, kind, item.id));
+        const scopedMatches = selected ? candidates.filter((item) => same(item.name, selected)) : [];
+        const soleExecutorInNamedTask = !selected && kind === "executor" && command.taskName && candidates.length === 1 ? candidates[0] : null;
+        const resolved = selectedSourceFor(slotValues[`slot-${index}-target`], project, kind) || scopedMatches.length === 1 && scopedMatches[0] || soleExecutorInNamedTask || !selected && trustedScopeEntity(project, scope, kind) || !selected && scopeEntity(scope, kind);
+        if (resolved) confirmedTargets[index] = { ...(confirmedTargets[index] || {}), target: { kind, id: resolved.id } };
+        else addSlot(index, "target", kind, `Какой ${kind} изменить?`, entities(project, kind, command));
+      }
     }
   });
   return { semantic: draft, confirmedTargets, slotValues, unresolvedSlots };

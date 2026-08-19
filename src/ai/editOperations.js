@@ -1,6 +1,9 @@
 import { PAYMENT_OPTIONS, SPECIALIZATION_OPTIONS, GRADE_OPTIONS, SOFTWARE_OPTIONS, STAGE_PRESETS } from "../constants.js";
 import { buildExecutorFromPerformer, performerSnapshot } from "../performerLibrary.js";
-import { makeExecutor, makeStage, makeTag, makeTask, normalizeProject } from "../store.js";
+import { makeExecutor, makeStage, makeTag, makeTask, normalizeProject, setSheetStages } from "../store.js";
+import { activeSheetId, sheetProject } from "../sheets.js";
+import { projectSum } from "../calculations.js";
+import { numVal, roundMoney } from "../utils.js";
 
 export const AI_EDIT_MAX_MONEY = 1_000_000_000;
 const PAYMENT_TYPES = new Set(PAYMENT_OPTIONS.map((item) => item.key));
@@ -144,6 +147,34 @@ function validateTagValue(key, value, operation) {
   return normalized;
 }
 
+function scaleMoneyValue(value, factor) {
+  return String(roundMoney(numVal(value) * factor));
+}
+
+/* Deterministic proportional scaling of every scalable monetary input in the
+   (already sheet-scoped) project: fixed amounts, per-unit/hour/shift rates and
+   task directCost. Quantities, markup, tax, VAT and structure stay untouched. */
+function scaleSheetMonetaryInputs(project, factor) {
+  return { ...project, stages: (project.stages || []).map((stage) => ({
+    ...stage,
+    tasks: (stage.tasks || []).map((task) => {
+      const executors = (task.executors || []).map((executor) => {
+        const payTag = (executor.tags || []).find((tag) => tag.key === "payment");
+        const type = payTag?.payment?.type;
+        if (type === "fix_total" && String(executor.amount || "").trim() !== "") {
+          return { ...executor, amount: scaleMoneyValue(executor.amount, factor) };
+        }
+        if (["fix_task", "hourly", "shift"].includes(type) && String(payTag.payment.rate || "").trim() !== "") {
+          return { ...executor, tags: executor.tags.map((tag) => tag.id === payTag.id ? { ...tag, payment: { ...tag.payment, rate: scaleMoneyValue(tag.payment.rate, factor) } } : tag) };
+        }
+        return executor;
+      });
+      const directCost = executors.length === 0 && task.directCost != null && String(task.directCost).trim() !== "" ? scaleMoneyValue(task.directCost, factor) : task.directCost;
+      return { ...task, executors, directCost };
+    }),
+  })) };
+}
+
 function applyOne(project, operation, context) {
   const index = indexProject(project), { scope: requestedScope, idPool, usedIds, performers, instruction, selectedSources } = context;
   // Follow-up fields of an entity created earlier in this same validated diff belong
@@ -252,6 +283,15 @@ function applyOne(project, operation, context) {
       return updateExecutor(project, located, (executor) => ({ ...executor, tags: executor.tags.filter((tag) => tag.id !== located.tag.id) }));
     }
     case "executor.delete": { const located = requireTarget(index, "executor", operation.targetId, scope, operation); return { ...project, stages: replaceAt(project.stages, located.stage.id, (stage) => ({ ...stage, tasks: replaceAt(stage.tasks, located.task.id, (task) => ({ ...task, executors: removeAt(task.executors, operation.targetId) })) })) }; }
+    case "project.setTargetBudget": {
+      const target = Number(moneyString(operation.value.target, operation));
+      if (target <= 0) fail("invalid_target_budget", "Целевая стоимость сметы должна быть больше нуля", operation);
+      const current = projectSum(project);
+      if (!(current > 0)) fail("target_budget_unscalable", "Нечего масштабировать: базовая стоимость сметы равна нулю", operation);
+      const factor = target / current;
+      if (!Number.isFinite(factor) || factor <= 0) fail("target_budget_unscalable", "Не удалось вычислить коэффициент масштабирования", operation);
+      return scaleSheetMonetaryInputs(project, factor);
+    }
     default: fail("unknown_operation", `Операция ${operation.type} не разрешена`, operation);
   }
 }
@@ -259,9 +299,11 @@ function applyOne(project, operation, context) {
 export function applyAiEditOperations(project, response, { performers = [], idPool, instruction = "", selectedSources = [] } = {}) {
   if (!project || response?.kind !== "diff") throw new AiEditValidationError("invalid_diff", "Ожидался валидный AI diff");
   if (response.scope.projectId !== project.id) throw new AiEditValidationError("project_mismatch", "Diff относится к другому Project");
-  let next = clone(normalizeProject(project));
+  const canonical = clone(normalizeProject(project));
+  const sheetId = response.scope?.sheetId || activeSheetId(canonical);
+  let next = sheetProject(canonical, sheetId);
   const context = { scope: response.scope, idPool, usedIds: new Set(), performers, instruction, selectedSources };
   for (const operation of response.operations) next = applyOne(next, operation, context);
   indexProject(next);
-  return normalizeProject(next);
+  return normalizeProject(setSheetStages(canonical, sheetId, next.stages));
 }

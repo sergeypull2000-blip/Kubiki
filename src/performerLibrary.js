@@ -1,5 +1,5 @@
 import { uid } from "./utils.js";
-import { makeTag } from "./store.js";
+import { makeTag, withStages } from "./store.js";
 
 export const PERFORMER_LIBRARY_KEY = "kubiki_performers_v1";
 const text = (value) => typeof value === "string" ? value.trim() : "";
@@ -69,9 +69,9 @@ export function buildExecutorFromPerformer(input, { inheritFinancials = true } =
 export function addPerformerToTask(project, stageId, taskId, performer) {
   if (!performer || !project?.stages?.some((stage) => stage.id === stageId && stage.tasks?.some((task) => task.id === taskId))) return project;
   const executor = buildExecutorFromPerformer(performer);
-  return { ...project, stages: project.stages.map((stage) => stage.id !== stageId ? stage : { ...stage, tasks: stage.tasks.map((task) => task.id !== taskId ? task : { ...task, executors: [...task.executors, executor] }) }) };
+  return withStages(project, project.stages.map((stage) => stage.id !== stageId ? stage : { ...stage, tasks: stage.tasks.map((task) => task.id !== taskId ? task : { ...task, executors: [...task.executors, executor] }) }) );
 }
 export function linkExecutorToPerformer(project, executorId, performer) {
   if (!project || !performer) return project;
-  return { ...project, stages: (project.stages || []).map((stage) => ({ ...stage, tasks: (stage.tasks || []).map((task) => ({ ...task, executors: (task.executors || []).map((executor) => executor.id === executorId ? { ...executor, performerId: performer.id, performerSnapshot: performerSnapshot(performer) } : executor) })) })) };
+  return withStages(project, (project.stages || []).map((stage) => ({ ...stage, tasks: (stage.tasks || []).map((task) => ({ ...task, executors: (task.executors || []).map((executor) => executor.id === executorId ? { ...executor, performerId: performer.id, performerSnapshot: performerSnapshot(performer) } : executor) })) })) );
 }

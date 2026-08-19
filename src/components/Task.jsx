@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, ChevronDown, ChevronRight, Bookmark, Pencil } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Bookmark, Pencil, MessageSquare } from "lucide-react";
 import { fmt } from "../utils.js";
 import { taskSum } from "../calculations.js";
 import { DND_TYPES, useDragSource, useDropTarget, makeExecutor, moveTask, withTask, moveExecutor, patchExecutorIn, withExecutorList } from "../store.js";
@@ -20,6 +20,7 @@ export function TaskBlock({ task, taskNumber, stageId, dispatch, taskDict, taskF
   const [justAddedId, setJustAddedId] = useState(null);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(task.name);
+  const [commentOpen, setCommentOpen] = useState(false);
   const { isDragging, dragHandlers } = useDragSource(DND_TYPES.TASK, { moveTaskId: task.id });
   const { isOver: isTaskOver, dropHandlers: taskDropHandlers } = useDropTarget(DND_TYPES.TASK, (payload) => {
     if (payload?.templateTaskId) {
@@ -97,6 +98,9 @@ export function TaskBlock({ task, taskNumber, stageId, dispatch, taskDict, taskF
         ) : (
           <span className="kb-sum kb-sum-task">{fmt(total)} ₽</span>
         )}
+        <button type="button" className={"kb-icon-btn kb-task-comment-btn" + (task.exportComment ? " is-active" : "")} onClick={() => setCommentOpen((open) => !open)} title="Комментарий к задаче">
+          <MessageSquare size={13} strokeWidth={1.5} />
+        </button>
         {onSaveTaskTemplate && (
           <button type="button" className="kb-icon-btn" onClick={() => onSaveTaskTemplate(task)} title="Сохранить задачу как шаблон">
             <Bookmark size={13} strokeWidth={1.5} />
@@ -106,6 +110,15 @@ export function TaskBlock({ task, taskNumber, stageId, dispatch, taskDict, taskF
           <Trash2 size={13} strokeWidth={1.5} />
         </button>
       </div>
+
+      {commentOpen && (
+        <div className="kb-task-comment">
+          <textarea className="kb-input kb-task-comment-input" rows={3} value={task.exportComment || ""}
+            placeholder="Комментарий к задаче…" title="Комментарий к задаче"
+            onChange={(event) => onPatch({ exportComment: event.target.value })}
+            onMouseDown={(event) => event.stopPropagation()} />
+        </div>
+      )}
 
       {!task.collapsed && (
       <div className={"kb-task-performer-target" + (isPerformerOver ? " kb-task-performer-over" : "")} {...performerDropHandlers}>

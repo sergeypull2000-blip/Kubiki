@@ -12,7 +12,8 @@ import { AiEditSemanticCompileError, compileAiEditSemanticPlan } from "../src/ai
 import { AiEditSemanticPlanError, materializeResolvedSemanticPlan, resolveAiEditSemanticDraft } from "../src/ai/editSemanticPlan.js";
 import { signAiEditContinuation, verifyAiEditContinuation } from "./_lib/semanticContinuation.js";
 import { indexProject } from "../src/ai/editOperations.js";
-import { projectRevision } from "../src/ai/projectRevision.js";
+import { sheetRevision } from "../src/ai/projectRevision.js";
+import { activeSheet, sheetsOf, sheetProject } from "../src/sheets.js";
 import { loadOwnKnowledge } from "./_lib/knowledgeRepository.js";
 import { projectKnowledge } from "./_lib/knowledgeProjection.js";
 import { routeAiIntent } from "./_lib/aiIntentRouter.js";
@@ -51,8 +52,9 @@ async function executeEdit(req, budget) {
   const project = await loadOwnProjectForEdit(auth.client, auth.user.id, request.projectId);
   if (!project) return { status: 404, body: { error: "Смета не найдена" } };
   if (!scopeExists(project, request.scope)) return { status: 400, body: { error: "Выбранный контекст не найден в смете" } };
-  const serverRevision = await projectRevision(project);
+  const serverRevision = await sheetRevision(project, request.scope?.sheetId);
   if (serverRevision !== request.baseRevision) return { status: 409, body: { error: "Смета изменилась. Сначала сохраните её и повторите запрос.", code: "stale_revision" } };
+  const editProject = sheetProject(project, request.scope?.sheetId);
   if (request.continuation) return await continueSemanticPlan({ request, project, auth });
   if (needsClarificationForBareInput(request.instruction)) return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, question: "Что именно нужно изменить в смете?" } };
   let settings = normalizeServerAiSettings();
@@ -80,7 +82,7 @@ async function executeEdit(req, budget) {
   if (route.kind === "clarification") return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, question: route.question } };
   if (route.kind === "unsupported") return { status: 200, body: { schemaVersion: 1, kind: "error", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, code: route.code, message: "Запрос не поддерживается" } };
   if (route.kind === "generate_structure") return generateStructurePlan({ request, project, auth, settings, requestModel });
-  const raw = await requestModel(buildAiEditMessages({ request, project, personalization: settings.personalization, performers: ownPerformers, knowledge }), { maxTokens: 2500, retries: 1, stage: "ai_edit" });
+  const raw = await requestModel(buildAiEditMessages({ request, project: editProject, personalization: settings.personalization, performers: ownPerformers, knowledge }), { maxTokens: 2500, retries: 1, stage: "ai_edit" });
   const semantic = normalizeAiEditSemanticPlan(parseAiEditSemanticResponse(raw));
   if (!semantic) {
     try {
@@ -91,9 +93,9 @@ async function executeEdit(req, budget) {
   }
   if (semantic.kind === "commands") {
     try {
-      const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, performers: ownPerformers, instruction: request.instruction, confirmedPerformerIds: selectedPerformerIds });
+      const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project: editProject, scope: request.scope, performers: ownPerformers, instruction: request.instruction, confirmedPerformerIds: selectedPerformerIds });
       if (resolvedPlan.unresolvedSlots.length) return clarificationResponse(request, resolvedPlan);
-      const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project, confirmedTargets: resolvedPlan.confirmedTargets, performers: ownPerformers });
+      const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project: editProject, confirmedTargets: resolvedPlan.confirmedTargets, performers: ownPerformers });
       return { status: 200, body: diff };
     } catch (error) {
       if (error instanceof AiEditSemanticPlanError || error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code } };
@@ -141,6 +143,7 @@ function confirmedTargetsExist(project, confirmedTargets) {
 async function continueSemanticPlan({ request, project, auth }) {
   const pending = verifyAiEditContinuation(request.continuation.token);
   if (!pending || pending.projectId !== request.projectId || pending.baseRevision !== request.baseRevision || JSON.stringify(pending.scope) !== JSON.stringify(request.scope)) return { status: 400, body: { error: "Уточнение недействительно или устарело", code: "ai_continuation_invalid" } };
+  const editProject = sheetProject(project, request.scope?.sheetId);
   if (pending.kind === "generated_structure") {
     const draft = parseGeneratedStructure(pending.generatedDraft);
     if (!draft) return { status: 400, body: { error: "Уточнение недействительно или устарело", code: "ai_continuation_invalid" } };
@@ -155,14 +158,14 @@ async function continueSemanticPlan({ request, project, auth }) {
     }
   }
   const semantic = parseAiEditSemanticResponse(pending.semantic);
-  if (!semantic || semantic.kind !== "commands" || !confirmedTargetsExist(project, pending.confirmedTargets)) return { status: 409, body: { error: "Подтверждённые сущности больше не существуют", code: "stale_revision" } };
+  if (!semantic || semantic.kind !== "commands" || !confirmedTargetsExist(editProject, pending.confirmedTargets)) return { status: 409, body: { error: "Подтверждённые сущности больше не существуют", code: "stale_revision" } };
   try {
     const needsPerformers = semantic.commands.some((command) => command.type === "executor.createFromPerformer");
     const performers = needsPerformers ? await loadOwnPerformersForEdit(auth.client, auth.user.id) : [];
-    const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project, scope: request.scope, performers, instruction: request.instruction, prior: pending,
+    const resolvedPlan = resolveAiEditSemanticDraft({ semantic, project: editProject, scope: request.scope, performers, instruction: request.instruction, prior: pending,
       answer: request.continuation.answer, selectedSource: request.continuation.source });
     if (resolvedPlan.unresolvedSlots.length) return clarificationResponse(request, resolvedPlan);
-    const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project, confirmedTargets: resolvedPlan.confirmedTargets, performers });
+    const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project: editProject, confirmedTargets: resolvedPlan.confirmedTargets, performers });
     return { status: 200, body: diff };
   } catch (error) {
     if (error instanceof AiEditSemanticPlanError || error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code } };
@@ -171,8 +174,15 @@ async function continueSemanticPlan({ request, project, auth }) {
 }
 
 function scopeExists(project, scope) {
-  if (scope.kind === "project") return scope.projectId === project.id;
-  const stage = (project.stages || []).find((item) => item.id === scope.stageId);
+  if (scope.kind === "project") {
+    if (scope.projectId !== project.id) return false;
+    return scope.sheetId == null || sheetsOf(project).some((sheet) => sheet.id === scope.sheetId);
+  }
+  const sheet = scope.sheetId != null
+    ? sheetsOf(project).find((item) => item.id === scope.sheetId)
+    : activeSheet(project);
+  if (!sheet) return false;
+  const stage = (sheet.stages || []).find((item) => item.id === scope.stageId);
   if (!stage) return false;
   if (scope.kind === "stage") return true;
   const task = (stage.tasks || []).find((item) => item.id === scope.taskId);

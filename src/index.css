@@ -33,7 +33,7 @@ body {
 .kb-profile-menu-up { top: auto; right: auto; left: 4px; bottom: calc(100% + 7px); width: 232px; transform-origin: bottom left; }
 
 .kb-canvas { position: relative; }
-.kb-ai-launcher-wrap { position: fixed; z-index: 900; bottom: 39px; width: 54px; height: 54px; }
+.kb-ai-launcher-wrap { position: fixed; z-index: 900; bottom: 69px; width: 54px; height: 54px; }
 .kb-ai-launcher { position: absolute; z-index: 3; right: 0; bottom: 0; display: grid; place-items: center; width: 54px; height: 54px; padding: 0; border: 0; border-radius: 15px; background: linear-gradient(145deg, #2974f0, #1553c6); color: #fff; box-shadow: 0 10px 25px rgba(27, 92, 211, .3); cursor: pointer; transition: width .23s cubic-bezier(.2,.75,.25,1), height .23s cubic-bezier(.2,.75,.25,1), right .23s cubic-bezier(.2,.75,.25,1), bottom .23s cubic-bezier(.2,.75,.25,1), border-radius .23s ease, box-shadow .18s ease; }
 .kb-ai-launcher:hover { transform: none; box-shadow: 0 13px 30px rgba(27, 92, 211, .38); }
 .kb-ai-launcher svg { transition: transform .23s cubic-bezier(.2,.75,.25,1); }
@@ -78,3 +78,19 @@ body {
 @keyframes kb-ai-launcher-open { from { opacity: 0; transform: scale(.12); } to { opacity: 1; transform: scale(1); } }
 @keyframes kb-ai-launcher-close { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(.12); } }
 @keyframes kb-ai-feedback-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+
+/* Sheet tabs (multi-sheet estimates) — spreadsheet-style, pinned to the bottom of the working area */
+.kb-sheets-bar { display: flex; align-items: center; gap: 4px; padding: 6px 14px; border-top: 1px solid var(--line, #E3E9F0); background: var(--surface, #FFFFFF); flex: 0 0 auto; min-width: 0; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.kb-sheets-bar::-webkit-scrollbar { display: none; }
+.kb-sheet-tab { position: relative; display: flex; align-items: center; gap: 4px; flex: 0 0 auto; width: 155px; min-width: 155px; height: 30px; padding: 0 8px; border: 1px solid transparent; border-radius: 6px; cursor: pointer; color: var(--text-muted, #64748B); font-size: 13px; background: var(--surface, #FFFFFF); transition: background .12s ease, color .12s ease; }
+.kb-sheet-tab:hover:not(.is-active) { background: var(--surface-sunken, #FAFBFD); }
+.kb-sheet-tab.is-active { background: #F1F4F8; border-color: var(--line, #EAEEF3); color: var(--accent, #5B8DEF); font-weight: 600; box-shadow: 0 1px 2px rgba(26, 34, 48, .05); }
+.kb-sheet-name { flex: 1 1 auto; min-width: 0; padding: 2px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-sheet-name-edit { width: 100%; border: 1px solid var(--accent, #5B8DEF); border-radius: 5px; background: #fff; font: inherit; color: var(--text, #1A2230); }
+.kb-sheet-tools { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
+.kb-sheet-tab:hover .kb-sheet-tools, .kb-sheet-tab.is-active .kb-sheet-tools { opacity: 1; pointer-events: auto; }
+.kb-sheet-ctrl { border: none; background: transparent; cursor: pointer; color: var(--text-muted, #64748B); font-size: 13px; line-height: 1; padding: 0; width: 20px; height: 20px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; }
+.kb-sheet-ctrl:hover { background: var(--accent-soft, #EEF4FE); color: var(--text, #1A2230); }
+.kb-sheet-ctrl-del:hover { color: #c0392b; }
+.kb-sheet-add { flex: 0 0 auto; border: 1px dashed var(--line-strong, #D3DAE3); background: transparent; cursor: pointer; color: var(--text-muted, #64748B); font-size: 15px; line-height: 1; width: 30px; height: 30px; padding: 0; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; }
+.kb-sheet-add:hover { border-color: var(--accent, #5B8DEF); color: var(--text, #1A2230); }

@@ -130,3 +130,38 @@ test("history is not queried without opt-in and is owner scoped and bounded when
   assert.equal(result.historicalProjects.some((project) => project.id === "h14"), false);
   assert.ok(withHistory.calls.some((call) => call.table === "projects" && call.limit === 50));
 });
+
+test("multi-sheet history projects the active sheet's stages", async () => {
+  const client = mockClient({
+    performerRows: [],
+    templateRow: null,
+    projectRows: [{ user_id: "u1", client_id: "p1", project_data: {
+      id: "p1", name: "Multi", createdAt: new Date(2026, 0, 1).toISOString(),
+      sheets: [
+        { id: "a", name: "Sheet A", stages: [{ id: "sa", name: "Stage A", tasks: [] }] },
+        { id: "b", name: "Sheet B", stages: [{ id: "sb", name: "Stage B", tasks: [] }] },
+      ],
+      activeSheetId: "b",
+    } }],
+  });
+  const raw = await loadOwnKnowledge(client, "u1", { includeHistory: true });
+  const knowledge = projectKnowledge(raw);
+  assert.equal(knowledge.historicalProjects.length, 1);
+  assert.deepEqual(knowledge.historicalProjects[0].stages.map((stage) => stage.id), ["sb"]);
+  assert.equal(knowledge.historicalProjects[0].name, "Multi");
+});
+
+test("legacy { stages } project history keeps working after migration", async () => {
+  const client = mockClient({
+    performerRows: [],
+    templateRow: null,
+    projectRows: [{ user_id: "u1", client_id: "p1", project_data: {
+      id: "p1", name: "Legacy", createdAt: new Date(2026, 0, 1).toISOString(),
+      stages: [{ id: "s", name: "Stage", tasks: [{ id: "t", name: "Task", executors: [] }] }],
+    } }],
+  });
+  const raw = await loadOwnKnowledge(client, "u1", { includeHistory: true });
+  const knowledge = projectKnowledge(raw);
+  assert.equal(knowledge.historicalProjects.length, 1);
+  assert.deepEqual(knowledge.historicalProjects[0].stages.map((stage) => stage.id), ["s"]);
+});

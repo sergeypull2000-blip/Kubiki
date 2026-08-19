@@ -29,21 +29,21 @@ test("Excel formulas survive branded fills, fonts and comment columns", () => {
   sheet.eachRow((row) => row.eachCell((cell) => { if (cell.value?.formula) formulaCells.push(cell); }));
   assert.ok(formulaCells.length >= 2);
   assert.ok(formulaCells.every((cell) => typeof cell.value.formula === "string"));
-  assert.equal(sheet.columnCount, 3);
-  const stageRow = sheet.findRow(sheet.getColumn(1).values.findIndex((value) => value === "Stage"));
-  const taskRow = sheet.findRow(sheet.getColumn(1).values.findIndex((value) => String(value).includes("Task")));
-  const totalRow = sheet.findRow(sheet.getColumn(1).values.findIndex((value) => value === "ИТОГО"));
-  assert.equal(stageRow.fill.fgColor.argb, "FF112233");
-  assert.equal(taskRow.fill.fgColor.argb, "FFFFFFFF");
-  assert.equal(totalRow.fill.fgColor.argb, "FF445566");
+  assert.equal(sheet.columnCount, 4);
+  const stageRow = sheet.findRow(sheet.getColumn(2).values.findIndex((value) => value === "Stage"));
+  const taskRow = sheet.findRow(sheet.getColumn(2).values.findIndex((value) => value === "Task"));
+  const totalRow = sheet.findRow(sheet.getColumn(2).values.findIndex((value) => value === "ИТОГО"));
+  assert.equal(stageRow.getCell(1).fill.fgColor.argb, "FF112233");
+  assert.equal(taskRow.getCell(1).fill.fgColor.argb, "FFFFFFFF");
+  assert.equal(totalRow.getCell(1).fill.fgColor.argb, "FF445566");
 });
 
 test("stage/task/total text colors reach Excel fonts", () => {
   const model = buildExportEstimateModel(project({ branding: { colors: { stage: "#101010", stageText: "#aabbcc", task: "#202020", taskText: "#ddeeff", total: "#303030", totalText: "#112233" } } }));
   const sheet = buildExcelWorkbook(model).worksheets[0];
-  const stageRow = sheet.findRow(sheet.getColumn(1).values.findIndex((value) => value === "Stage"));
-  const taskRow = sheet.findRow(sheet.getColumn(1).values.findIndex((value) => String(value).includes("Task")));
-  const totalRow = sheet.findRow(sheet.getColumn(1).values.findIndex((value) => value === "ИТОГО"));
+  const stageRow = sheet.findRow(sheet.getColumn(2).values.findIndex((value) => value === "Stage"));
+  const taskRow = sheet.findRow(sheet.getColumn(2).values.findIndex((value) => value === "Task"));
+  const totalRow = sheet.findRow(sheet.getColumn(2).values.findIndex((value) => value === "ИТОГО"));
   assert.equal(stageRow.font.color.argb, "FFAABBCC");
   assert.equal(taskRow.font.color.argb, "FFDDEEFF");
   assert.equal(totalRow.font.color.argb, "FF112233");
@@ -167,8 +167,8 @@ test("arbitrary custom hex colors reach the canonical model and Excel", () => {
   assert.equal(model.stages[0].rows[0].textColor, "#dd22ee");
 
   const sheet = buildExcelWorkbook(model).worksheets[0];
-  const stageRow = sheet.findRow(sheet.getColumn(1).values.findIndex((value) => value === "Stage"));
-  assert.equal(stageRow.fill.fgColor.argb, "FF0A2B4C");
+  const stageRow = sheet.findRow(sheet.getColumn(2).values.findIndex((value) => value === "Stage"));
+  assert.equal(stageRow.getCell(1).fill.fgColor.argb, "FF0A2B4C");
   assert.equal(stageRow.font.color.argb, "FF7F3FBF");
 });
 
@@ -225,4 +225,74 @@ test("export modal hydrates presentation defaults for legacy projects before ren
   assert.match(source, /useState\(\(\) => \(\{[\s\S]*normalizeExportSettings\(project\.exportSettings\)[\s\S]*normalizePresentationSettings\(project\.exportSettings\)/);
   assert.doesNotMatch(source, /<summary>Содержимое<\/summary>/);
   assert.doesNotMatch(source, /visibleExecutorIds\.includes|toggleExecutor|executorOptions/);
+});
+
+test("showComments=false hides task comments and the Excel comment column", () => {
+  const settings = normalizeExportSettings({ content: { showComments: false } });
+  const model = buildExportEstimateModel(project(settings), settings);
+  assert.equal(model.stages[0].rows[0].comment, "");
+  assert.equal(buildExcelWorkbook(model).worksheets[0].columnCount, 3);
+});
+
+test("showComments=true exports the comment into a separate wrapped top-aligned column", () => {
+  const settings = normalizeExportSettings({ content: { showComments: true } });
+  const model = buildExportEstimateModel(project(settings), settings);
+  const sheet = buildExcelWorkbook(model).worksheets[0];
+  assert.equal(sheet.columnCount, 4);
+  const taskRow = sheet.findRow(sheet.getColumn(2).values.findIndex((value) => value === "Task"));
+  assert.equal(taskRow.getCell(3).value, "Note");
+  assert.equal(taskRow.getCell(3).alignment.wrapText, true);
+  assert.equal(taskRow.getCell(3).alignment.vertical, "top");
+  assert.equal(typeof taskRow.getCell(4).value, "number");
+  assert.equal(taskRow.getCell(4).numFmt.includes("₽"), false);
+});
+
+test("task number and name live in separate Excel columns", () => {
+  for (const showComments of [true, false]) {
+    const settings = normalizeExportSettings({ content: { showComments } });
+    const model = buildExportEstimateModel(project(settings), settings);
+    const sheet = buildExcelWorkbook(model).worksheets[0];
+    const taskRow = sheet.findRow(sheet.getColumn(2).values.findIndex((value) => value === "Task"));
+    const amountColumn = showComments ? 4 : 3;
+    assert.equal(taskRow.getCell(1).value, "1.1");
+    assert.equal(taskRow.getCell(2).value, "Task");
+    assert.equal(taskRow.getCell(2).value.includes("1.1"), false);
+    assert.equal(sheet.getColumn(1).values.includes("1.1"), true);
+    assert.equal(typeof taskRow.getCell(amountColumn).value, "number");
+  }
+});
+
+test("₽ currency symbol is shown only on the final ИТОГО row, other money cells stay numeric", () => {
+  const settings = normalizeExportSettings({ content: { showComments: true } });
+  const model = buildExportEstimateModel(project(settings), settings);
+  const sheet = buildExcelWorkbook(model).worksheets[0];
+  const rubCells = [];
+  sheet.eachRow((row) => row.eachCell((cell) => { if (cell.numFmt?.includes("₽")) rubCells.push(cell); }));
+  assert.equal(rubCells.length, 1);
+  const totalRow = sheet.findRow(sheet.getColumn(2).values.findIndex((value) => value === "ИТОГО"));
+  assert.equal(rubCells[0].row, totalRow.number);
+  assert.equal(rubCells[0].col, sheet.columnCount);
+  assert.ok(rubCells[0].value?.formula);
+  const moneyCells = [];
+  sheet.eachRow((row) => { const cell = row.getCell(sheet.columnCount); const v = cell.value; if (typeof v === "number" || (typeof v === "object" && v?.formula)) moneyCells.push(cell); });
+  assert.ok(moneyCells.every((cell) => cell.numFmt === "#,##0.00" || cell.numFmt === '#,##0.00" ₽"'));
+  assert.equal(moneyCells.filter((cell) => typeof cell.value === "number").every((cell) => cell.numFmt === "#,##0.00"), true);
+});
+
+test("branded fills end at the last used column and never paint empty Excel columns to the right", () => {
+  for (const showComments of [true, false]) {
+    const settings = normalizeExportSettings({ content: { showComments } });
+    const model = buildExportEstimateModel(project(settings), settings);
+    const sheet = buildExcelWorkbook(model).worksheets[0];
+    const amountColumn = showComments ? 4 : 3;
+    const stageRow = sheet.findRow(sheet.getColumn(2).values.findIndex((value) => value === "Stage"));
+    const taskRow = sheet.findRow(sheet.getColumn(2).values.findIndex((value) => value === "Task"));
+    const totalRow = sheet.findRow(sheet.getColumn(2).values.findIndex((value) => value === "ИТОГО"));
+    for (const row of [stageRow, taskRow, totalRow]) {
+      assert.equal(row.cellCount, amountColumn);
+      assert.equal(row.getCell(1).fill.fgColor.argb, row === taskRow ? "FFFFFFFF" : row === stageRow ? "FFEEF2F7" : "FFE8EEF7");
+      assert.equal(row.getCell(amountColumn).fill.fgColor.argb, row === taskRow ? "FFFFFFFF" : row === stageRow ? "FFEEF2F7" : "FFE8EEF7");
+    }
+    assert.equal(sheet.columnCount, amountColumn);
+  }
 });

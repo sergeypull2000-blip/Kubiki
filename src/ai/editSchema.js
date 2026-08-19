@@ -6,6 +6,7 @@ export const AI_EDIT_OPERATION_TYPES = Object.freeze([
   "executor.payment.setType", "executor.payment.setRate", "executor.payment.setQuantity",
   "executor.amount.set", "executor.tag.add", "executor.tag.update", "executor.tag.remove",
   "executor.delete",
+  "project.setTargetBudget",
 ]);
 export const AI_EDIT_RESPONSE_KINDS = Object.freeze(["diff", "clarification", "out_of_scope", "error"]);
 export const AI_EDIT_SCOPE_KINDS = Object.freeze(["project", "stage", "task", "executor"]);
@@ -30,7 +31,7 @@ export function isAiEditScope(scope) {
     task: ["kind", "projectId", "stageId", "taskId"],
     executor: ["kind", "projectId", "stageId", "taskId", "executorId"],
   }[scope.kind];
-  return exactKeys(scope, expected) && expected.filter((key) => key.endsWith("Id")).every((key) => id(scope[key]));
+  return exactKeys(scope, expected, ["sheetId"]) && expected.filter((key) => key.endsWith("Id")).every((key) => id(scope[key])) && (scope.sheetId === undefined || id(scope.sheetId));
 }
 
 function isIdPool(pool) {
@@ -90,6 +91,7 @@ function operationValueIsValid(operation) {
     case "executor.tag.add": return exactKeys(value, ["tagId", "key", "value"]) && id(value.tagId) && id(value.key) && typeof value.value === "string";
     case "executor.tag.update": return exactKeys(value, ["executorId", "value"]) && id(value.executorId) && typeof value.value === "string";
     case "executor.tag.remove": return exactKeys(value, ["executorId"]) && id(value.executorId);
+    case "project.setTargetBudget": return exactKeys(value, ["target"]) && (typeof value.target === "string" || typeof value.target === "number");
     default: return false;
   }
 }

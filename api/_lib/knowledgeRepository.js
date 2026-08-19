@@ -1,3 +1,5 @@
+import { deserializeProjectFromServer } from "../../src/projectServer.js";
+
 function resultData(result, operation) {
   if (result.error) throw new Error(operation, { cause: result.error });
   return result.data;
@@ -14,7 +16,7 @@ export async function loadOwnKnowledge(client, userId, { includeHistory = false 
   const performerRows = resultData(performerResult, "Не удалось загрузить базу исполнителей");
   const templateRow = resultData(templateResult, "Не удалось загрузить библиотеку шаблонов");
   const projectRows = includeHistory ? resultData(projectResult, "Не удалось загрузить историю проектов") : [];
-  const historicalProjects = (Array.isArray(projectRows) ? projectRows : []).filter((row) => row?.user_id === userId).map((row) => ({ ...row.project_data, id: String(row.client_id || row.project_data?.id || "") })).sort((a, b) => (Date.parse(b.createdAt || "") || 0) - (Date.parse(a.createdAt || "") || 0) || String(a.id).localeCompare(String(b.id))).slice(0, 12);
+  const historicalProjects = (Array.isArray(projectRows) ? projectRows : []).filter((row) => row?.user_id === userId).map((row) => deserializeProjectFromServer(row)).sort((a, b) => (Date.parse(b.createdAt || "") || 0) - (Date.parse(a.createdAt || "") || 0) || String(a.id).localeCompare(String(b.id))).slice(0, 12);
   return {
     performers: (Array.isArray(performerRows) ? performerRows : []).filter((row) => row?.user_id === userId).map((row) => ({ ...row.performer_data, id: String(row.client_id || row.performer_data?.id || "") })),
     templateLibrary: templateRow?.user_id === userId ? templateRow.library_data : {},

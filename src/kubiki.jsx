@@ -26,7 +26,7 @@ import { productEventsRepository } from "./repositories/productEventsRepository.
 import { isAiHydrationReady } from "./ai/hydrationGate.js";
 import { createAiEditIdPool, createAiEditRequest, requestAiEdit } from "./ai/editClient.js";
 import { buildAiEditPreview } from "./ai/editPreview.js";
-import { projectRevision } from "./ai/projectRevision.js";
+import { projectRevision, sheetRevision } from "./ai/projectRevision.js";
 import { createAiEditUndoStore } from "./ai/editUndo.js";
 import { drainProjectSaveQueue } from "./projectSaveQueue.js";
 
@@ -503,7 +503,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     if (!await flushProject(projectId)) throw new Error("Сначала нужно успешно сохранить текущую смету");
     const project = projectsRef.current.find((item) => item.id === projectId);
     if (!project) throw new Error("Смета не найдена");
-    const baseRevision = await projectRevision(project), idPool = createAiEditIdPool(project);
+    const baseRevision = await sheetRevision(project, scope?.sheetId), idPool = createAiEditIdPool(project);
     const payload = createAiEditRequest({ projectId, baseRevision, scope, instruction, knowledge, confirmed, idPool, continuation });
     productEventsRepository.track(userId, "ai_edit", { requestId: payload.requestId }, { type: scope?.kind }).catch(() => {});
     const controller = new AbortController(); activeAiEditRequestsRef.current.set(projectId, controller);

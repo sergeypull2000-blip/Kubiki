@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { PROJECT_DATA_VERSION, applyConfirmedEstimate, makeProject, makeProjectFromEstimate, normalizeProject } from "../src/store.js";
+import { PROJECT_DATA_VERSION, applyConfirmedEstimate, makeProject, makeProjectFromEstimate, makeTask, normalizeProject } from "../src/store.js";
 import { buildProjectRow, deserializeProjectFromServer } from "../src/projectServer.js";
 
 test("new project has the canonical data version", () => {
@@ -32,11 +32,20 @@ test("real Workspace confirm path renames an empty whole-project Initial estimat
 });
 
 test("normalizeProject(undefined) returns a safe project", () => {
-  assert.deepEqual(normalizeProject(undefined), { dataVersion: PROJECT_DATA_VERSION, stages: [] });
+  const result = normalizeProject(undefined);
+  assert.equal(result.dataVersion, PROJECT_DATA_VERSION);
+  assert.equal(result.sheets.length, 1);
+  assert.equal(result.activeSheetId, result.sheets[0].id);
+  assert.deepEqual(result.stages, []);
 });
 
-test("project without stages gets an empty stages array", () => {
-  assert.deepEqual(normalizeProject({ id: "legacy" }), { id: "legacy", dataVersion: PROJECT_DATA_VERSION, stages: [] });
+test("legacy project without stages migrates to a single deterministic default sheet", () => {
+  const result = normalizeProject({ id: "legacy" });
+  assert.equal(result.sheets.length, 1);
+  assert.equal(result.sheets[0].id, "sheet-legacy-1");
+  assert.equal(result.sheets[0].name, "Смета 1");
+  assert.equal(result.activeSheetId, "sheet-legacy-1");
+  assert.deepEqual(result.stages, []);
 });
 
 test("legacy project without dataVersion gets the canonical version", () => {
@@ -56,10 +65,13 @@ test("task without executors gets an empty executors array", () => {
   assert.deepEqual(result.stages[0].tasks[0].executors, []);
 });
 
-test("existing stages, tasks and executors are preserved", () => {
+test("existing stages, tasks and executors are preserved inside the default sheet", () => {
   const executor = { id: "executor", amount: "1250" };
   const input = { dataVersion: PROJECT_DATA_VERSION, stages: [{ id: "stage", tasks: [{ id: "task", executors: [executor] }] }] };
-  assert.deepEqual(normalizeProject(input), input);
+  const result = normalizeProject(input);
+  assert.deepEqual(result.stages, input.stages);
+  assert.deepEqual(result.sheets[0].stages, input.stages);
+  assert.equal(result.sheets[0].id, "sheet-project-1");
 });
 
 test("unknown project fields are preserved", () => {
@@ -103,4 +115,17 @@ test("legacy project can execute Workspace collection operations after normaliza
   assert.equal(project.stages.length, 0);
   assert.equal(project.stages.every((stage) => stage.tasks.every((task) => task.executors.length >= 0)), true);
   assert.deepEqual(project.stages.map((stage) => stage.tasks.map((task) => task.executors.map((executor) => executor.id))), []);
+});
+
+test("makeTask initializes an empty exportComment", () => {
+  assert.equal(makeTask().exportComment, "");
+});
+
+test("task exportComment survives normalization and server round-trip", () => {
+  const input = { id: "project", stages: [{ tasks: [{ id: "task", name: "Task", exportComment: "Доделать к пятнице" }] }] };
+  const normalized = normalizeProject(input);
+  assert.equal(normalized.stages[0].tasks[0].exportComment, "Доделать к пятнице");
+  const row = buildProjectRow("user", normalized);
+  const back = deserializeProjectFromServer({ ...row, client_id: normalized.id });
+  assert.equal(back.stages[0].tasks[0].exportComment, "Доделать к пятнице");
 });

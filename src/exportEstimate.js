@@ -7,6 +7,7 @@ import {
   taskSum,
 } from "./calculations.js";
 import { normalizePresentationSettings } from "./exportSettings.js";
+import { activeSheet, stagesOf } from "./sheets.js";
 
 export const EXPORT_SETTINGS_VERSION = 1;
 export const DEFAULT_EXPORT_SETTINGS = Object.freeze({
@@ -32,7 +33,7 @@ export function normalizeExportSettings(settings) {
 const formatDate = (value) => { const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || ""); return match ? `${match[3]}.${match[2]}.${match[1]}` : ""; };
 
 export function getEligibleExportTasks(project) {
-  return (project?.stages || []).flatMap((stage, stageIndex) =>
+  return stagesOf(project).flatMap((stage, stageIndex) =>
     (stage.tasks || []).map((task, taskIndex) => ({ stage, task, stageIndex, taskIndex })));
 }
 
@@ -165,11 +166,11 @@ export function buildExportEstimateModel(project, rawSettings = project?.exportS
     rows.push(row); rowsByStage.set(item.stage.id, rows);
   });
 
-  const stages = (project?.stages || []).filter((stage) => (stage.tasks || []).length).map((stage) => {
+  const stages = stagesOf(project).filter((stage) => (stage.tasks || []).length).map((stage) => {
     const rows = rowsByStage.get(stage.id) || [];
     const baseSubtotalMinor = rows.reduce((sum, row) => sum + row.baseAmountMinor, 0);
     const exportedSubtotalMinor = rows.reduce((sum, row) => sum + row.exportedAmountMinor, 0);
-    return { id: stage.id, number: String((project?.stages || []).indexOf(stage) + 1), name: stage.name || "Этап", color: settings.content.rowColorOverrides[String(stage.id)] || settings.branding.colors.stage, textColor: settings.branding.colors.stageText, rows, baseSubtotal: fromMinor(baseSubtotalMinor), baseSubtotalMinor, exportedSubtotal: fromMinor(exportedSubtotalMinor), exportedSubtotalMinor };
+    return { id: stage.id, number: String(stagesOf(project).indexOf(stage) + 1), name: stage.name || "Этап", color: settings.content.rowColorOverrides[String(stage.id)] || settings.branding.colors.stage, textColor: settings.branding.colors.stageText, rows, baseSubtotal: fromMinor(baseSubtotalMinor), baseSubtotalMinor, exportedSubtotal: fromMinor(exportedSubtotalMinor), exportedSubtotalMinor };
   });
   const separateRows = [
     ...(markupSeparate && markupMinor !== 0 ? [buildSeparateMarkupRow(markupMinor, {
@@ -180,7 +181,7 @@ export function buildExportEstimateModel(project, rawSettings = project?.exportS
   ];
   const totalMinor = toMinor(projectTotalWithTax(project));
   const model = {
-    version: 2, settings, projectId: project?.id, projectName: project?.name || "Проект",
+    version: 2, settings, projectId: project?.id, projectName: project?.name || "Проект", sheetName: activeSheet(project)?.name || "",
     proposal: { title: project?.exportMetadata?.title || project?.name || "Коммерческое предложение", startDate: project?.exportMetadata?.startDate || "", endDate: project?.exportMetadata?.endDate || "", durationDays: project?.exportMetadata?.durationDays || "", createdAt: project?.exportMetadata?.createdAt || new Date().toISOString().slice(0, 10), validUntil: project?.exportMetadata?.validUntil || "", producer: project?.exportMetadata?.producer || "", artDirector: project?.exportMetadata?.artDirector || "", supervisor: project?.exportMetadata?.supervisor || "" },
     brand: { ...settings.branding, logoUrl: project?.exportLogoUrl || "" },
     typography: settings.typography,

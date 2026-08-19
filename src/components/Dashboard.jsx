@@ -17,6 +17,12 @@ function isToday(dateStr) {
   return !Number.isNaN(date.getTime()) && date.toDateString() === new Date().toDateString();
 }
 
+/* Multi-sheet projects never show a "project total" (sheets are independent and
+   are never summed). A single sheet keeps the legacy sum/stage count; multiple
+   sheets show the number of independent estimates instead. */
+const sheetCount = (item) => (Array.isArray(item?.sheets) && item.sheets.length) ? item.sheets.length : 1;
+const sheetsLabel = (n) => (n === 1 ? "1 смета" : (n >= 2 && n <= 4 ? `${n} сметы` : `${n} смет`));
+
 function EntityCard({ item, template = false, onOpen, onDelete, onMakeTemplate, onToggleFavorite, onEdit, onRename }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const cardRef = useRef(null);
@@ -26,6 +32,8 @@ function EntityCard({ item, template = false, onOpen, onDelete, onMakeTemplate, 
     window.addEventListener("pointerdown", close);
     return () => window.removeEventListener("pointerdown", close);
   }, [menuOpen]);
+
+  const count = sheetCount(item);
 
   return (
     <div ref={cardRef} className={`kb-card${template ? " kb-card-template" : ""}`}
@@ -55,8 +63,8 @@ function EntityCard({ item, template = false, onOpen, onDelete, onMakeTemplate, 
         aria-label={template ? "Название шаблона" : "Название проекта"}
         onClick={(event) => event.stopPropagation()}
         onChange={(event) => onRename(item.id, event.target.value)} />
-      <div className="kb-card-sum">{fmt(projectSum(item))} ₽</div>
-      <div className="kb-card-meta">{item.stages?.length || 0} этапов</div>
+      <div className="kb-card-sum">{count <= 1 ? `${fmt(projectSum(item))} ₽` : sheetsLabel(count)}</div>
+      {count <= 1 && <div className="kb-card-meta">{`${item.stages?.length || 0} этапов`}</div>}
       {!template && <div className="kb-card-actions">
         <button type="button" className={`kb-icon-btn kb-card-favorite${item.favorite ? " is-active" : ""}`}
           onClick={(event) => { event.stopPropagation(); onToggleFavorite(item.id); }} title={item.favorite ? "Убрать из избранного" : "Добавить в избранное"}>

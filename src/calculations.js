@@ -1,4 +1,5 @@
 import { fmt, numVal, roundMoney } from "./utils.js";
+import { stagesOf } from "./sheets.js";
 
 /* ---------- calculations ----------
    Сумма исполнителя определяется тегом оплаты:
@@ -32,7 +33,7 @@ export const executorSum = (e) => {
   return roundMoney(taxPct > 0 && taxDivisor > 0 ? base / taxDivisor : base);
 };
 export const executorFinancialCommission = (e) => roundMoney(executorSum(e) - executorPaymentBase(e));
-export const projectFinancialCommission = (p) => roundMoney((p.stages || []).reduce((projectTotal, stage) =>
+export const projectFinancialCommission = (p) => roundMoney(stagesOf(p).reduce((projectTotal, stage) =>
   projectTotal + (stage.tasks || []).reduce((stageTotal, task) =>
     stageTotal + (task.executors || []).reduce((taskTotal, executor) => taskTotal + executorFinancialCommission(executor), 0), 0), 0));
 /* Быстрый ввод стоимости: если у задачи есть хотя бы один исполнитель — сумма
@@ -42,7 +43,7 @@ export const taskSum = (t) => (t.executors && t.executors.length > 0)
   ? t.executors.reduce((a, e) => a + executorSum(e), 0)
   : numVal(t.directCost);
 export const stageSum = (s) => (s.tasks || []).reduce((a, t) => a + taskSum(t), 0);
-export const projectSum = (p) => (p.stages || []).reduce((a, s) => a + stageSum(s), 0);
+export const projectSum = (p) => stagesOf(p).reduce((a, s) => a + stageSum(s), 0);
 
 /* ---------- цена (себестоимость + маркап) ----------
    Параллельный каскад поверх *Sum. Чистые функции, один источник данных.
@@ -57,7 +58,7 @@ export const stagePrice = (s, globalMarkup, mode = "embedded") => (s.tasks || []
 export const projectPrice = (p) => {
   const mode = getMarkupMode(p);
   const gm = p.globalMarkup ?? 0;
-  return (p.stages || []).reduce((a, s) => a + stagePrice(s, gm, mode), 0);
+  return stagesOf(p).reduce((a, s) => a + stagePrice(s, gm, mode), 0);
 };
 
 /* ---------- режимы маркапа (ЗАДАЧА 3) ----------
@@ -117,7 +118,7 @@ export const projectTaxBreakdown = (p) => {
 };
 
 export const chargeIsVisible = (charge) => charge?.visible !== false;
-export const projectTaskCount = (p) => (p.stages || []).reduce((count, stage) => count + (stage.tasks || []).length, 0);
+export const projectTaskCount = (p) => stagesOf(p).reduce((count, stage) => count + (stage.tasks || []).length, 0);
 export const hiddenChargesPerTask = (p) => {
   const count = projectTaskCount(p);
   if (!count) return 0;
@@ -142,7 +143,7 @@ export const projectMarginPct = (p) => {
 /* ---------- аналитика «Котёл» (для внутреннего Excel-аудита) ---------- */
 export const projectHours = (p) => {
   let h = 0;
-  for (const s of p.stages || []) for (const t of s.tasks || []) for (const e of t.executors || []) {
+  for (const s of stagesOf(p)) for (const t of s.tasks || []) for (const e of t.executors || []) {
     const pay = (e.tags || []).find((tg) => tg.key === "payment")?.payment;
     if (pay?.type === "hourly") h += numVal(pay.hours);
   }
@@ -150,7 +151,7 @@ export const projectHours = (p) => {
 };
 export const projectShifts = (p) => {
   let sh = 0;
-  for (const s of p.stages || []) for (const t of s.tasks || []) for (const e of t.executors || []) {
+  for (const s of stagesOf(p)) for (const t of s.tasks || []) for (const e of t.executors || []) {
     const pay = (e.tags || []).find((tg) => tg.key === "payment")?.payment;
     if (pay?.type === "shift") sh += numVal(pay.shifts);
   }

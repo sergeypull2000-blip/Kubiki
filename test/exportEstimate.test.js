@@ -158,26 +158,27 @@ test("Excel leaf amounts are numeric while Stage subtotals and grand total are d
   const model = buildExportEstimateModel(source, { markupPresentation: "distributed", taxPresentation: "distributed" });
   const workbook = buildExcelWorkbook(model);
   const sheet = workbook.worksheets[0];
+  const amountCol = sheet.getColumn(sheet.columnCount).letter;
   const moneyCells = [];
-  sheet.eachRow((row) => {
-    const cell = row.getCell(2);
-    if (cell.numFmt?.includes("₽")) moneyCells.push(cell);
-  });
+  sheet.eachRow((row) => { const cell = row.getCell(sheet.columnCount); const v = cell.value; if (typeof v === "number" || (typeof v === "object" && v?.formula)) moneyCells.push(cell); });
   const formulaCells = moneyCells.filter((cell) => typeof cell.value === "object" && cell.value?.formula);
   const numericCells = moneyCells.filter((cell) => typeof cell.value === "number");
   assert.equal(formulaCells.length, model.stages.length + model.separateRows.length + 1);
   assert.equal(numericCells.length, model.stages.flatMap((stage) => stage.rows).length);
   assert.ok(numericCells.every((cell) => Number.isFinite(cell.value)));
+  assert.ok(numericCells.every((cell) => cell.numFmt === "#,##0.00"));
+  assert.ok(formulaCells.slice(0, -1).every((cell) => cell.numFmt === "#,##0.00"));
+  assert.ok(formulaCells.at(-1).numFmt.includes("₽"));
   for (const stage of model.stages) {
-    const subtotal = formulaCells.find((cell) => sheet.getRow(cell.row).getCell(1).value === stage.name);
-    assert.match(subtotal.value.formula, /^SUM\(B\d+:B\d+\)$/);
+    const subtotal = formulaCells.find((cell) => sheet.getRow(cell.row).getCell(2).value === stage.name);
+    assert.match(subtotal.value.formula, new RegExp(`^SUM\\(${amountCol}\\d+:${amountCol}\\d+\\)$`));
   }
   const grandTotal = formulaCells.at(-1).value.formula;
   assert.ok(formulaCells.slice(0, -1).every((cell) => grandTotal.includes(cell.address)));
   const grandTotalReferences = grandTotal.slice(4, -1).split(",");
   assert.equal(grandTotalReferences.length, model.stages.length + model.separateRows.length);
-  const taskRows = new Set(model.stages.flatMap((stage) => stage.rows).map((taskRow) => `  ${taskRow.name}`));
-  const taskCells = numericCells.filter((cell) => taskRows.has(sheet.getRow(cell.row).getCell(1).value));
+  const taskRows = new Set(model.stages.flatMap((stage) => stage.rows).map((taskRow) => taskRow.name));
+  const taskCells = numericCells.filter((cell) => taskRows.has(sheet.getRow(cell.row).getCell(2).value));
   assert.ok(taskCells.every((cell) => !grandTotalReferences.includes(cell.address)));
   assert.equal(workbook.calcProperties.calcMode, "auto");
   assert.equal(workbook.calcProperties.fullCalcOnLoad, true);
@@ -192,18 +193,21 @@ test("all separate markup, tax and VAT rows are formulas with canonical coordina
   const workbook = buildExcelWorkbook(model);
   const sheet = workbook.worksheets[0];
   const byLabel = (label) => {
-    const row = sheet.findRow(sheet.getColumn(1).values.findIndex((value) => value === label));
-    return row.getCell(2);
+    const row = sheet.findRow(sheet.getColumn(2).values.findIndex((value) => value === label));
+    return row.getCell(sheet.columnCount);
   };
   const stageCells = model.stages.map((stage) => byLabel(stage.name));
   const derivedCells = model.separateRows.map((row) => byLabel(row.label));
   const totalCell = byLabel("ИТОГО");
-  const taskLabels = new Set(model.stages.flatMap((stage) => stage.rows).map((row) => `  ${row.name}`));
+  const taskLabels = new Set(model.stages.flatMap((stage) => stage.rows).map((row) => row.name));
   const taskCells = [];
-  sheet.eachRow((row) => { if (taskLabels.has(row.getCell(1).value)) taskCells.push(row.getCell(2)); });
+  sheet.eachRow((row) => { if (taskLabels.has(row.getCell(2).value)) taskCells.push(row.getCell(sheet.columnCount)); });
 
   assert.ok(taskCells.every((cell) => typeof cell.value === "number"));
-  assert.ok([...stageCells, ...derivedCells, totalCell].every((cell) => cell.value?.formula && cell.numFmt.includes("₽")));
+  assert.ok(taskCells.every((cell) => cell.numFmt === "#,##0.00"));
+  assert.ok(stageCells.every((cell) => cell.value?.formula && cell.numFmt === "#,##0.00"));
+  assert.ok(derivedCells.every((cell) => cell.value?.formula && cell.numFmt === "#,##0.00"));
+  assert.ok(totalCell.value?.formula && totalCell.numFmt.includes("₽"));
   derivedCells.forEach((cell, index) => {
     const expectedBase = [...stageCells, ...derivedCells.slice(0, index)].map((item) => item.address);
     assert.match(cell.value.formula, /^ROUND\(SUM\([A-Z]\d+(?:,[A-Z]\d+)*\)\*[\d.eE+-]+\/100,2\)$/);

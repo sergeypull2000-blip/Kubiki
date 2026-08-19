@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ArrowUp, ChevronsUp, ChevronsDown } from "lucide-react";
 import { fmt } from "../utils.js";
-import { projectSum } from "../calculations.js";
+import { projectTotalWithTax } from "../calculations.js";
+import { activeSheetId as getActiveSheetId } from "../sheets.js";
 import { CUSTOM_STAGE } from "../constants.js";
 import {
   makeExecutor, makeTask, makeStage,
-  mapStage, withTask,
+  mapStage, withTask, withStages,
   findExecutor, cloneExecutor, insertStage, applyTagToExecutor,
+  createSheet, renameSheet, switchSheet, duplicateSheet, deleteSheet,
 } from "../store.js";
 import { ImportModal, GenerateEstimateModal, UnifiedImportEmptyState, LogoMenu } from "../importExcel.jsx";
 import { applyConfirmedEstimate } from "../store.js";
@@ -24,6 +26,60 @@ import { AccountControl } from "./AccountControl.jsx";
 const LEFT_PANEL_RANGE = [210, 320];
 const RIGHT_PANEL_RANGE = [250, 360];
 const clampPanelWidth = (value, [min, max], fallback) => Math.min(max, Math.max(min, Number(value) || fallback));
+
+/* ============================================================
+   Вкладка сметы: single click переключает лист, double click — rename.
+   ============================================================ */
+function SheetTab({ sheet, isActive, canRemove, onSwitch, onRename, onDuplicate, onDelete }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const cancelRef = useRef(false);
+  const startEdit = () => { setDraft(sheet.name || ""); setEditing(true); };
+  const commit = () => {
+    if (!editing) return;
+    const name = draft.trim();
+    if (name && name !== sheet.name) onRename(sheet.id, name);
+    setEditing(false);
+  };
+  const cancel = () => { cancelRef.current = true; setEditing(false); };
+  return (
+    <div
+      className={"kb-sheet-tab" + (isActive ? " is-active" : "")}
+      role="tab"
+      aria-selected={isActive}
+      onClick={() => { if (!isActive) onSwitch(sheet.id); }}
+    >
+      {editing ? (
+        <input
+          className="kb-sheet-name kb-sheet-name-edit"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onFocus={(event) => event.target.select()}
+          onBlur={() => { if (cancelRef.current) cancelRef.current = false; else commit(); }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") { event.currentTarget.blur(); }
+            else if (event.key === "Escape") { cancel(); }
+          }}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+          autoFocus
+          aria-label="Название сметы"
+        />
+      ) : (
+        <span className="kb-sheet-name" title="Двойной клик — переименовать" onDoubleClick={startEdit}>
+          {sheet.name || ""}
+        </span>
+      )}
+      {canRemove && (
+        <span className="kb-sheet-tools">
+          <button type="button" className="kb-sheet-ctrl" title="Дублировать смету" onClick={(event) => { event.stopPropagation(); onDuplicate(sheet.id); }}>⧉</button>
+          <button type="button" className="kb-sheet-ctrl kb-sheet-ctrl-del" title="Удалить смету" onClick={(event) => { event.stopPropagation(); onDelete(sheet.id); }}>×</button>
+        </span>
+      )}
+    </div>
+  );
+}
 
 /* ============================================================
    Рабочая зона
@@ -46,6 +102,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
   const globalAiSubmitRef = useRef(null);
   const globalAiBoundaryRef = useRef(null);
   const canvasInnerRef = useRef(null);
+  const sheetsBarRef = useRef(null);
   const [aiAnchor, setAiAnchor] = useState({ right: 12, width: 0 });
   useEffect(() => {
     const canvasInner = canvasInnerRef.current;
@@ -62,7 +119,9 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
   }, []);
   const clipboardRef = useRef(null); // скопированный исполнитель (Ctrl+C/Ctrl+V)
   const dispatch = (fn) => onChange(fn);
-  const total = projectSum(project);
+  // Итого справа сверху = финальное клиентское ИТОГО активной сметы
+  // (base + markup + tax + VAT) — тот же helper, что даёт ИТОГО в экспорте.
+  const total = projectTotalWithTax(project);
   const beginPanelResize = useCallback((side, event) => {
     event.preventDefault(); event.stopPropagation();
     const startX = event.clientX;
@@ -109,7 +168,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
     setGlobalAiOpen(false);
     setLocalAiPopover({ x: event.clientX, y: event.clientY, context });
   };
-  const localScope = (context) => ({ projectId: project.id, kind: context.kind, stageId: context.stageId, ...(context.taskId ? { taskId: context.taskId } : {}), ...(context.executorId ? { executorId: context.executorId } : {}) });
+  const localScope = (context) => ({ projectId: project.id, sheetId: getActiveSheetId(project), kind: context.kind, stageId: context.stageId, ...(context.taskId ? { taskId: context.taskId } : {}), ...(context.executorId ? { executorId: context.executorId } : {}) });
   const closeGlobalAi = () => {
     if (!globalAiOpen || globalAiClosing) return;
     setGlobalAiClosing(true);
@@ -158,14 +217,14 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
   }, [project, activeExecutorId, activeTaskId, activeStageId]);
 
   const removeStage = (stageId) => {
-    dispatch((p) => ({ ...p, stages: p.stages.filter((s) => s.id !== stageId) }));
+    dispatch((p) => withStages(p, p.stages.filter((s) => s.id !== stageId)));
     if (activeStageId === stageId) clearSelection();
   };
 
   /* ---- добавление кликом из палитры ---- */
   const addStageByClick = (preset) => {
     const stage = makeStage(preset);
-    dispatch((p) => ({ ...p, stages: [...p.stages, stage] }));
+    dispatch((p) => withStages(p, [...p.stages, stage]));
     activateStage(stage.id);
   };
 
@@ -200,17 +259,14 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
   // добавить тег активному исполнителю (клик из палитры)
   const addTagToActive = (payload) => {
     if (!activeExecutorId) return;
-    dispatch((p) => ({
-      ...p,
-      stages: p.stages.map((s) => ({
-        ...s,
-        tasks: s.tasks.map((t) => ({
-          ...t,
-          executors: t.executors.map((e) =>
-            e.id === activeExecutorId ? { ...e, tags: applyTagToExecutor(e.tags, payload) } : e),
-        })),
+    dispatch((p) => withStages(p, p.stages.map((s) => ({
+      ...s,
+      tasks: s.tasks.map((t) => ({
+        ...t,
+        executors: t.executors.map((e) =>
+          e.id === activeExecutorId ? { ...e, tags: applyTagToExecutor(e.tags, payload) } : e),
       })),
-    }));
+    }))));
   };
 
   /* ---- п.7.2: файл проекта (.json) — замена серверного сохранения ----
@@ -299,13 +355,10 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
  const handleApplyStageTemplate = useCallback((template) => {
   const clone = cloneStageTemplate(template);
 
-  dispatch((projectState) => ({
-    ...projectState,
-    stages: [
-      ...(Array.isArray(projectState?.stages) ? projectState.stages : []),
-      clone,
-    ],
-  }));
+  dispatch((projectState) => withStages(projectState, [
+    ...(Array.isArray(projectState?.stages) ? projectState.stages : []),
+    clone,
+  ]));
 
   activateStage(clone.id);
 }, []);
@@ -333,24 +386,58 @@ const toggleAllCollapsed = () =>
       ? current.stages
       : [];
 
-    return {
-      ...current,
-      stages: currentStages.map((stage) => {
-        const stageTasks = Array.isArray(stage?.tasks)
-          ? stage.tasks
-          : [];
+    return withStages(current, currentStages.map((stage) => {
+      const stageTasks = Array.isArray(stage?.tasks)
+        ? stage.tasks
+        : [];
 
-        return {
-          ...stage,
+      return {
+        ...stage,
+        collapsed: !allCollapsed,
+        tasks: stageTasks.map((task) => ({
+          ...task,
           collapsed: !allCollapsed,
-          tasks: stageTasks.map((task) => ({
-            ...task,
-            collapsed: !allCollapsed,
-          })),
-        };
-      }),
-    };
+        })),
+      };
+    }));
   });
+
+  const sheets = Array.isArray(project.sheets) ? project.sheets : [];
+  const currentSheetId = project.activeSheetId ?? sheets[0]?.id ?? null;
+  const addSheet = () => { dispatch((p) => createSheet(p, `Смета ${sheets.length + 1}`)); clearSelection(); };
+  const renameActiveSheet = (id, name) => dispatch((p) => renameSheet(p, id, name));
+  const switchActiveSheet = (id) => { dispatch((p) => switchSheet(p, id)); clearSelection(); };
+  const duplicateActiveSheet = (id) => { dispatch((p) => duplicateSheet(p, id)); clearSelection(); };
+  const deleteActiveSheet = (id) => {
+    if (sheets.length <= 1) { window.alert("Нельзя удалить последнюю смету"); return; }
+    dispatch((p) => deleteSheet(p, id));
+    clearSelection();
+  };
+
+  // Горизонтальный скролл полосы sheet tabs: вертикальное колесо / Shift+wheel / trackpad deltaX
+  // преобразуем в прокрутку табов. Листенер навешиваем нативно с passive:false, чтобы
+  // preventDefault() действительно гасил вертикальный скролл канвы под полосой.
+  useEffect(() => {
+    const bar = sheetsBarRef.current;
+    if (!bar) return;
+    const onWheel = (event) => {
+      if (bar.scrollWidth <= bar.clientWidth) return;
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      if (!delta) return;
+      event.preventDefault();
+      bar.scrollLeft += delta;
+    };
+    bar.addEventListener("wheel", onWheel, { passive: false });
+    return () => bar.removeEventListener("wheel", onWheel);
+  }, [editingTemplate, sheets.length]);
+
+  // При переключении листа стараемся держать активный таб в зоне видимости.
+  useEffect(() => {
+    const bar = sheetsBarRef.current;
+    if (!bar) return;
+    const activeTab = bar.querySelector('.kb-sheet-tab[aria-selected="true"]');
+    if (activeTab) activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [currentSheetId]);
 
   const rightPanel = (
     <RightPanel project={project} dispatch={dispatch} userId={userAccount?.id}
@@ -416,10 +503,9 @@ const toggleAllCollapsed = () =>
           <div className="kb-panel-resizer kb-panel-resizer-left" role="separator" aria-label="Изменить ширину левой панели" aria-orientation="vertical" onPointerDown={(event) => beginPanelResize("left", event)} />
         </div>
           {/* клик по нейтральной зоне листа снимает все выделения. */}
-          <main className="kb-canvas"
-            onMouseDown={clearSelection}
-            onScroll={(event) => setCollapseButtonCompact(event.currentTarget.scrollTop > 12)}>
-            <div ref={canvasInnerRef} className="kb-canvas-inner">
+          <main className="kb-canvas" onMouseDown={clearSelection}>
+            <div className="kb-canvas-scroll" onScroll={(event) => setCollapseButtonCompact(event.currentTarget.scrollTop > 12)}>
+              <div ref={canvasInnerRef} className="kb-canvas-inner">
               {project.metadata?.aiGeneration?.knowledgeNames?.length > 0 && <div className="kb-generation-knowledge">Использованы знания студии: {project.metadata.aiGeneration.knowledgeNames.join(", ")}</div>}
               {!isEmpty && <button type="button" className={`kb-collapse-all-btn${collapseButtonCompact ? " is-compact" : ""}`}
                 onMouseDown={(event) => event.stopPropagation()}
@@ -474,12 +560,30 @@ const toggleAllCollapsed = () =>
                     onAddStage={() => addStageByClick(CUSTOM_STAGE)} />
                 </>
               )}
+              </div>
             </div>
             {!editingTemplate && onRequestAiEdit && project.stages.length > 0 && <div ref={globalAiBoundaryRef} className="kb-ai-launcher-wrap" style={{ right: aiAnchor.right, "--kb-ai-panel-width": `${aiAnchor.width}px` }}>
               {globalAiOpen && <AiEditTechnicalModal variant="launcher" closing={globalAiClosing} submitRef={globalAiSubmitRef} outsideBoundaryRef={globalAiBoundaryRef} scope={globalScope} contextLabel="Вся смета" onRequest={onRequestAiEdit} onCancelRequest={onCancelAiEdit} onApply={onApplyAiEdit} onUndo={onUndoAiEdit} canUndo={canUndoAiEdit} onClose={closeGlobalAi} />}
               {canUndoAiEdit && !globalAiOpen && <button type="button" className="kb-ai-undo-chip" onClick={onUndoAiEdit}>Undo AI</button>}
               <button type="button" className={`kb-ai-launcher${globalAiOpen && !globalAiClosing ? " is-open" : ""}`} aria-label={globalAiOpen ? "Предпросмотр изменений" : "Открыть AI-ассистента"} onClick={() => { setLocalAiPopover(null); if (globalAiOpen) globalAiSubmitRef.current?.(); else setGlobalAiOpen(true); }}><ArrowUp size={20} strokeWidth={1.8} /></button>
             </div>}
+            {!editingTemplate && sheets.length > 0 && (
+              <div ref={sheetsBarRef} className="kb-sheets-bar" role="tablist" aria-label="Сметы" onMouseDown={(event) => event.stopPropagation()}>
+                {sheets.map((sheet) => (
+                  <SheetTab
+                    key={sheet.id}
+                    sheet={sheet}
+                    isActive={sheet.id === currentSheetId}
+                    canRemove={sheets.length > 1}
+                    onSwitch={switchActiveSheet}
+                    onRename={renameActiveSheet}
+                    onDuplicate={duplicateActiveSheet}
+                    onDelete={deleteActiveSheet}
+                  />
+                ))}
+                <button type="button" className="kb-sheet-add" onClick={addSheet} title="Новая смета">+</button>
+              </div>
+            )}
           </main>
           <div className="kb-panel-shell kb-panel-shell-right" style={{ width: rightPanelWidth }}>
             <div className="kb-panel-resizer kb-panel-resizer-right" role="separator" aria-label="Изменить ширину правой панели" aria-orientation="vertical" onPointerDown={(event) => beginPanelResize("right", event)} />

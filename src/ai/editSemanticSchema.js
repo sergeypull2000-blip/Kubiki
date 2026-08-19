@@ -3,6 +3,7 @@ export const AI_EDIT_SEMANTIC_COMMAND_TYPES = Object.freeze([
   "executor.createAnonymous", "executor.createFromPerformer", "executor.delete", "executor.setCompensation", "executor.setPaymentType",
   "executor.setPaymentRate", "executor.setPaymentQuantity", "executor.setRole", "executor.setName",
   "executor.setTax", "executor.setTaxBulk", "executor.replacePerformer",
+  "estimate.setTargetBudget",
 ]);
 export const MAX_AI_EDIT_SEMANTIC_COMMANDS = 20;
 
@@ -31,7 +32,7 @@ export function isAiEditSemanticCommand(command, { multi = false } = {}) {
       : exact(command, ["type", "name"]) && text(command.name, 160);
     case "executor.setRole":
     case "executor.setName": return multi
-      ? exact(command, ["type", "name"], ["targetRef", "targetName", "taskName", "stageName"])
+      ? exact(command, ["type", "name"], ["target", "targetRef", "targetName", "taskName", "stageName"])
         && text(command.name, 160) && validExecutorTarget(command)
       : exact(command, ["type", "name"]) && text(command.name, 160);
     case "task.rename": return multi
@@ -40,7 +41,7 @@ export function isAiEditSemanticCommand(command, { multi = false } = {}) {
       : exact(command, ["type", "name"]) && text(command.name, 160);
     case "stage.delete": return multi ? exact(command, ["type"], ["targetName"]) && (command.targetName === undefined || text(command.targetName, 160)) : exact(command, ["type"]);
     case "task.delete": return multi ? exact(command, ["type"], ["targetRef", "targetName", "stageName"]) && validTaskTarget(command) : exact(command, ["type"]);
-    case "executor.delete":
+    case "executor.delete": return multi ? exact(command, ["type"], ["target", "targetRef", "targetName", "taskName", "stageName"]) && validExecutorTarget(command) : exact(command, ["type"]);
     case "executor.replacePerformer": return multi ? exact(command, ["type"], ["targetRef", "targetName", "taskName", "stageName"]) && validExecutorTarget(command) : exact(command, ["type"]);
     case "executor.createAnonymous": return multi
       ? exact(command, ["type"], ["ref", "name", "role", "paymentType", "compensation", "quantity", "tax", "taskId", "taskRef", "taskName", "stageName"])
@@ -65,16 +66,18 @@ export function isAiEditSemanticCommand(command, { multi = false } = {}) {
         && (command.stageName === undefined || text(command.stageName, 160)) && (command.performerId === undefined || id(command.performerId))
         && (command.performerName === undefined || text(command.performerName, 160)) && Boolean(command.performerId || command.performerName)
       : exact(command, ["type", "taskId", "performerId"]) && id(command.taskId) && id(command.performerId);
-    case "executor.setCompensation": return multi ? exact(command, ["type", "value"], ["targetRef", "targetName", "taskName", "stageName"]) && numberValue(command.value) && validExecutorTarget(command) : exact(command, ["type", "value"]) && numberValue(command.value);
-    case "executor.setPaymentType": return multi ? exact(command, ["type", "paymentType"], ["targetRef", "targetName", "taskName", "stageName"]) && text(command.paymentType, 40) && validExecutorTarget(command) : exact(command, ["type", "paymentType"]) && text(command.paymentType, 40);
+    case "executor.setCompensation": return multi ? exact(command, ["type", "value"], ["target", "targetRef", "targetName", "taskName", "stageName"]) && numberValue(command.value) && validExecutorTarget(command) : exact(command, ["type", "value"]) && numberValue(command.value);
+    case "executor.setPaymentType": return multi ? exact(command, ["type", "paymentType"], ["target", "targetRef", "targetName", "taskName", "stageName"]) && text(command.paymentType, 40) && validExecutorTarget(command) : exact(command, ["type", "paymentType"]) && text(command.paymentType, 40);
     case "executor.setPaymentRate":
-    case "executor.setPaymentQuantity": return multi ? exact(command, ["type", "value"], ["targetRef", "targetName", "taskName", "stageName"]) && numberValue(command.value) && validExecutorTarget(command) : exact(command, ["type", "value"]) && numberValue(command.value);
-    case "executor.setTax": return multi ? exact(command, ["type", "percent"], ["targetRef", "targetName", "taskName", "stageName"]) && numberValue(command.percent) && validExecutorTarget(command) : exact(command, ["type", "percent"]) && numberValue(command.percent);
+    case "executor.setPaymentQuantity": return multi ? exact(command, ["type", "value"], ["target", "targetRef", "targetName", "taskName", "stageName"]) && numberValue(command.value) && validExecutorTarget(command) : exact(command, ["type", "value"]) && numberValue(command.value);
+    case "executor.setTax": return multi ? exact(command, ["type", "percent"], ["target", "targetRef", "targetName", "taskName", "stageName"]) && numberValue(command.percent) && validExecutorTarget(command) : exact(command, ["type", "percent"]) && numberValue(command.percent);
     case "executor.setTaxBulk": return exact(command, ["type", "percent"]) && numberValue(command.percent);
+    case "estimate.setTargetBudget": return exact(command, ["type", "value"]) && numberValue(command.value);
     default: return false;
   }
 }
 
+const allInScopeTarget = (value) => object(value) && exact(value, ["kind"]) && value.kind === "all_in_scope";
 function validTaskTarget(command) {
   return (command.targetRef === undefined || localRef(command.targetRef, "task"))
     && (command.targetName === undefined || text(command.targetName, 160))
@@ -84,7 +87,9 @@ function validExecutorTarget(command) {
   return (command.targetRef === undefined || localRef(command.targetRef, "executor"))
     && (command.targetName === undefined || text(command.targetName, 160))
     && (command.taskName === undefined || text(command.taskName, 160))
-    && (command.stageName === undefined || text(command.stageName, 160)) && !(command.targetRef && command.targetName);
+    && (command.stageName === undefined || text(command.stageName, 160))
+    && !(command.targetRef && command.targetName)
+    && (command.target === undefined || allInScopeTarget(command.target) && !command.targetRef && !command.targetName);
 }
 
 const HARMLESS_MODEL_KEYS = new Set(["schemaVersion", "confidence", "explanation", "reasoning"]);
@@ -160,16 +165,17 @@ const COMMAND_KEYS = Object.freeze({
   "task.delete": { required: ["type"], optional: ["targetRef", "targetName", "stageName"] },
   "executor.createAnonymous": { required: ["type"], optional: ["ref", "name", "role", "paymentType", "compensation", "quantity", "tax", "taskId", "taskRef", "taskName", "stageName"] },
   "executor.createFromPerformer": { required: ["type"], optional: ["taskId", "taskName", "stageName", "performerId", "performerName"] },
-  "executor.delete": { required: ["type"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
-  "executor.setCompensation": { required: ["type", "value"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
-  "executor.setPaymentType": { required: ["type", "paymentType"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
-  "executor.setPaymentRate": { required: ["type", "value"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
-  "executor.setPaymentQuantity": { required: ["type", "value"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
-  "executor.setRole": { required: ["type", "name"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
-  "executor.setName": { required: ["type", "name"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
-  "executor.setTax": { required: ["type", "percent"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
+  "executor.delete": { required: ["type"], optional: ["target", "targetRef", "targetName", "taskName", "stageName"] },
+  "executor.setCompensation": { required: ["type", "value"], optional: ["target", "targetRef", "targetName", "taskName", "stageName"] },
+  "executor.setPaymentType": { required: ["type", "paymentType"], optional: ["target", "targetRef", "targetName", "taskName", "stageName"] },
+  "executor.setPaymentRate": { required: ["type", "value"], optional: ["target", "targetRef", "targetName", "taskName", "stageName"] },
+  "executor.setPaymentQuantity": { required: ["type", "value"], optional: ["target", "targetRef", "targetName", "taskName", "stageName"] },
+  "executor.setRole": { required: ["type", "name"], optional: ["target", "targetRef", "targetName", "taskName", "stageName"] },
+  "executor.setName": { required: ["type", "name"], optional: ["target", "targetRef", "targetName", "taskName", "stageName"] },
+  "executor.setTax": { required: ["type", "percent"], optional: ["target", "targetRef", "targetName", "taskName", "stageName"] },
   "executor.setTaxBulk": { required: ["type", "percent"], optional: [] },
   "executor.replacePerformer": { required: ["type"], optional: ["targetRef", "targetName", "taskName", "stageName"] },
+  "estimate.setTargetBudget": { required: ["type", "value"], optional: [] },
 });
 const safeKey = (value) => typeof value === "string" ? value.replace(/[^\p{L}\p{N}_.-]/gu, "?").slice(0, 64) : "<non-string>";
 

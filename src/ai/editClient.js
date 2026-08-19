@@ -1,4 +1,5 @@
 import { parseAiEditResponse } from "./editSchema.js";
+import { sheetsOf } from "../sheets.js";
 import { requestErrorMessage } from "./requestErrors.js";
 
 export const AI_EDIT_REQUEST_TIMEOUT_MS = 270_000;
@@ -7,7 +8,10 @@ const freshId = () => globalThis.crypto?.randomUUID?.() || `${Date.now().toStrin
 
 export function createAiEditIdPool(project, sizes = { stages: 6, tasks: 30, executors: 40, tags: 200 }) {
   const existing = new Set([project?.id]);
-  for (const stage of project?.stages || []) { existing.add(stage.id); for (const task of stage.tasks || []) { existing.add(task.id); for (const executor of task.executors || []) { existing.add(executor.id); for (const tag of executor.tags || []) existing.add(tag.id); } } }
+  const collect = (stages) => { for (const stage of stages) { existing.add(stage.id); for (const task of stage.tasks || []) { existing.add(task.id); for (const executor of task.executors || []) { existing.add(executor.id); for (const tag of executor.tags || []) existing.add(tag.id); } } } };
+  const sheets = sheetsOf(project);
+  if (sheets.length) sheets.forEach((sheet) => collect(sheet.stages || []));
+  else collect(project?.stages || []);
   const make = (count) => { const result = []; while (result.length < count) { const value = freshId(); if (!existing.has(value)) { existing.add(value); result.push(value); } } return result; };
   return { stages: make(sizes.stages), tasks: make(sizes.tasks), executors: make(sizes.executors), tags: make(sizes.tags) };
 }

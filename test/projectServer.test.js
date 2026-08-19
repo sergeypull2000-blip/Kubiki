@@ -163,3 +163,44 @@ test("строка хранит только поля проекта, а не г
   assert.equal("performers" in row.project_data, false);
   assert.equal("templates" in row.project_data, false);
 });
+
+test("serialized payload keeps sheets as the only source of stages and drops top-level stages", () => {
+  const input = { id: "p1", name: "Multi", sheets: [
+    { id: "a", name: "A", stages: [{ id: "sa", name: "S1", tasks: [{ id: "t", name: "T", executors: [] }] }] },
+    { id: "b", name: "B", stages: [{ id: "sb", tasks: [] }] },
+  ], activeSheetId: "a" };
+  const serialized = serializeProjectForServer(input);
+  assert.equal("stages" in serialized, false);
+  assert.deepEqual(serialized.sheets.map((sheet) => sheet.id), ["a", "b"]);
+  assert.deepEqual(serialized.sheets[0].stages.map((stage) => stage.id), ["sa"]);
+  assert.deepEqual(serialized.sheets[1].stages.map((stage) => stage.id), ["sb"]);
+  assert.equal(serialized.activeSheetId, "a");
+});
+
+test("deserialize rebuilds runtime project.stages from the active sheet", () => {
+  const result = deserializeProjectFromServer({ client_id: "p1", project_data: { id: "p1", name: "Multi", sheets: [
+    { id: "a", name: "A", stages: [{ id: "sa", tasks: [] }] },
+    { id: "b", name: "B", stages: [{ id: "sb", tasks: [] }] },
+  ], activeSheetId: "b" } });
+  assert.equal(result.stages.length, 1);
+  assert.equal(result.stages[0].id, "sb");
+  assert.equal(result.sheets.length, 2);
+  assert.equal(result.activeSheetId, "b");
+});
+
+test("serialize → deserialize round-trip preserves sheet ids and nested data", () => {
+  const input = { id: "p1", name: "Multi", globalMarkup: 25, sheets: [
+    { id: "sheet-a", name: "A", stages: [{ id: "sa", name: "S", tasks: [{ id: "t", name: "T", executors: [{ id: "e", amount: "100", tags: [] }] }] }] },
+    { id: "sheet-b", name: "B", stages: [{ id: "sb", tasks: [] }] },
+  ], activeSheetId: "sheet-b" };
+  const serialized = serializeProjectForServer(input);
+  assert.equal("stages" in serialized, false);
+  const roundtrip = deserializeProjectFromServer({ client_id: input.id, project_data: serialized });
+  assert.deepEqual(roundtrip.sheets.map((sheet) => sheet.id), ["sheet-a", "sheet-b"]);
+  assert.deepEqual(roundtrip.sheets[0].stages[0].id, "sa");
+  assert.deepEqual(roundtrip.sheets[0].stages[0].tasks[0].id, "t");
+  assert.deepEqual(roundtrip.sheets[0].stages[0].tasks[0].executors[0].id, "e");
+  assert.equal(roundtrip.activeSheetId, "sheet-b");
+  assert.equal(roundtrip.stages[0].id, "sb");
+  assert.equal(roundtrip.globalMarkup, 25);
+});

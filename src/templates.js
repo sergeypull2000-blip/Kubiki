@@ -118,7 +118,7 @@ export function cloneStageTemplate(stage) {
 
 /** Глубокая копия проекта с новыми id для всего дерева. */
 export function cloneProjectTemplate(project) {
-  const { templateName, folderId: _folderId, sourceProjectId: _sourceProjectId, ...projectData } = project;
+  const { templateName, folderId: _folderId, sourceProjectId: _sourceProjectId, sheets: _sheets, activeSheetId: _activeSheetId, stages: _stages, ...projectData } = project;
   return {
     ...projectData,
     name: templateName || project.name || "Новый проект",

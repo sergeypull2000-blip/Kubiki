@@ -30,6 +30,14 @@ test("stage and task titles rest as text and enter explicit pencil edit mode", a
   assert.match(task, /kb-task-title-edit" onMouseDown=\{onTaskMouseDown\}/);
 });
 
+test("workspace top-right total shows the final client total (base + markup + tax + VAT)", async () => {
+  const workspace = await source("src/components/Workspace.jsx");
+  assert.match(workspace, /import \{[^}]*\bprojectTotalWithTax\b[^}]*\} from "\.\.\/calculations\.js"/);
+  assert.doesNotMatch(workspace, /import \{[^}]*\bprojectSum\b/);
+  assert.match(workspace, /const total = projectTotalWithTax\(project\)/);
+  assert.match(workspace, /kb-total-badge/);
+});
+
 test("estimate depth backgrounds derive only from existing task and executor collections", async () => {
   const [stage, task, styles] = await Promise.all([
     source("src/components/Stage.jsx"), source("src/components/Task.jsx"), source("src/styles.js"),
@@ -76,4 +84,13 @@ test("tasks and executors render as compact bordered rows inside a stage", async
   assert.match(styles, /\.kb-task-head\{[^}]*border-bottom:1px solid var\(--line\)/);
   assert.match(styles, /\.kb-erow-group\{[^}]*border-radius:5px[^}]*border:1px solid var\(--line\)/);
   assert.match(styles, /\.kb-erow-group-active\{box-shadow:inset 0 0 0 1px var\(--accent\)/);
+});
+
+test("task row exposes a comment toggle and inline editor bound to exportComment", async () => {
+  const [task, styles] = await Promise.all([source("src/components/Task.jsx"), source("src/styles.js")]);
+  assert.match(task, /MessageSquare/);
+  assert.match(task, /kb-task-comment-btn/);
+  assert.match(task, /onPatch\(\{ exportComment: event\.target\.value \}\)/);
+  assert.match(task, /kb-task-comment-input/);
+  assert.match(styles, /\.kb-task-comment-btn\.is-active\{color:var\(--accent\)\}/);
 });

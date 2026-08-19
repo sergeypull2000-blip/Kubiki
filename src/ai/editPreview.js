@@ -1,6 +1,7 @@
 import { projectFinancialCommission, projectMarkupAmount, projectPrice, projectSum, projectTaxAmount, projectTotalWithTax, projectVatAmount } from "../calculations.js";
 import { applyAiEditOperations } from "./editOperations.js";
-import { projectRevision } from "./projectRevision.js";
+import { projectRevision, sheetRevision } from "./projectRevision.js";
+import { sheetProject } from "../sheets.js";
 
 function counts(project) {
   let tasks = 0, executors = 0;
@@ -40,24 +41,28 @@ function humanPlan(beforeProject, afterProject, operationCount) {
 }
 
 export async function buildAiEditPreview({ project, response, performers, idPool, expectedRevision, instruction = "", selectedSources = [] }) {
-  const currentRevision = await projectRevision(project);
+  const sheetId = response.scope?.sheetId;
+  const currentRevision = await sheetRevision(project, sheetId);
   if (currentRevision !== expectedRevision || response.baseRevision !== expectedRevision) {
     const error = new Error("Смета изменилась. Пересчитайте AI-запрос."); error.code = "stale_revision"; throw error;
   }
   const afterProject = applyAiEditOperations(project, response, { performers, idPool, instruction, selectedSources });
+  const beforeView = sheetProject(project, sheetId);
+  const afterView = sheetProject(afterProject, sheetId);
   return {
     kind: "diff",
     requestId: response.requestId,
     baseRevision: expectedRevision,
+    sheetId: sheetId || null,
     scope: response.scope,
     summary: response.summary,
     operations: response.operations,
     warnings: response.warnings,
     beforeProject: structuredClone(project),
     afterProject,
-    before: projectAiEditMetrics(project),
-    after: projectAiEditMetrics(afterProject),
-    plan: humanPlan(project, afterProject, response.operations.length),
+    before: projectAiEditMetrics(beforeView),
+    after: projectAiEditMetrics(afterView),
+    plan: humanPlan(beforeView, afterView, response.operations.length),
     afterRevision: await projectRevision(afterProject),
     response,
     idPool,

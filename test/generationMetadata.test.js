@@ -46,7 +46,7 @@ test("endpoint keeps estimate body unchanged and Project persists only display m
   assert.match(endpoint, /body: result\.estimate/);
   assert.match(endpoint, /json\(response\.body\)/);
   assert.match(kubiki, /makeProjectFromEstimate\(stages, meta\)/);
-  assert.match(store, /project\.metadata = \{ \.\.\.project\.metadata, aiGeneration: meta\.generationMetadata \}/);
+  assert.match(store, /withStages\.metadata = \{ \.\.\.withStages\.metadata, aiGeneration: meta\.generationMetadata \}/);
   assert.match(workspace, /Использованы знания студии/);
   assert.doesNotMatch(workspace, /performerSnapshot|phone|telegram|email/i);
 });

@@ -7,7 +7,7 @@ import { materializeResolvedSemanticPlan, resolveAiEditSemanticDraft } from "../
 import { signAiEditContinuation, verifyAiEditContinuation } from "../api/_lib/semanticContinuation.js";
 import { validateAiEditRequest } from "../src/ai/editSchema.js";
 import { buildAiEditPreview } from "../src/ai/editPreview.js";
-import { projectRevision } from "../src/ai/projectRevision.js";
+import { sheetRevision } from "../src/ai/projectRevision.js";
 
 const pool = (prefix, count) => Array.from({ length: count }, (_, index) => `${prefix}-${index + 1}`);
 const idPool = { stages: pool("stage", 6), tasks: pool("task", 30), executors: pool("executor", 40), tags: pool("tag", 200) };
@@ -135,7 +135,7 @@ test("full Performer continuation preserves exact Task destinations through prev
     const materialized = materializeResolvedSemanticPlan(second);
     assert.deepEqual(materialized.commands.map((command) => command.performerExplicit), [true, true]);
     assert.deepEqual(materialized.commands.map((command) => [command.taskName, command.performerId]), [["герой", "misha"], ["лох", "ella-2"]]);
-    const revision = await projectRevision(current), editRequest = { ...request, baseRevision: revision, instruction };
+    const revision = await sheetRevision(current), editRequest = { ...request, baseRevision: revision, instruction };
     const diff = compileAiEditSemanticPlan({ semantic: materialized, request: editRequest, project: current, confirmedTargets: second.confirmedTargets, performers });
     assert.deepEqual(diff.operations.map((operation) => [operation.targetId, operation.value.performerId]), [["hero", "misha"], ["loh", "ella-2"]]);
     const preview = await buildAiEditPreview({ project: current, response: diff, performers, idPool, expectedRevision: revision, instruction: editRequest.instruction });

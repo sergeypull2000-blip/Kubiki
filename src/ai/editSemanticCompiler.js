@@ -1,5 +1,6 @@
 import { applyAiEditOperations, AiEditValidationError, indexProject } from "./editOperations.js";
 import { PAYMENT_OPTIONS, ROLE_OPTIONS } from "../constants.js";
+import { sheetProject } from "../sheets.js";
 
 const source = { kind: "current_request" };
 const operation = (id, type, targetId, value, reason) => ({ id, type, targetId, ...(value === undefined ? {} : { value }), reason, source });
@@ -33,9 +34,62 @@ function take(pool, used, kind) {
   used.add(value); return value;
 }
 
+function scopeAllowsExecutor(scope, item) {
+  if (!scope || scope.kind === "project") return true;
+  if (scope.kind === "stage") return item.stage.id === scope.stageId;
+  if (scope.kind === "task") return item.task.id === scope.taskId;
+  return item.executor.id === scope.executorId;
+}
+
+function scopedExecutors(projectIndex, scope) {
+  return [...projectIndex.executors.values()].filter((item) => scopeAllowsExecutor(scope, item));
+}
+
+function mutationTargets(projectIndex, resolvedTarget, scope, batchTargets) {
+  if (resolvedTarget?.kind === "all_in_scope") return batchTargets || [];
+  const located = projectIndex.executors.get(resolvedTarget?.id);
+  if (resolvedTarget?.kind !== "executor" || !located) throw new AiEditSemanticCompileError("ai_semantic_missing_target", "Не подтверждён Executor");
+  return [located];
+}
+
+function executorSatisfies(executor, command) {
+  const pay = executor?.tags?.find((tag) => tag.key === "payment")?.payment || {};
+  switch (command.type) {
+    case "executor.delete": return executor === undefined;
+    case "executor.setPaymentType": return pay.type === paymentTypeValue(command.paymentType);
+    case "executor.setPaymentRate": return Boolean(executor && String(pay.rate) === money(command.value));
+    case "executor.setPaymentQuantity": {
+      const field = { fix_task: "units", hourly: "hours", shift: "shifts" }[pay.type];
+      return Boolean(executor && field && String(pay[field]) === money(command.value));
+    }
+    case "executor.setCompensation": {
+      if (!executor) return false;
+      if (pay.type === "fix_total") return String(executor.amount) === money(command.value);
+      return ["fix_task", "hourly", "shift"].includes(pay.type) && String(pay.rate) === money(command.value);
+    }
+    case "executor.setRole": return Boolean(executor?.tags?.some((tag) => tag.key === "role" && tag.value === roleValue(command.name)));
+    case "executor.setName": return Boolean(executor?.tags?.some((tag) => tag.key === "name" && tag.value === command.name.trim()));
+    case "executor.setTax": return Boolean(executor?.tags?.some((tag) => tag.key === "tax" && String(tag.value) === taxValue(command.percent)));
+    default: return true;
+  }
+}
+
+function verifyExecutorBatch(applied, scope, expected, command) {
+  const index = indexProject(sheetProject(applied, scope?.sheetId));
+  const failures = [];
+  for (const item of expected) {
+    const executor = index.executors.get(item.executor.id)?.executor;
+    if (!executorSatisfies(executor, command)) failures.push(item.executor.id);
+  }
+  if (failures.length) throw new AiEditSemanticCompileError("ai_compile_incomplete_batch", `Изменение применено не полностью: ${failures.length} из ${expected.length} исполнителей не удовлетворяют запрошенному состоянию`);
+}
+
 export function compileAiEditSemanticCommand({ semantic, request, project, resolvedTarget, resolvedTask, performer, performers = [], performerExplicit = false }) {
+  project = sheetProject(project, request.scope?.sheetId);
   const command = semantic.command, used = new Set(), operations = [], projectIndex = indexProject(project);
   const add = (type, targetId, value, reason) => operations.push(operation(`semantic-${operations.length + 1}`, type, targetId, value, reason));
+  const batchTargets = resolvedTarget?.kind === "all_in_scope" ? scopedExecutors(projectIndex, request.scope) : null;
+  if (resolvedTarget?.kind === "all_in_scope" && !batchTargets.length) throw new AiEditSemanticCompileError("ai_semantic_missing_target", "Не найдены исполнители в выбранном контексте");
   switch (command.type) {
     case "stage.create":
       add("stage.add", project.id, { stageId: take(request.idPool, used, "stages"), name: explicitStageName(command.name, request.instruction), presetKey: "custom", beforeStageId: null }, "Создать явно запрошенный этап");
@@ -69,37 +123,50 @@ export function compileAiEditSemanticCommand({ semantic, request, project, resol
       operations[operations.length - 1].source = { kind: "performer", id: confirmedPerformer.id, name: command.performerName || confirmedPerformer.firstName || confirmedPerformer.id };
       break;
     }
-    case "executor.setCompensation": { const executor = projectIndex.executors.get(resolvedTarget?.id)?.executor;
-      if (resolvedTarget?.kind !== "executor" || !executor) throw new AiEditSemanticCompileError("ai_semantic_missing_target", "Не подтверждён Executor");
-      const type = executor.tags?.find((tag) => tag.key === "payment")?.payment?.type;
-      if (type === "fix_total") add("executor.amount.set", executor.id, { value: money(command.value) }, "Изменить оплату Executor");
-      else if (["fix_task", "hourly", "shift"].includes(type)) add("executor.payment.setRate", executor.id, { value: money(command.value) }, "Изменить ставку Executor");
-      else throw new AiEditSemanticCompileError("ai_semantic_missing_payment_type", "Не определён тип оплаты Executor");
+    case "executor.setCompensation": {
+      const targets = mutationTargets(projectIndex, resolvedTarget, request.scope, batchTargets);
+      for (const { executor } of targets) {
+        const type = executor.tags?.find((tag) => tag.key === "payment")?.payment?.type;
+        if (type === "fix_total") add("executor.amount.set", executor.id, { value: money(command.value) }, "Изменить оплату Executor");
+        else if (["fix_task", "hourly", "shift"].includes(type)) add("executor.payment.setRate", executor.id, { value: money(command.value) }, "Изменить ставку Executor");
+        else throw new AiEditSemanticCompileError("ai_semantic_missing_payment_type", "Не определён тип оплаты Executor");
+      }
       break;
     }
-    case "executor.delete": add("executor.delete", target(projectIndex, resolvedTarget, "executor").executor.id, undefined, "Удалить выбранного исполнителя"); break;
-    case "executor.setPaymentType": add("executor.payment.setType", target(projectIndex, resolvedTarget, "executor").executor.id, { type: paymentTypeValue(command.paymentType) }, "Изменить тип оплаты исполнителя"); break;
-    case "executor.setPaymentRate": add("executor.payment.setRate", target(projectIndex, resolvedTarget, "executor").executor.id, { value: money(command.value) }, "Изменить ставку исполнителя"); break;
-    case "executor.setPaymentQuantity": { const executor = target(projectIndex, resolvedTarget, "executor").executor;
-      const type = executor.tags?.find((tag) => tag.key === "payment")?.payment?.type;
-      const field = { fix_task: "units", hourly: "hours", shift: "shifts" }[type];
-      if (!field) throw new AiEditSemanticCompileError("ai_semantic_quantity_not_applicable", "Количество доступно только для оплаты за единицу, по часам или сменам");
-      add("executor.payment.setQuantity", executor.id, { field, value: money(command.value) }, "Изменить количество по текущему типу оплаты"); break;
+    case "executor.delete": { for (const { executor } of mutationTargets(projectIndex, resolvedTarget, request.scope, batchTargets)) add("executor.delete", executor.id, undefined, "Удалить выбранного исполнителя"); break; }
+    case "executor.setPaymentType": { for (const { executor } of mutationTargets(projectIndex, resolvedTarget, request.scope, batchTargets)) add("executor.payment.setType", executor.id, { type: paymentTypeValue(command.paymentType) }, "Изменить тип оплаты исполнителя"); break; }
+    case "executor.setPaymentRate": { for (const { executor } of mutationTargets(projectIndex, resolvedTarget, request.scope, batchTargets)) add("executor.payment.setRate", executor.id, { value: money(command.value) }, "Изменить ставку исполнителя"); break; }
+    case "executor.setPaymentQuantity": {
+      for (const { executor } of mutationTargets(projectIndex, resolvedTarget, request.scope, batchTargets)) {
+        const type = executor.tags?.find((tag) => tag.key === "payment")?.payment?.type;
+        const field = { fix_task: "units", hourly: "hours", shift: "shifts" }[type];
+        if (!field) throw new AiEditSemanticCompileError("ai_semantic_quantity_not_applicable", "Количество доступно только для оплаты за единицу, по часам или сменам");
+        add("executor.payment.setQuantity", executor.id, { field, value: money(command.value) }, "Изменить количество по текущему типу оплаты");
+      }
+      break;
     }
     case "executor.setRole":
-    case "executor.setName": { const executor = target(projectIndex, resolvedTarget, "executor").executor, key = command.type === "executor.setRole" ? "role" : "name", value = key === "role" ? roleValue(command.name) : command.name.trim(), existing = executor.tags?.find((tag) => tag.key === key);
-      if (existing) add("executor.tag.update", existing.id, { executorId: executor.id, value }, `Изменить ${key === "role" ? "роль" : "имя"} исполнителя`);
-      else add("executor.tag.add", executor.id, { tagId: take(request.idPool, used, "tags"), key, value }, `Добавить ${key === "role" ? "роль" : "имя"} исполнителя`);
+    case "executor.setName": { const key = command.type === "executor.setRole" ? "role" : "name", value = key === "role" ? roleValue(command.name) : command.name.trim();
+      for (const { executor } of mutationTargets(projectIndex, resolvedTarget, request.scope, batchTargets)) {
+        const existing = executor.tags?.find((tag) => tag.key === key);
+        if (existing) add("executor.tag.update", existing.id, { executorId: executor.id, value }, `Изменить ${key === "role" ? "роль" : "имя"} исполнителя`);
+        else add("executor.tag.add", executor.id, { tagId: take(request.idPool, used, "tags"), key, value }, `Добавить ${key === "role" ? "роль" : "имя"} исполнителя`);
+      }
       break;
     }
-    case "executor.setTax":
-    case "executor.setTaxBulk": { const targets = command.type === "executor.setTaxBulk" ? [...projectIndex.executors.values()].filter((item) => request.scope.kind === "project" || item.stage.id === request.scope.stageId && (request.scope.kind === "stage" || item.task.id === request.scope.taskId && (request.scope.kind === "task" || item.executor.id === request.scope.executorId))) : [projectIndex.executors.get(resolvedTarget?.id)];
+    case "executor.setTax": { for (const { executor } of mutationTargets(projectIndex, resolvedTarget, request.scope, batchTargets)) {
+      const existing = executor.tags?.find((tag) => tag.key === "tax");
+      if (existing) add("executor.tag.update", existing.id, { executorId: executor.id, value: taxValue(command.percent) }, "Изменить налог Executor");
+      else add("executor.tag.add", executor.id, { tagId: take(request.idPool, used, "tags"), key: "tax", value: taxValue(command.percent) }, "Добавить налог Executor");
+    } break; }
+    case "executor.setTaxBulk": { const targets = scopedExecutors(projectIndex, request.scope);
       if (!targets.length || targets.some((item) => !item?.executor)) throw new AiEditSemanticCompileError("ai_semantic_missing_target", "Не подтверждён Executor");
       for (const item of targets) { const executor = item.executor, existing = executor.tags?.find((tag) => tag.key === "tax");
         if (existing) add("executor.tag.update", existing.id, { executorId: executor.id, value: taxValue(command.percent) }, "Изменить налог Executor");
         else add("executor.tag.add", executor.id, { tagId: take(request.idPool, used, "tags"), key: "tax", value: taxValue(command.percent) }, "Добавить налог Executor");
       } break;
     }
+    case "estimate.setTargetBudget": add("project.setTargetBudget", project.id, { target: money(command.value) }, "Установить базовую стоимость сметы"); break;
     case "task.delete":
       if (resolvedTarget?.kind !== "task") throw new AiEditSemanticCompileError("ai_semantic_missing_target", "Не подтверждена Task");
       add("task.delete", resolvedTarget.id, undefined, "Удалить явно указанную Task"); break;
@@ -109,15 +176,18 @@ export function compileAiEditSemanticCommand({ semantic, request, project, resol
     default: throw new AiEditSemanticCompileError("ai_semantic_unknown_command", "Неизвестная semantic command");
   }
   const diff = { schemaVersion: 1, kind: "diff", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, summary: semantic.summary, operations, warnings: semantic.warnings };
-  try { applyAiEditOperations(project, diff, { performers, idPool: request.idPool, instruction: request.instruction, selectedSources: request.knowledge.selectedSources }); }
+  let applied;
+  try { applied = applyAiEditOperations(project, diff, { performers, idPool: request.idPool, instruction: request.instruction, selectedSources: request.knowledge.selectedSources }); }
   catch (error) { if (error instanceof AiEditValidationError) throw new AiEditSemanticCompileError(`ai_compile_${error.code}`, error.message); throw error; }
+  if (resolvedTarget?.kind === "all_in_scope") verifyExecutorBatch(applied, request.scope, batchTargets, command);
   return diff;
 }
 
-const creationPhase = (type) => type === "stage.create" ? 1 : type === "task.create" ? 2 : ["executor.createAnonymous", "executor.createFromPerformer"].includes(type) ? 3 : type === "executor.setTaxBulk" ? 5 : 4;
-const withoutPlanFields = (command) => Object.fromEntries(Object.entries(command).filter(([key]) => !["ref", "stageRef", "stageName", "taskRef", "taskName", "targetRef", "targetName"].includes(key)));
+const creationPhase = (type) => type === "stage.create" ? 1 : type === "task.create" ? 2 : ["executor.createAnonymous", "executor.createFromPerformer"].includes(type) ? 3 : type === "executor.setTaxBulk" || type === "estimate.setTargetBudget" ? 5 : 4;
+const withoutPlanFields = (command) => Object.fromEntries(Object.entries(command).filter(([key]) => !["ref", "stageRef", "stageName", "taskRef", "taskName", "targetRef", "targetName", "target"].includes(key)));
 
 export function compileAiEditSemanticPlan({ semantic, request, project, confirmedTargets = {}, performer, performers = [] }) {
+  project = sheetProject(project, request.scope?.sheetId);
   if (semantic.kind === "command") return compileAiEditSemanticCommand({ semantic, request, project, resolvedTarget: confirmedTargets[0]?.target, resolvedTask: confirmedTargets[0]?.task, performer, performers });
   const refs = new Map();
   for (const command of semantic.commands) {

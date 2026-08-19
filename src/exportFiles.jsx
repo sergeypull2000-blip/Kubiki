@@ -5,6 +5,7 @@ import pdfFonts from "pdfmake/build/vfs_fonts.js";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Loader2, UploadCloud, X } from "lucide-react";
 import { fmt } from "./utils.js";
 import { buildExportEstimateModel, normalizeExportSettings } from "./exportEstimate.js";
+import { activeSheet } from "./sheets.js";
 import { useOutsideClose } from "./hooks.js";
 import { clamp, hexToRgb, hsvToHex, normalizeHex, rgbToHsv } from "./color.js";
 import { buildExcelRows, buildExcelWorkbook } from "./excelExport.js";
@@ -19,7 +20,11 @@ pdfMake.addVirtualFileSystem(pdfFonts);
 
 const money = (amount) => `${fmt(amount)} ₽`;
 const safeFile = (value) => (String(value || "smeta").replace(/[^\wа-яА-ЯёЁ\- ]+/g, "").trim().replace(/\s+/g, "_") || "smeta");
-const defaultFilename = (project, format) => `${safeFile(project.name)}_СМЕТА.${format === "pdf" ? "pdf" : "xlsx"}`;
+const defaultFilename = (project, format) => {
+  const sheet = activeSheet(project);
+  const stem = sheet?.name ? `${safeFile(project.name)}_${safeFile(sheet.name)}` : safeFile(project.name);
+  return `${stem}_СМЕТА.${format === "pdf" ? "pdf" : "xlsx"}`;
+};
 
 function brandColors() {
   const styles = getComputedStyle(document.documentElement);
@@ -74,8 +79,8 @@ function pdfDefinition(model) {
   const rowTextColor = (row) => row.type === "stage" ? model.brand.colors.stageText : row.type === "task" ? model.brand.colors.taskText : colors.muted;
   const body = buildPdfContent(model).rows.map((row) => [
     { text: row.type === "performer" ? `    ${row.number}  ${row.label}` : row.type === "task" ? `${row.number}  ${row.label}` : row.label, bold: row.type === "stage", fillColor: row.color, italics: row.type === "markup" || row.type === "tax", color: rowTextColor(row), fontSize: row.type === "stage" ? model.typography.stage.size : model.typography.task.size, margin: [2, 4, 2, 4] },
-    { text: money(row.amount), bold: row.type === "stage", fillColor: row.color, italics: row.type === "markup" || row.type === "tax", color: rowTextColor(row), alignment: "right", margin: [2, 4, 2, 4] },
     ...(model.display.showComments ? [{ text: row.comment || "", fillColor: row.color, fontSize: model.typography.service.size, margin: [2, 4, 2, 4] }] : []),
+    { text: money(row.amount), bold: row.type === "stage", fillColor: row.color, italics: row.type === "markup" || row.type === "tax", color: rowTextColor(row), alignment: "right", margin: [2, 4, 2, 4] },
   ]);
   return {
     pageSize: "A4", pageMargins: [40, 40, 40, 40], defaultStyle: { font: "Roboto", fontSize: 10, color: colors.text },
@@ -83,8 +88,9 @@ function pdfDefinition(model) {
       ...(model.brand?.logoUrl ? [{ image: model.brand.logoUrl, fit: [110, 52], alignment: "right", margin: [0, 0, 0, 8] }] : []),
       ...(model.brand?.companyName ? [{ text: model.brand.companyName, bold: true, fontSize: 12, margin: [0, 0, 0, 3] }] : []),
       ...([model.brand?.phone, model.brand?.email, model.brand?.website].some(Boolean) ? [{ text: [model.brand.phone, model.brand.email, model.brand.website].filter(Boolean).join(" · "), color: colors.muted, fontSize: 9, margin: [0, 0, 0, 10] }] : []),
-      { text: model.proposal.title, bold: true, fontSize: model.typography.title.size, margin: [0, 0, 0, 14] },
-      { table: { widths: model.display.showComments ? ["*", "auto", "30%"] : ["*", "auto"], body }, layout: { hLineWidth: () => 0.5, vLineWidth: () => 0, hLineColor: () => colors.line } },
+      { text: model.proposal.title, bold: true, fontSize: model.typography.title.size, margin: [0, 0, 0, model.sheetName ? 3 : 14] },
+      ...(model.sheetName ? [{ text: model.sheetName, fontSize: model.typography.stage.size, color: colors.muted, margin: [0, 0, 0, 14] }] : []),
+      { table: { widths: model.display.showComments ? ["*", "30%", "auto"] : ["*", "auto"], body }, layout: { hLineWidth: () => 0.5, vLineWidth: () => 0, hLineColor: () => colors.line } },
       { table: { widths: ["*", "auto"], body: [[{ text: "Итого", bold: true, fontSize: model.typography.total.size, fillColor: model.brand.colors.total, color: model.brand.colors.totalText, margin: [6, 6, 6, 6] }, { text: money(model.summary.total), bold: true, fontSize: model.typography.total.size, alignment: "right", fillColor: model.brand.colors.total, color: model.brand.colors.totalText, margin: [6, 6, 6, 6] }]] }, layout: "noBorders", margin: [0, 14, 0, 0] },
       ...model.serviceBlocks.map((text) => ({ text, fontSize: model.typography.service.size, color: colors.muted, margin: [0, 8, 0, 0] })),
     ],
@@ -369,6 +375,15 @@ function PresentationControls({ draft, onChange, project, dispatch, userId, logo
       </div>
     </details>
     <details className="kb-export-section">
+      <summary>Комментарии</summary>
+      <div className="kb-export-section-body">
+        <label className="kb-export-check">
+          <input type="checkbox" checked={draft.content.showComments} onChange={(event) => patch("content", { showComments: event.target.checked })} />
+          <span>Показывать комментарии к задачам</span>
+        </label>
+      </div>
+    </details>
+    <details className="kb-export-section">
       <summary>Служебный текст</summary>
       <div className="kb-export-section-body kb-export-service">
         <label className="kb-export-check">
@@ -400,10 +415,10 @@ function ExportPreview({ model }) {
       <div className="kb-export-preview-brand">{model.brand.logoUrl && <img src={model.brand.logoUrl} alt="Логотип компании" />}{model.brand.companyName && <strong>{model.brand.companyName}</strong>}</div>
       <h2 style={{ fontSize: model.typography.title.size }}>{model.proposal.title}</h2>
       {model.stages.map((stage) => <div className="kb-export-preview-stage" key={stage.id}>
-        <div className="kb-export-preview-row" style={{ background: stage.color, color: stage.textColor, fontSize: model.typography.stage.size }}><b>{stage.number}  {stage.name}</b><b>{money(stage.exportedSubtotal)}</b>{model.display.showComments && <span />}</div>
+        <div className="kb-export-preview-row" style={{ background: stage.color, color: stage.textColor, fontSize: model.typography.stage.size }}><b>{stage.number}  {stage.name}</b>{model.display.showComments && <span className="kb-export-preview-comment" />}<b>{money(stage.exportedSubtotal)}</b></div>
         {stage.rows.map((row) => <div className="kb-export-preview-task" key={row.sourceTaskId}>
-          <div className="kb-export-preview-row" style={{ background: row.color, color: row.textColor, fontSize: model.typography.task.size }}><span>{row.number}  {row.name}</span><span>{money(row.exportedAmount)}</span>{model.display.showComments && <span className="kb-export-preview-comment">{row.comment}</span>}</div>
-          {row.performers.map((performer) => <div className="kb-export-preview-row kb-export-preview-performer" key={performer.id} style={{ fontSize: model.typography.task.size }}><span>{performer.number}  {performer.label}</span><span>{money(performer.amount)}</span>{model.display.showComments && <span />}</div>)}
+          <div className="kb-export-preview-row" style={{ background: row.color, color: row.textColor, fontSize: model.typography.task.size }}><span>{row.number}  {row.name}</span>{model.display.showComments && <span className="kb-export-preview-comment">{row.comment}</span>}<span>{money(row.exportedAmount)}</span></div>
+          {row.performers.map((performer) => <div className="kb-export-preview-row kb-export-preview-performer" key={performer.id} style={{ fontSize: model.typography.task.size }}><span>{performer.number}  {performer.label}</span>{model.display.showComments && <span className="kb-export-preview-comment" />}<span>{money(performer.amount)}</span></div>)}
         </div>)}
       </div>)}
       {model.separateRows.map((row, index) => <div className="kb-export-preview-separate" key={`${row.type}-${index}`}><span>{row.label}</span><span>{money(row.amount)}</span></div>)}

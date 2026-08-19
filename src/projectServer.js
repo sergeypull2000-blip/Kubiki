@@ -17,7 +17,11 @@ export function getProjectClientId(project) {
 }
 
 export function serializeProjectForServer(project) {
-  return jsonSafeClone(normalizeProject(project));
+  // `sheets` is the single persisted source of stages. The derived top-level
+  // `stages` view is recomputed from the active sheet on load, never stored.
+  const canonical = normalizeProject(project);
+  const { stages: _derived, ...persistable } = canonical;
+  return jsonSafeClone(persistable);
 }
 
 export function buildProjectRow(userId, project) {
