@@ -25,7 +25,7 @@ test("welcome and feedback modals escape the base .kb-modal width cap and scroll
 });
 
 test("logo and favicon share one canonical 20-unit geometry so nothing clips at any size", async () => {
-  const [logo, favicon] = await Promise.all([source("src/Logo.jsx"), source("public/favicon-v2.svg")]);
+  const [logo, favicon] = await Promise.all([source("src/Logo.jsx"), source("public/kubiki-favicon-v3.svg")]);
   assert.match(logo, /viewBox="0 0 20 20"/);
   assert.doesNotMatch(logo, /size \/ 2/);
   assert.match(logo, /<rect x="0" y="0" width="9" height="9" rx="2" fill="url\(#kb-logo-tl\)" \/>/);
@@ -33,8 +33,11 @@ test("logo and favicon share one canonical 20-unit geometry so nothing clips at 
   assert.match(logo, /<rect x="0" y="11" width="9" height="9" rx="2" fill="url\(#kb-logo-bl\)" \/>/);
   assert.match(logo, /<rect x="11" y="11" width="9" height="9" rx="2" fill="url\(#kb-logo-br\)" \/>/);
   assert.match(favicon, /viewBox="0 0 20 20"/);
-  assert.match(favicon, /<rect x="0" y="0" width="9" height="9" rx="2" fill="url\(#kb-fav-tl\)" \/>/);
-  assert.match(favicon, /<rect x="11" y="11" width="9" height="9" rx="2" fill="url\(#kb-fav-br\)" \/>/);
+  assert.match(favicon, /<rect x="0" y="0" width="9" height="9" rx="2" fill="#162138" \/>/);
+  assert.match(favicon, /<rect x="11" y="0" width="9" height="9" rx="2" fill="#c9d2e3" \/>/);
+  assert.match(favicon, /<rect x="0" y="11" width="9" height="9" rx="2" fill="#b4d6fd" \/>/);
+  assert.match(favicon, /<rect x="11" y="11" width="9" height="9" rx="2" fill="#4780f3" \/>/);
+  assert.doesNotMatch(favicon, /currentColor|url\(#|<style|class=/);
 });
 
 test("welcome modal keeps approved copy and makes the feedback paragraph bold before CTA", async () => {
