@@ -99,6 +99,9 @@ function normalizeExecutor(raw) {
     if (!exact(value, ["type", "key", "performerName"]) || !text(value.key) || !text(value.performerName)) return null;
   } else return null;
   if (value.role !== undefined && !text(value.role)) return null;
+  // Если пользователь не указал тип оплаты, сгенерированная стоимость исполнителя
+  // по умолчанию относится к существующему в Kubiki типу «Фиксированная ставка» (fix_total).
+  if (value.paymentType === undefined && value.compensation !== undefined) value.paymentType = "fix_total";
   if (value.paymentType !== undefined && !GENERATED_PAYMENT_TYPES.includes(value.paymentType)) return null;
   if (financial.some((key) => value[key] !== undefined && (!numberValue(value[key]) || Number(String(value[key]).replace(/\s/g, "")) < 0 || Number(String(value[key]).replace(/\s/g, "")) > 1_000_000_000))) return null;
   return Array.from({ length: count }, () => structuredClone(value));

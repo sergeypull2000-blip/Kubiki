@@ -109,6 +109,10 @@ test("workspace money/number displays stay text-selectable despite reorder drag"
   assert.match(executor, /INTERACTIVE_SEL = "input, textarea, select, button, \.kb-tag, \.kb-addcube, \.kb-payinline, \.kb-erow-taxed, \.kb-erow-sum"/);
   // Суммы остаются выделяемыми по CSS независимо от draggable-контейнеров.
   assert.match(styles, /\.kb-sum\{[^}]*user-select:text/);
+  // Readonly selectable суммы при наведении — текстовый курсор, а не pointer/hand.
+  assert.match(styles, /\.kb-sum\{[^}]*cursor:text/);
+  assert.match(styles, /\.kb-erow-sum\{[^}]*cursor:text/);
+  assert.match(styles, /\.kb-erow-taxed\{[^}]*cursor:text/);
   assert.match(styles, /\.kb-erow-sum\{[^}]*user-select:text/);
   // Верхнее «Итого» — без user-select:none, выделяется как обычный текст.
   assert.doesNotMatch(styles, /\.kb-total-badge\{[^}]*user-select:none/);

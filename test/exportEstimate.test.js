@@ -248,6 +248,22 @@ test("настройка брендинга доступна из модалки
   assert.match(source, /model\.brand\.logoUrl/);
 });
 
+test("Excel date row spans the used export columns and stays fully visible without widening column №", () => {
+  const dateValue = new Date().toLocaleDateString("ru-RU");
+  for (const showComments of [true, false]) {
+    const settings = normalizeExportSettings({ content: { showComments } });
+    const model = buildExportEstimateModel(project(settings), settings);
+    const sheet = buildExcelWorkbook(model).worksheets[0];
+    const amountColumn = showComments ? 4 : 3;
+    const dateRow = sheet.findRow(sheet.getColumn(1).values.findIndex((value) => value === dateValue));
+    assert.ok(dateRow, "date row is present");
+    assert.equal(dateRow.getCell(1).value, dateValue);
+    assert.equal(dateRow.getCell(1).alignment?.horizontal, "left");
+    assert.equal(sheet.getCell(dateRow.number, amountColumn).master.address, `A${dateRow.number}`);
+    assert.equal(sheet.getColumn(1).width, 8);
+  }
+});
+
 test("legacy external estimate сохраняется, но не влияет на runtime export", () => {
   const canonical = project();
   const legacy = { ...canonical, externalEstimate: { total: 1, stages: [{ id: "legacy" }] }, clientEstimate: { total: 2 }, tax: { ...canonical.tax, visible: false } };

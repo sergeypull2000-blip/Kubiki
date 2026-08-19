@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { makeProject, makeProjectFromEstimate, normalizeProject } from "./store.js";
 import { Dashboard } from "./components/Dashboard.jsx";
 import { Workspace } from "./components/Workspace.jsx";
 import { KnowledgeBasePage } from "./components/KnowledgeBasePage.jsx";
 import { cloneProjectTemplate } from "./templates.js";
+import { activeSheetId } from "./sheets.js";
 import { ImportModal, GenerateEstimateModal } from "./importExcel.jsx";
 import { APP_SECTIONS } from "./appNavigation.js";
 import { createPerformer, removePerformer, savePerformerLibrary, updatePerformer } from "./performerLibrary.js";
@@ -21,6 +22,7 @@ import { loadLocalAiSettings, normalizeAiSettings, saveLocalAiSettings } from ".
 import { AIPersonalizationModal } from "./components/AIPersonalizationModal.jsx";
 import { WelcomeModal } from "./components/WelcomeModal.jsx";
 import { UsageLimitsModal } from "./components/UsageLimitsModal.jsx";
+import { BetaFeedbackModal } from "./components/BetaFeedbackModal.jsx";
 import { userFlagsRepository } from "./repositories/userFlagsRepository.js";
 import { productEventsRepository } from "./repositories/productEventsRepository.js";
 import { isAiHydrationReady } from "./ai/hydrationGate.js";
@@ -121,6 +123,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   // product analytics: максимум одно session_active на сессию браузера (скоуп по user_id).
   useEffect(() => {
@@ -156,6 +159,14 @@ export default function KubikiApp({ userId, user, onSignOut }) {
 
   const storedCurrentProject = projects.find((p) => p.id === currentId) || null;
   const currentProject = storedCurrentProject ? normalizeProject(storedCurrentProject) : null;
+
+  // Контекст бета-фидбэка: где пользователь находится в момент открытия окна.
+  const feedbackContext = useMemo(() => {
+    if (editingTemplateId) return { context: "template_editor", projectId: null, sheetId: null };
+    if (currentProject) return { context: "project", projectId: currentProject.id, sheetId: activeSheetId(currentProject) || null };
+    if (activeSection === APP_SECTIONS.KNOWLEDGE_BASE) return { context: "knowledge_base", projectId: null, sheetId: null };
+    return { context: "dashboard", projectId: null, sheetId: null };
+  }, [editingTemplateId, currentProject, activeSection]);
 
   const replaceProjects = useCallback((next) => {
     projectsRef.current = next;
@@ -698,6 +709,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
       {aiSettingsOpen && <AIPersonalizationModal settings={aiSettings} state={aiSettingsState} message={aiSettingsMessage} onSave={saveAiSettings} onClose={() => setAiSettingsOpen(false)} />}
       {welcomeOpen && <WelcomeModal onStart={handleWelcomeStart} />}
       {usageOpen && <UsageLimitsModal onClose={() => setUsageOpen(false)} />}
+      {feedbackOpen && <BetaFeedbackModal userId={userId} context={feedbackContext} onClose={() => setFeedbackOpen(false)} />}
       {(templateState === "migration-offer" || templateState === "migrating") && <div className="kb-modal-overlay kb-server-overlay">
         <div className="kb-modal kb-server-card" role="dialog" aria-modal="true" aria-labelledby="template-migration-title">
           <div className="kb-server-title" id="template-migration-title">Перенести библиотеку шаблонов</div>
@@ -749,6 +761,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
           quickAccess={quickAccess} onToggleQuickAccessPin={toggleQuickAccessPin} onRemoveQuickAccess={removeQuickAccessByItem}
           onOpenAiSettings={() => setAiSettingsOpen(true)}
           onOpenUsage={() => setUsageOpen(true)}
+          onOpenFeedback={() => setFeedbackOpen(true)}
 
           userAccount={{ id: userId, displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }}
           aiGenerationReady={aiGenerationReady}
@@ -762,6 +775,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
           quickAccess={quickAccess} onToggleQuickAccessPin={toggleQuickAccessPin} onRemoveQuickAccess={removeQuickAccessByItem} onSignOut={handleSignOut}
           onOpenAiSettings={() => setAiSettingsOpen(true)}
           onOpenUsage={() => setUsageOpen(true)}
+          onOpenFeedback={() => setFeedbackOpen(true)}
 
           userAccount={{ id: userId, displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }}
           aiGenerationReady={aiGenerationReady}
@@ -782,7 +796,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
           onTemplatesChange={handleTemplatesChange} onEditTemplate={setEditingTemplateId}
           categories={templateLibrary.categories} onCategoriesChange={(categories) => replaceTemplateLibrary((library) => ({ ...library, categories }))}
           openCategoryIds={templateLibrary.metadata.openCategoryIds || ["new"]} onOpenCategoryIdsChange={(openCategoryIds) => replaceTemplateLibrary((library) => ({ ...library, metadata: { ...library.metadata, openCategoryIds } }))}
-          onToggleFavorite={toggleFavorite} onRenameProject={renameProject} onSectionChange={setActiveSection} onOpenAiSettings={() => setAiSettingsOpen(true)} onOpenUsage={() => setUsageOpen(true)} onSignOut={handleSignOut}
+          onToggleFavorite={toggleFavorite} onRenameProject={renameProject} onSectionChange={setActiveSection} onOpenAiSettings={() => setAiSettingsOpen(true)} onOpenUsage={() => setUsageOpen(true)} onOpenFeedback={() => setFeedbackOpen(true)} onSignOut={handleSignOut}
           userAccount={{ id: userId, displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }} />
       )}
     </>

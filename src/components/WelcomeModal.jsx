@@ -5,7 +5,7 @@ import { Logo } from "../Logo.jsx";
 export function WelcomeModal({ onStart }) {
   return <div className="kb-modal-overlay kb-welcome-overlay">
     <div className="kb-modal kb-welcome-modal" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
-      <div className="kb-welcome-brand"><Logo size={40} /><span>Kubiki <em>Beta</em></span></div>
+      <div className="kb-welcome-brand"><Logo size={44} /></div>
       <h2 className="kb-welcome-title" id="welcome-title">Добро пожаловать в Kubiki Beta</h2>
       <p className="kb-welcome-text">Команда Kubiki рада приветствовать вас на закрытом бета-тестировании первой версии продукта.</p>
       <p className="kb-welcome-text">Kubiki помогает создавать и переиспользовать сметы, хранить знания студии и работать с ними через ИИ.</p>
@@ -18,6 +18,7 @@ export function WelcomeModal({ onStart }) {
         </ul>
       </div>
       <p className="kb-welcome-text">Это beta-версия - некоторые вещи ещё могут меняться. Будем очень рады вашему фидбэку.</p>
+      <p className="kb-welcome-text">Если у вас появятся замечания, идеи или что-то окажется неудобным, вы всегда можете нажать «Оставить отзыв» и написать нам прямо из Kubiki.</p>
       <div className="kb-modal-actions">
         <button type="button" className="kb-btn kb-btn-primary" onClick={onStart}>Начать работу</button>
       </div>

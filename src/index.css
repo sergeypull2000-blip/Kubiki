@@ -37,7 +37,7 @@ body {
 .kb-profile-menu-anchored { position: fixed; top: auto; right: auto; bottom: auto; left: auto; }
 
 .kb-canvas { position: relative; }
-.kb-ai-launcher-wrap { position: fixed; z-index: 900; bottom: 69px; width: 54px; height: 54px; }
+.kb-ai-launcher-wrap { position: fixed; z-index: 900; bottom: 39px; width: 54px; height: 54px; }
 .kb-ai-launcher { position: absolute; z-index: 3; right: 0; bottom: 0; display: grid; place-items: center; width: 54px; height: 54px; padding: 0; border: 0; border-radius: 15px; background: linear-gradient(145deg, #2974f0, #1553c6); color: #fff; box-shadow: 0 10px 25px rgba(27, 92, 211, .3); cursor: pointer; transition: width .23s cubic-bezier(.2,.75,.25,1), height .23s cubic-bezier(.2,.75,.25,1), right .23s cubic-bezier(.2,.75,.25,1), bottom .23s cubic-bezier(.2,.75,.25,1), border-radius .23s ease, box-shadow .18s ease; }
 .kb-ai-launcher:hover { transform: none; box-shadow: 0 13px 30px rgba(27, 92, 211, .38); }
 .kb-ai-launcher svg { transition: transform .23s cubic-bezier(.2,.75,.25,1); }
@@ -45,7 +45,7 @@ body {
 .kb-ai-launcher.is-open svg { transform: scale(.83); }
 .kb-ai-launcher.is-open:hover { transform: none; box-shadow: none; }
 .kb-ai-launcher.is-open:disabled { opacity: .55; cursor: default; }
-.kb-ai-undo-chip { position: absolute; right: 55px; bottom: 8px; width: max-content; padding: 7px 10px; border: 1px solid #d9e2f5; border-radius: 999px; background: rgba(255,255,255,.94); color: #315185; font-size: 11px; box-shadow: 0 5px 16px rgba(29, 44, 73, .12); cursor: pointer; }
+.kb-ai-undo-chip { position: absolute; right: 64px; /* 54px launcher + 10px gap */ bottom: 8px; width: max-content; padding: 7px 10px; border: 1px solid #d9e2f5; border-radius: 999px; background: rgba(255,255,255,.94); color: #315185; font-size: 11px; box-shadow: 0 5px 16px rgba(29, 44, 73, .12); cursor: pointer; }
 .kb-ai-global-overlay .kb-ai-edit-dialog { transform-origin: calc(100% - 28px) calc(100% - 28px); animation: kb-ai-expand .2s cubic-bezier(.2,.75,.25,1); }
 .kb-ai-inline-anchor { position: fixed; z-index: 1450; width: min(360px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-x: hidden; overflow-y: hidden; overscroll-behavior: contain; }
 .kb-ai-edit-inline { width: 100%; max-height: min(410px, calc(100vh - 24px)); overflow: auto; border-radius: 13px; box-shadow: 0 18px 50px rgba(24, 31, 48, .24); animation: kb-menu-in .14s ease-out; }

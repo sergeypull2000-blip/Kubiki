@@ -143,7 +143,7 @@ function NewProjectCard({ onCreate }) {
   </div>;
 }
 
-export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, aiGenerationReady = false, onDelete, projectTemplates, onTemplatesChange, categories, onCategoriesChange, openCategoryIds, onOpenCategoryIdsChange, onEditTemplate, onToggleFavorite, onRenameProject, onSectionChange, onOpenAiSettings, onOpenUsage, onSignOut, userAccount }) {
+export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, aiGenerationReady = false, onDelete, projectTemplates, onTemplatesChange, categories, onCategoriesChange, openCategoryIds, onOpenCategoryIdsChange, onEditTemplate, onToggleFavorite, onRenameProject, onSectionChange, onOpenAiSettings, onOpenUsage, onSignOut, onOpenFeedback, userAccount }) {
   const [activeNav, setActiveNav] = useState("all");
   const [toast, setToast] = useState("");
   const [sourceModal, setSourceModal] = useState(null);
@@ -176,7 +176,7 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, ai
     window.addEventListener("pointerup", onUp, { once: true });
   }, [sidebarWidth]);
 
-  const accountControl = <AccountControl userAccount={userAccount} onOpenAiSettings={onOpenAiSettings} onOpenUsage={onOpenUsage} onSignOut={onSignOut} />;
+  const accountControl = <AccountControl userAccount={userAccount} onOpenAiSettings={onOpenAiSettings} onOpenUsage={onOpenUsage} onOpenFeedback={onOpenFeedback} onSignOut={onSignOut} />;
 
   useEffect(() => {
     const categoryIds = new Set(categories.map((category) => category.id));
@@ -222,7 +222,7 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, ai
         openCategoryIds={openCategoryIds} onOpenCategoryIdsChange={onOpenCategoryIdsChange}
         templates={templates} onMoveTemplate={moveTemplate} onDeleteCategory={deleteCategory}
         onRenameTemplate={renameTemplate} onDeleteTemplate={deleteTemplate}
-        width={sidebarWidth} accountControl={accountControl} />
+        width={sidebarWidth} accountControl={accountControl} onOpenFeedback={onOpenFeedback} />
       <div className="kb-dash-resizer" role="separator" aria-label="Изменить ширину панели" aria-orientation="vertical" onPointerDown={beginSidebarResize} />
       <main className="kb-dashboard"><div className="kb-board">
         {activeCategory ? (visibleTemplates.length ? visibleTemplates.map((template) =>

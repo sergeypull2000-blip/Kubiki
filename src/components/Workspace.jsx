@@ -85,7 +85,7 @@ function SheetTab({ sheet, isActive, canRemove, onSwitch, onRename, onDuplicate,
 /* ============================================================
    Рабочая зона
    ============================================================ */
-export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onOpenAiSettings, onOpenUsage, onTrackAiGenerate, onSignOut, userAccount, aiGenerationReady = false, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange, onRequestAiEdit, onCancelAiEdit, onApplyAiEdit, onUndoAiEdit, canUndoAiEdit = false }) {
+export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onOpenAiSettings, onOpenUsage, onOpenFeedback, onTrackAiGenerate, onSignOut, userAccount, aiGenerationReady = false, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange, onRequestAiEdit, onCancelAiEdit, onApplyAiEdit, onUndoAiEdit, canUndoAiEdit = false }) {
   const [leftPanelWidth, setLeftPanelWidth] = useState(() => clampPanelWidth(localStorage.getItem("kb-workspace-left-width"), LEFT_PANEL_RANGE, 248));
   const [rightPanelWidth, setRightPanelWidth] = useState(() => clampPanelWidth(localStorage.getItem("kb-workspace-right-width"), RIGHT_PANEL_RANGE, 288));
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
@@ -444,7 +444,7 @@ const toggleAllCollapsed = () =>
     <RightPanel project={project} dispatch={dispatch} userId={userAccount?.id}
       activeStageId={activeStageId} activeTaskId={activeTaskId} activeExecutorId={activeExecutorId} />
   );
-  const accountControl = <AccountControl userAccount={userAccount} onOpenAiSettings={onOpenAiSettings} onOpenUsage={onOpenUsage} onSignOut={onSignOut} />;
+  const accountControl = <AccountControl userAccount={userAccount} onOpenAiSettings={onOpenAiSettings} onOpenUsage={onOpenUsage} onOpenFeedback={onOpenFeedback} onSignOut={onSignOut} />;
 
   return (
     <div className="kb-root kb-root-workspace">
@@ -501,6 +501,7 @@ const toggleAllCollapsed = () =>
             onRemoveTaskTemplate={handleRemoveTaskTemplate}
             onRemoveStageTemplate={handleRemoveStageTemplate}
             accountControl={accountControl}
+            onOpenFeedback={onOpenFeedback}
           />
           <div className="kb-panel-resizer kb-panel-resizer-left" role="separator" aria-label="Изменить ширину левой панели" aria-orientation="vertical" onPointerDown={(event) => beginPanelResize("left", event)} />
         </div>

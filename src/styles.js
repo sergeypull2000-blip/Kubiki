@@ -209,7 +209,7 @@ export const CSS = `
 .kb-dropzone-over{background:var(--accent-soft); outline:1.5px dashed var(--accent); outline-offset:-4px; border-radius:5px}
 
 /* иерархия сумм: все выровнены по правому краю, вес/размер = уровень */
-.kb-sum{font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right; margin-left:auto; user-select:text}
+.kb-sum{font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right; margin-left:auto; user-select:text; cursor:text}
 .kb-sum-stage{font-size:16px; font-weight:var(--fw-semibold); color:var(--text); letter-spacing:-.01em; min-width:104px}
 .kb-sum-task{font-size:var(--fs-sm); font-weight:var(--fw-medium); color:var(--text-muted); min-width:104px}
 /* быстрый ввод стоимости задачи напрямую, пока нет исполнителей */
@@ -271,7 +271,7 @@ export const CSS = `
 .kb-erow-tags{flex:1; min-width:0; min-height:27px; display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding:1px 0}
 .kb-erow-amount{flex-shrink:0; min-width:104px; display:flex; justify-content:flex-end; align-items:center; gap:6px}
 .kb-erow-taxed{white-space:nowrap; user-select:text; cursor:text}
-.kb-erow-sum{font-size:var(--fs-xs); font-weight:var(--fw-regular); color:var(--text-muted); font-variant-numeric:tabular-nums; white-space:nowrap; user-select:text}
+.kb-erow-sum{font-size:var(--fs-xs); font-weight:var(--fw-regular); color:var(--text-muted); font-variant-numeric:tabular-nums; white-space:nowrap; user-select:text; cursor:text}
 .kb-erow-sum-muted{color:var(--text-faint)}
 .kb-erow-sum-strong{font-size:var(--fs-sm); font-weight:var(--fw-medium); color:var(--text)}
 .kb-amount-input{text-align:right; font-size:var(--fs-sm); font-weight:var(--fw-medium)}
@@ -555,7 +555,9 @@ export const CSS = `
 .kb-tpl-add{display:inline-flex; align-items:center; gap:5px; width:100%; justify-content:flex-start; margin-top:4px; padding:6px 8px; border:1px dashed var(--line-strong); border-radius:6px; background:none; color:var(--text-muted); font:inherit; font-size:11.5px; cursor:pointer}
 .kb-tpl-add:hover{color:var(--text); border-color:var(--text-faint)}
 .kb-tpl-soon{color:var(--accent); font-weight:var(--fw-medium)}
-.kb-palette-foot{flex:0 0 auto; margin-top:0; padding:14px; font-size:11px; color:var(--text-faint); line-height:1.45; border-top:1px solid var(--line)}
+.kb-palette-foot{flex:0 0 auto; position:relative; margin-top:0; padding:14px; font-size:11px; color:var(--text-faint); line-height:1.45; border-top:1px solid var(--line)}
+.kb-feedback-float{position:absolute; z-index:3; left:25px; bottom:calc(100% + 12px); display:grid; place-items:center; width:auto; height:45px; padding:0 16px; border:0; border-radius:12px; background:linear-gradient(145deg,#2ea3ff,#2698ff); color:#fff; font:inherit; font-size:13px; font-weight:600; white-space:nowrap; box-shadow:0 10px 24px rgba(38,152,255,.3); cursor:pointer; transition:box-shadow .18s ease, background .15s ease, filter .15s ease}
+.kb-feedback-float:hover{background:linear-gradient(145deg,#1f8cf2,#1877dc); box-shadow:0 13px 30px rgba(38,152,255,.38)}
 .kb-brand-logo-sq{width:56px; height:56px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px dashed var(--line-strong); border-radius:8px; background:var(--surface-sunken); color:var(--text-muted); cursor:pointer; overflow:hidden}
 .kb-brand-logo-lbl{font-size:10px}
 .kb-brand-input{width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:6px; background:var(--surface); font-size:var(--fs-sm)}
@@ -791,7 +793,7 @@ export const CSS = `
   border-right:1px solid var(--line);
   display:flex; flex-direction:column; gap:0; overflow:hidden; min-height:0}
 .kb-dash-sidebar-scroll{flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:18px 14px 24px}
-.kb-dash-sidebar-foot{flex:0 0 auto; margin-top:0; padding:14px; border-top:1px solid var(--line)}
+.kb-dash-sidebar-foot{flex:0 0 auto; position:relative; margin-top:0; padding:14px; border-top:1px solid var(--line)}
 .kb-dash-resizer{position:relative; flex:0 0 9px; cursor:col-resize; touch-action:none; background:transparent}
 .kb-dash-resizer::after{content:""; position:absolute; top:0; bottom:0; left:4px; width:1px; background:transparent; transition:background .12s}
 .kb-dash-resizer:hover::after,.kb-is-panel-resizing .kb-dash-resizer::after{background:var(--line-strong)}
@@ -918,12 +920,16 @@ export const CSS = `
 /* ===== Beta readiness ===== */
 .kb-beta-badge{display:inline-flex;align-items:center;margin-left:7px;padding:1px 7px;border-radius:999px;background:var(--accent);color:#fff;font-size:10px;font-weight:var(--fw-semibold);letter-spacing:.03em;line-height:1.6}
 .kb-welcome-overlay{z-index:2000}
-.kb-welcome-modal{width:min(460px,92vw);padding:0}
-.kb-welcome-brand{display:flex;align-items:center;gap:10px;padding:20px 22px 0}.kb-welcome-brand span{font-size:18px;font-weight:var(--fw-semibold);letter-spacing:-.02em}.kb-welcome-brand em{font-style:normal;color:var(--accent);font-size:12px;margin-left:2px}
-.kb-welcome-title{margin:16px 22px 0;font-size:20px;letter-spacing:-.02em}
-.kb-welcome-text{margin:8px 22px 0;color:var(--text-muted);font-size:var(--fs-sm);line-height:1.5}
-.kb-welcome-list{margin:14px 22px 0;display:flex;flex-direction:column;gap:6px}.kb-welcome-list-label{font-size:var(--fs-sm);font-weight:var(--fw-semibold);color:var(--text)}.kb-welcome-list ul{margin:0;padding:0 0 0 18px;display:flex;flex-direction:column;gap:4px;color:var(--text-muted);font-size:var(--fs-sm);line-height:1.45}.kb-welcome-list li::marker{color:var(--accent)}
-.kb-welcome-modal .kb-modal-actions{padding:18px 22px 22px}
+.kb-welcome-modal{width:min(640px,92vw);padding:0}
+.kb-welcome-brand{display:flex;justify-content:center;padding:26px 24px 0}
+.kb-welcome-title{margin:14px 24px 0;font-size:24px;font-weight:700;letter-spacing:-.02em}
+.kb-welcome-text{margin:9px 24px 0;color:var(--text-muted);font-size:16px;line-height:1.55}
+.kb-welcome-list{margin:16px 24px 0;display:flex;flex-direction:column;gap:6px}.kb-welcome-list-label{font-size:16px;font-weight:600;color:var(--text)}.kb-welcome-list ul{margin:0;padding:0 0 0 20px;display:flex;flex-direction:column;gap:4px;color:var(--text-muted);font-size:16px;line-height:1.5}.kb-welcome-list li::marker{color:var(--accent)}
+.kb-welcome-modal .kb-modal-actions{padding:20px 24px 24px}
+.kb-feedback-modal{width:min(520px,92vw)}
+.kb-feedback-hint{margin:0 0 12px;color:var(--text-muted);font-size:var(--fs-sm);line-height:1.5}
+.kb-feedback-textarea{width:100%;min-height:160px;resize:vertical;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font:inherit;font-size:var(--fs-sm);line-height:1.5}.kb-feedback-textarea:focus{outline:none;border-color:var(--accent)}
+.kb-feedback-success{padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--accent-soft);color:var(--text);font-size:var(--fs-sm);line-height:1.5}
 .kb-usage-modal{width:min(440px,92vw)}
 .kb-usage-bar{height:10px;border-radius:999px;background:var(--surface-sunken);border:1px solid var(--line);overflow:hidden}
 .kb-usage-bar-fill{height:100%;background:var(--accent);border-radius:999px;transition:width .3s ease}

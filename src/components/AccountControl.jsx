@@ -1,5 +1,5 @@
 import { useState, useRef, useLayoutEffect } from "react";
-import { ChevronDown, LogOut, Sparkles, Gauge } from "lucide-react";
+import { ChevronDown, LogOut, MessageSquare, Sparkles, Gauge } from "lucide-react";
 import { useOutsideClose } from "../hooks.js";
 
 /* Переиспользуемая кнопка аккаунта (аватар + имя + меню «Использование и лимиты» /
@@ -29,7 +29,7 @@ function computeProfileMenuPosition(trigger, menu) {
   return { top, left, width };
 }
 
-export function AccountControl({ userAccount, onOpenAiSettings, onOpenUsage, onSignOut }) {
+export function AccountControl({ userAccount, onOpenAiSettings, onOpenUsage, onSignOut, onOpenFeedback }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileMenuPos, setProfileMenuPos] = useState(null);
   const profileRef = useRef(null);
@@ -62,6 +62,7 @@ export function AccountControl({ userAccount, onOpenAiSettings, onOpenUsage, onS
     {profileOpen && <div ref={menuRef} className="kb-profile-menu kb-profile-menu-anchored" style={profileMenuPos} role="menu">
       {onOpenUsage && <button type="button" role="menuitem" onClick={() => { setProfileOpen(false); onOpenUsage(); }}><Gauge size={15} />Использование и лимиты</button>}
       {onOpenAiSettings && <button type="button" role="menuitem" onClick={() => { setProfileOpen(false); onOpenAiSettings(); }}><Sparkles size={15} />Персонализация ИИ</button>}
+      {onOpenFeedback && <button type="button" role="menuitem" onClick={() => { setProfileOpen(false); onOpenFeedback(); }}><MessageSquare size={15} />Оставить отзыв</button>}
       <button type="button" role="menuitem" onClick={onSignOut}><LogOut size={15} />Выйти</button>
     </div>}
   </div>;

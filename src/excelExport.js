@@ -48,7 +48,10 @@ export function buildExcelWorkbook(model, addLogo) {
   sheet.addRow([model.proposal?.title || model.projectName]); sheet.mergeCells(sheet.rowCount, 1, sheet.rowCount, sheet.columnCount);
   sheet.getCell(`A${sheet.rowCount}`).font = { bold: true, size: model.typography?.title?.size || 15, name: brand.fontFamily || "Roboto" };
   if (model.sheetName) { sheet.addRow([model.sheetName]); sheet.mergeCells(sheet.rowCount, 1, sheet.rowCount, sheet.columnCount); sheet.getCell(`A${sheet.rowCount}`).font = { size: model.typography?.stage?.size || 11, name: brand.fontFamily || "Roboto", color: { argb: "FF64748B" } }; }
-  sheet.addRow([new Date().toLocaleDateString("ru-RU"), ""]); sheet.addRow([]);
+  const dateRow = sheet.addRow([new Date().toLocaleDateString("ru-RU")]);
+  sheet.mergeCells(dateRow.number, 1, dateRow.number, amountColumn);
+  sheet.getCell(dateRow.number, 1).alignment = { horizontal: "left" };
+  sheet.addRow([]);
   const totalReferences = [];
   const derivedBaseReferences = [];
   let derivedBaseAmount = 0;
