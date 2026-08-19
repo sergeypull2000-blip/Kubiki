@@ -89,6 +89,33 @@ test("каждый налоговый компонент распределяе�
   }
   assert.deepEqual(model.separateRows.filter((row) => row.type === "tax").map((row) => row.metadata.type), ["vat"]);
 });
+test("распределённый налог назначается целыми рублями, копеечный остаток детерминированно уходит в одну строку", () => {
+  const weights = [{ preTaxAmountMinor: 35050 }, { preTaxAmountMinor: 65050 }, { preTaxAmountMinor: 100000 }];
+  const first = distributeTaxAcrossTasks(12006, weights);
+  assert.deepEqual(first, [2100, 3900, 6006]);
+  assert.equal(first.reduce((sum, value) => sum + value, 0), 12006);
+  assert.equal(first.filter((value) => value % 100 !== 0).length, 1);
+  assert.deepEqual(first, distributeTaxAcrossTasks(12006, weights));
+});
+
+test("tax=distributed сохраняет общий налог точно, а отдельная строка налога не меняется", () => {
+  const source = project({ stages: [{ id: "s", name: "Этап", tasks: [task("one", "A", 350.5), task("two", "B", 650.5), task("three", "C", 1000)] }] });
+  const model = buildExportEstimateModel(source, { markupPresentation: "separate_line", taxPresentation: "distributed" });
+  const component = model.summary.taxBreakdown.find((item) => item.type !== "vat");
+  const parts = model.stages.flatMap((stage) => stage.rows).flatMap((row) => row.distributedTaxBreakdown).filter((item) => item.id === component.id);
+  assert.equal(parts.length, 3);
+  assert.equal(parts.reduce((sum, item) => sum + item.amountMinor, 0), component.amountMinor);
+  assert.equal(parts.filter((item) => item.amountMinor % 100 !== 0).length, component.amountMinor % 100 === 0 ? 0 : 1);
+  assert.equal(validateExportModelTotals(model).valid, true);
+  const again = buildExportEstimateModel(source, { markupPresentation: "separate_line", taxPresentation: "distributed" });
+  assert.deepEqual(model.stages.flatMap((s) => s.rows.map((r) => r.distributedTaxAmountMinor)), again.stages.flatMap((s) => s.rows.map((r) => r.distributedTaxAmountMinor)));
+  const separate = buildExportEstimateModel(source, { markupPresentation: "separate_line", taxPresentation: "separate_line" });
+  const separateTax = separate.separateRows.find((row) => row.metadata?.type === "usn");
+  assert.equal(separateTax.amountMinor, component.amountMinor);
+  assert.equal(separate.stages.flatMap((stage) => stage.rows).flatMap((row) => row.distributedTaxBreakdown).length, 0);
+});
+
+
 
 test("НДС всегда остаётся отдельной строкой при любой настройке налога", () => {
   for (const taxPresentation of ["distributed", "separate_line"]) {

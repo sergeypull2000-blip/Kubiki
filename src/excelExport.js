@@ -21,7 +21,7 @@ const paintRow = (row, lastColumn, argb) => {
 export function buildExcelRows(model) {
   const rows = [];
   for (const stage of model.stages) {
-    rows.push({ type: "stage", label: stage.name, amount: stage.exportedSubtotal, color: stage.color });
+    rows.push({ type: "stage", number: stage.number, label: stage.name, amount: stage.exportedSubtotal, color: stage.color });
     for (const task of stage.rows) {
       rows.push({ type: "task", number: task.number, label: task.name, amount: task.exportedAmount, sourceTaskId: task.sourceTaskId, comment: task.comment, color: task.color });
       for (const performer of task.performers) rows.push({ ...performer, label: performer.label });
@@ -36,7 +36,7 @@ export function buildExcelWorkbook(model, addLogo) {
   workbook.calcProperties = { calcMode: "auto", fullCalcOnLoad: true, forceFullCalc: true };
   const sheet = workbook.addWorksheet("Смета", { views: [{ showGridLines: false }] });
   const showComments = model.settings?.content?.showComments;
-  // Excel columns: № | Наименование | [Комментарий] | Сумма
+  // Excel columns: № | Наименование | [Комментарии] | Сумма
   const commentColumn = showComments ? 3 : null;
   const amountColumn = showComments ? 4 : 3;
   sheet.columns = [{ width: 8 }, { width: 48 }, ...(showComments ? [{ width: 40 }] : []), { width: 20 }];
@@ -52,11 +52,14 @@ export function buildExcelWorkbook(model, addLogo) {
   sheet.mergeCells(dateRow.number, 1, dateRow.number, amountColumn);
   sheet.getCell(dateRow.number, 1).alignment = { horizontal: "left" };
   sheet.addRow([]);
+  const headerRow = sheet.addRow(showComments ? ["№", "Наименование", "Комментарии", "Сумма"] : ["№", "Наименование", "Сумма"]);
+  headerRow.font = { bold: true, size: 10, name: brand.fontFamily || "Roboto", color: { argb: "FF64748B" } };
+  paintRow(headerRow, amountColumn, "FFEEF2F7");
   const totalReferences = [];
   const derivedBaseReferences = [];
   let derivedBaseAmount = 0;
   for (const stage of model.stages) {
-    const stageRow = sheet.addRow([null, stage.name, ...(showComments ? [""] : []), null]);
+    const stageRow = sheet.addRow([stage.number, stage.name, ...(showComments ? [""] : []), null]);
     stageRow.font = { bold: true, size: model.typography?.stage?.size || 11, name: brand.fontFamily || "Roboto", color: { argb: excelColor(stage.textColor ?? brand.colors?.stageText, "#1A2230") } };
     paintRow(stageRow, amountColumn, excelColor(stage.color, "#EEF2F7"));
     const taskReferences = [];

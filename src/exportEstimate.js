@@ -75,7 +75,21 @@ export function distributeMarkupAcrossTasks(markupMinor, tasks) {
 }
 
 export function distributeTaxAcrossTasks(componentMinor, tasks) {
-  return allocateMoneyProportionally(componentMinor, tasks.map((item) => ({ weight: item.preTaxAmountMinor })));
+  // Налог назначается по строкам в целых рублях. Внутренний общий налог
+  // сохраняется точно: копеечный остаток (componentMinor % 100) детерминированно
+  // добавляется в строку с наибольшей назначенной суммой (при равенстве — первую).
+  const weights = tasks.map((item) => ({ weight: item.preTaxAmountMinor }));
+  if (componentMinor !== 0 && weights.every((item) => item.weight <= 0)) return null;
+  const rublesTotal = Math.trunc(componentMinor / 100);
+  const allocations = allocateMoneyProportionally(rublesTotal, weights);
+  if (!allocations) return allocations;
+  const wholeRubles = allocations.map((value) => value * 100);
+  const residual = componentMinor - wholeRubles.reduce((sum, value) => sum + value, 0);
+  if (residual !== 0) {
+    const target = wholeRubles.reduce((best, value, index) => (value > wholeRubles[best] ? index : best), 0);
+    wholeRubles[target] += residual;
+  }
+  return wholeRubles;
 }
 
 export const buildSeparateMarkupRow = (amountMinor, metadata = {}) => ({

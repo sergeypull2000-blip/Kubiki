@@ -18,8 +18,29 @@ test("welcome modal uses canonical LogoMark 2x2 with app typography", async () =
   assert.doesNotMatch(styles, /\.kb-welcome[^}]*font-family:serif/);
 });
 
-test("welcome modal keeps approved copy and adds feedback paragraph before CTA", async () => {
-  const modal = await source("src/components/WelcomeModal.jsx");
+test("welcome and feedback modals escape the base .kb-modal width cap and scroll instead of clipping", async () => {
+  const styles = await source("src/styles.js");
+  assert.match(styles, /\.kb-welcome-modal\{width:min\(640px,92vw\);max-width:min\(640px,92vw\)[^}]*overflow-y:auto/);
+  assert.match(styles, /\.kb-feedback-modal\{width:min\(520px,92vw\);max-width:min\(520px,92vw\)/);
+});
+
+test("logo and favicon share one canonical 20-unit geometry so nothing clips at any size", async () => {
+  const [logo, favicon] = await Promise.all([source("src/Logo.jsx"), source("public/favicon-v2.svg")]);
+  assert.match(logo, /viewBox="0 0 20 20"/);
+  assert.doesNotMatch(logo, /size \/ 2/);
+  assert.match(logo, /<rect x="0" y="0" width="9" height="9" rx="2" fill="url\(#kb-logo-tl\)" \/>/);
+  assert.match(logo, /<rect x="11" y="0" width="9" height="9" rx="2" fill="url\(#kb-logo-tr\)" \/>/);
+  assert.match(logo, /<rect x="0" y="11" width="9" height="9" rx="2" fill="url\(#kb-logo-bl\)" \/>/);
+  assert.match(logo, /<rect x="11" y="11" width="9" height="9" rx="2" fill="url\(#kb-logo-br\)" \/>/);
+  assert.match(favicon, /viewBox="0 0 20 20"/);
+  assert.match(favicon, /<rect x="0" y="0" width="9" height="9" rx="2" fill="url\(#kb-fav-tl\)" \/>/);
+  assert.match(favicon, /<rect x="11" y="11" width="9" height="9" rx="2" fill="url\(#kb-fav-br\)" \/>/);
+});
+
+test("welcome modal keeps approved copy and makes the feedback paragraph bold before CTA", async () => {
+  const [modal, styles] = await Promise.all([source("src/components/WelcomeModal.jsx"), source("src/styles.js")]);
+  assert.match(modal, /<p className="kb-welcome-text kb-welcome-feedback">Если у вас появятся замечания/);
+  assert.match(styles, /\.kb-welcome-feedback\{font-weight:700\}/);
   assert.match(modal, /Команда Kubiki рада приветствовать вас на закрытом бета-тестировании первой версии продукта\./);
   assert.match(modal, /Что уже можно:/);
   assert.match(modal, /Это beta-версия - некоторые вещи ещё могут меняться\. Будем очень рады вашему фидбэку\./);
@@ -95,6 +116,19 @@ test("feedback repository inserts into beta_feedback with context", async () => 
   assert.match(repo, /context: context \|\| null/);
   assert.match(repo, /project_id: projectId \|\| null/);
   assert.match(repo, /sheet_id: sheetId \|\| null/);
+  assert.doesNotMatch(repo, /\.select\(/);
+  assert.doesNotMatch(repo, /\.single\(/);
+  assert.match(repo, /data\(result, "Не удалось отправить отзыв"\) \?\? \{ ok: true \}/);
+});
+
+test("feedback repository insert never selects after insert, so the insert-only RLS policy applies", async () => {
+  const { createBetaFeedbackRepository } = await import("../src/repositories/betaFeedbackRepository.js");
+  const calls = [];
+  const chain = { insert: (payload) => { calls.push(payload); return chain; }, then: (resolve) => resolve({ data: null, error: null, status: 201 }) };
+  const client = { from: (table) => { assert.equal(table, "beta_feedback"); return chain; } };
+  const result = await createBetaFeedbackRepository(client).insert({ userId: "u1", message: "Привет", context: "template_editor", projectId: "p1", sheetId: "s1" });
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(calls, [{ user_id: "u1", message: "Привет", context: "template_editor", project_id: "p1", sheet_id: "s1" }]);
 });
 
 /* ===== Migration ===== */

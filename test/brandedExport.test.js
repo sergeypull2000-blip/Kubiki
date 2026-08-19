@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { buildExportEstimateModel, normalizeExportSettings } from "../src/exportEstimate.js";
-import { buildExcelWorkbook } from "../src/excelExport.js";
+import { buildExcelRows, buildExcelWorkbook } from "../src/excelExport.js";
 import { normalizePresentationSettings, presentationSettingsForPreset } from "../src/exportSettings.js";
 import { createExportPresetsRepository } from "../src/repositories/exportPresetsRepository.js";
 import { createExportProfileRepository } from "../src/repositories/exportProfileRepository.js";
@@ -101,6 +101,47 @@ test("preview and PDF apply stage/task/total text colors", async () => {
   assert.match(source, /model\.brand\.colors\.totalText/);
   assert.match(source, /model\.brand\.colors\.stageText/);
   assert.match(source, /model\.brand\.colors\.taskText/);
+});
+
+test("PDF definition keeps stage and task numbers in a separate № column and shows the №|Наименование|[Комментарии]|Сумма header", async () => {
+  const source = await readFile(new URL("../src/exportFiles.jsx", import.meta.url), "utf8");
+  assert.match(source, /headerCell\("№"\)/);
+  assert.match(source, /headerCell\("Наименование"\)/);
+  assert.match(source, /headerCell\("Комментарии"\)/);
+  assert.match(source, /headerCell\("Сумма"/);
+  assert.match(source, /row\.number \? String\(row\.number\) : ""/);
+  assert.doesNotMatch(source, /№ \/ Наименование/);
+  assert.doesNotMatch(source, /\$\{row\.number\}  \$\{row\.label\}/);
+  const model = buildExportEstimateModel(project({}));
+  const rows = buildExcelRows(model).rows;
+  assert.equal(rows[0].type, "stage");
+  assert.equal(rows[0].number, "1");
+  assert.equal(rows[1].type, "task");
+  assert.equal(rows[1].number, "1.1");
+});
+
+test("branded Preview shows the №|Наименование|[Комментарии]|Сумма header and separate № cells for stages and tasks", async () => {
+  const source = await readFile(new URL("../src/exportFiles.jsx", import.meta.url), "utf8");
+  assert.match(source, /<div className="kb-export-preview-row kb-export-preview-head"><span>№<\/span><span>Наименование<\/span>\{model\.display\.showComments && <span className="kb-export-preview-comment">Комментарии<\/span>\}<span>Сумма<\/span><\/div>/);
+  assert.match(source, /<b>\{stage\.number\}<\/b><b>\{stage\.name\}<\/b>/);
+  assert.match(source, /<span>\{row\.number\}<\/span><span>\{row\.name\}<\/span>/);
+  assert.doesNotMatch(source, /\$\{stage\.number\}  \$\{stage\.name\}/);
+  assert.doesNotMatch(source, /\$\{row\.number\}  \$\{row\.name\}/);
+});
+
+test("Excel shows stage number in the № column and the №|Наименование|[Комментарии]|Сумма header", () => {
+  for (const showComments of [true, false]) {
+    const settings = normalizeExportSettings({ content: { showComments } });
+    const model = buildExportEstimateModel(project(settings), settings);
+    const sheet = buildExcelWorkbook(model).worksheets[0];
+    const headerRow = sheet.findRow(sheet.getColumn(1).values.findIndex((value) => value === "№"));
+    const expectedHeader = showComments ? ["№", "Наименование", "Комментарии", "Сумма"] : ["№", "Наименование", "Сумма"];
+    assert.deepEqual(expectedHeader.map((_, col) => headerRow.getCell(col + 1).value), expectedHeader);
+    const stageRow = sheet.findRow(sheet.getColumn(2).values.findIndex((value) => value === "Stage"));
+    assert.equal(stageRow.getCell(1).value, "1");
+    assert.equal(stageRow.getCell(2).value, "Stage");
+    assert.equal(stageRow.getCell(2).value.includes("1"), false);
+  }
 });
 
 test("legacy performer export settings are cleared and never create subrows", () => {

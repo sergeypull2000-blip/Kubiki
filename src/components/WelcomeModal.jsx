@@ -18,7 +18,7 @@ export function WelcomeModal({ onStart }) {
         </ul>
       </div>
       <p className="kb-welcome-text">Это beta-версия - некоторые вещи ещё могут меняться. Будем очень рады вашему фидбэку.</p>
-      <p className="kb-welcome-text">Если у вас появятся замечания, идеи или что-то окажется неудобным, вы всегда можете нажать «Оставить отзыв» и написать нам прямо из Kubiki.</p>
+      <p className="kb-welcome-text kb-welcome-feedback">Если у вас появятся замечания, идеи или что-то окажется неудобным, вы всегда можете нажать «Оставить отзыв» и написать нам прямо из Kubiki.</p>
       <div className="kb-modal-actions">
         <button type="button" className="kb-btn kb-btn-primary" onClick={onStart}>Начать работу</button>
       </div>

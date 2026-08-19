@@ -77,11 +77,23 @@ async function exportExcel(model, filename) {
 function pdfDefinition(model) {
   const colors = { ...brandColors(), ...model.brand.colors };
   const rowTextColor = (row) => row.type === "stage" ? model.brand.colors.stageText : row.type === "task" ? model.brand.colors.taskText : colors.muted;
-  const body = buildPdfContent(model).rows.map((row) => [
-    { text: row.type === "performer" ? `    ${row.number}  ${row.label}` : row.type === "task" ? `${row.number}  ${row.label}` : row.label, bold: row.type === "stage", fillColor: row.color, italics: row.type === "markup" || row.type === "tax", color: rowTextColor(row), fontSize: row.type === "stage" ? model.typography.stage.size : model.typography.task.size, margin: [2, 4, 2, 4] },
-    ...(model.display.showComments ? [{ text: row.comment || "", fillColor: row.color, fontSize: model.typography.service.size, margin: [2, 4, 2, 4] }] : []),
-    { text: money(row.amount), bold: row.type === "stage", fillColor: row.color, italics: row.type === "markup" || row.type === "tax", color: rowTextColor(row), alignment: "right", margin: [2, 4, 2, 4] },
-  ]);
+  const labelText = (row) => (row.type === "performer" ? `    ${row.label}` : row.label);
+  const headerCell = (text, overrides = {}) => ({ text, bold: true, fillColor: colors.sunken, color: colors.muted, fontSize: model.typography.task.size, margin: [2, 4, 2, 4], ...overrides });
+  const header = [
+    headerCell("№"),
+    headerCell("Наименование"),
+    ...(model.display.showComments ? [headerCell("Комментарии")] : []),
+    headerCell("Сумма", { alignment: "right" }),
+  ];
+  const body = [header, ...buildPdfContent(model).rows.map((row) => {
+    const text = { bold: row.type === "stage", fillColor: row.color, italics: row.type === "markup" || row.type === "tax", color: rowTextColor(row), fontSize: row.type === "stage" ? model.typography.stage.size : model.typography.task.size, margin: [2, 4, 2, 4] };
+    return [
+      { text: row.number ? String(row.number) : "", ...text },
+      { text: labelText(row), ...text },
+      ...(model.display.showComments ? [{ text: row.comment || "", fillColor: row.color, fontSize: model.typography.service.size, margin: [2, 4, 2, 4] }] : []),
+      { text: money(row.amount), ...text, alignment: "right" },
+    ];
+  })];
   return {
     pageSize: "A4", pageMargins: [40, 40, 40, 40], defaultStyle: { font: "Roboto", fontSize: 10, color: colors.text },
     content: [
@@ -90,7 +102,7 @@ function pdfDefinition(model) {
       ...([model.brand?.phone, model.brand?.email, model.brand?.website].some(Boolean) ? [{ text: [model.brand.phone, model.brand.email, model.brand.website].filter(Boolean).join(" · "), color: colors.muted, fontSize: 9, margin: [0, 0, 0, 10] }] : []),
       { text: model.proposal.title, bold: true, fontSize: model.typography.title.size, margin: [0, 0, 0, model.sheetName ? 3 : 14] },
       ...(model.sheetName ? [{ text: model.sheetName, fontSize: model.typography.stage.size, color: colors.muted, margin: [0, 0, 0, 14] }] : []),
-      { table: { widths: model.display.showComments ? ["*", "30%", "auto"] : ["*", "auto"], body }, layout: { hLineWidth: () => 0.5, vLineWidth: () => 0, hLineColor: () => colors.line } },
+      { table: { widths: model.display.showComments ? ["auto", "*", "30%", "auto"] : ["auto", "*", "auto"], body }, layout: { hLineWidth: () => 0.5, vLineWidth: () => 0, hLineColor: () => colors.line } },
       { table: { widths: ["*", "auto"], body: [[{ text: "Итого", bold: true, fontSize: model.typography.total.size, fillColor: model.brand.colors.total, color: model.brand.colors.totalText, margin: [6, 6, 6, 6] }, { text: money(model.summary.total), bold: true, fontSize: model.typography.total.size, alignment: "right", fillColor: model.brand.colors.total, color: model.brand.colors.totalText, margin: [6, 6, 6, 6] }]] }, layout: "noBorders", margin: [0, 14, 0, 0] },
       ...model.serviceBlocks.map((text) => ({ text, fontSize: model.typography.service.size, color: colors.muted, margin: [0, 8, 0, 0] })),
     ],
@@ -414,11 +426,12 @@ function ExportPreview({ model }) {
       <div style={{ fontFamily: model.brand.fontFamily, color: model.brand.colors.text }}>
       <div className="kb-export-preview-brand">{model.brand.logoUrl && <img src={model.brand.logoUrl} alt="Логотип компании" />}{model.brand.companyName && <strong>{model.brand.companyName}</strong>}</div>
       <h2 style={{ fontSize: model.typography.title.size }}>{model.proposal.title}</h2>
+      <div className="kb-export-preview-row kb-export-preview-head"><span>№</span><span>Наименование</span>{model.display.showComments && <span className="kb-export-preview-comment">Комментарии</span>}<span>Сумма</span></div>
       {model.stages.map((stage) => <div className="kb-export-preview-stage" key={stage.id}>
-        <div className="kb-export-preview-row" style={{ background: stage.color, color: stage.textColor, fontSize: model.typography.stage.size }}><b>{stage.number}  {stage.name}</b>{model.display.showComments && <span className="kb-export-preview-comment" />}<b>{money(stage.exportedSubtotal)}</b></div>
+        <div className="kb-export-preview-row" style={{ background: stage.color, color: stage.textColor, fontSize: model.typography.stage.size }}><b>{stage.number}</b><b>{stage.name}</b>{model.display.showComments && <span className="kb-export-preview-comment" />}<b>{money(stage.exportedSubtotal)}</b></div>
         {stage.rows.map((row) => <div className="kb-export-preview-task" key={row.sourceTaskId}>
-          <div className="kb-export-preview-row" style={{ background: row.color, color: row.textColor, fontSize: model.typography.task.size }}><span>{row.number}  {row.name}</span>{model.display.showComments && <span className="kb-export-preview-comment">{row.comment}</span>}<span>{money(row.exportedAmount)}</span></div>
-          {row.performers.map((performer) => <div className="kb-export-preview-row kb-export-preview-performer" key={performer.id} style={{ fontSize: model.typography.task.size }}><span>{performer.number}  {performer.label}</span>{model.display.showComments && <span className="kb-export-preview-comment" />}<span>{money(performer.amount)}</span></div>)}
+          <div className="kb-export-preview-row" style={{ background: row.color, color: row.textColor, fontSize: model.typography.task.size }}><span>{row.number}</span><span>{row.name}</span>{model.display.showComments && <span className="kb-export-preview-comment">{row.comment}</span>}<span>{money(row.exportedAmount)}</span></div>
+          {row.performers.map((performer) => <div className="kb-export-preview-row kb-export-preview-performer" key={performer.id} style={{ fontSize: model.typography.task.size }}><span>{performer.number || ""}</span><span>    {performer.label}</span>{model.display.showComments && <span className="kb-export-preview-comment" />}<span>{money(performer.amount)}</span></div>)}
         </div>)}
       </div>)}
       {model.separateRows.map((row, index) => <div className="kb-export-preview-separate" key={`${row.type}-${index}`}><span>{row.label}</span><span>{money(row.amount)}</span></div>)}

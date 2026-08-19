@@ -11,7 +11,6 @@
    Геометрия/порядок квадратов одинаковы на всех размерах.
 */
 export function Logo({ size = 20 }) {
-  const s = size / 2 - 1;
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" fill="none" role="img" aria-label="Kubiki">
       <defs>
@@ -32,10 +31,10 @@ export function Logo({ size = 20 }) {
           <stop offset="1" stopColor="#4780f3" />
         </linearGradient>
       </defs>
-      <rect x="0" y="0" width={s} height={s} rx="2" fill="url(#kb-logo-tl)" />
-      <rect x={s + 2} y="0" width={s} height={s} rx="2" fill="url(#kb-logo-tr)" />
-      <rect x="0" y={s + 2} width={s} height={s} rx="2" fill="url(#kb-logo-bl)" />
-      <rect x={s + 2} y={s + 2} width={s} height={s} rx="2" fill="url(#kb-logo-br)" />
+      <rect x="0" y="0" width="9" height="9" rx="2" fill="url(#kb-logo-tl)" />
+      <rect x="11" y="0" width="9" height="9" rx="2" fill="url(#kb-logo-tr)" />
+      <rect x="0" y="11" width="9" height="9" rx="2" fill="url(#kb-logo-bl)" />
+      <rect x="11" y="11" width="9" height="9" rx="2" fill="url(#kb-logo-br)" />
     </svg>
   );
 }
