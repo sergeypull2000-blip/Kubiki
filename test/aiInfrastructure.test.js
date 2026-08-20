@@ -81,6 +81,22 @@ test("orchestrator inserts deterministic shortlist only into final request", asy
   assert.deepEqual(result.shortlist, shortlist);
 });
 
+test("orchestrator exposes auto-match diagnostics for generation_compile", async () => {
+  const responses = [validProfile(), JSON.stringify({ projectName: "Проект", stages: [{ name: "CG", tasks: [{ name: "Анимация", executors: [{ type: "anonymous_unnamed", role: "Аниматор", paymentType: "fix_total", compensation: 50000 }] }] }], warnings: [] })];
+  const result = await runEstimateGeneration({ brief: "Brief", systemPrompt: "ORIGINAL", requestModel: async () => responses.shift(), remainingRequestMs: () => 0, getGenerationContext: async () => ({ personalization: "", shortlist: { projectTemplates: [], stageTemplates: [], taskTemplates: [], performers: [], historicalProjects: [] }, performers: [{ id: "p1", firstName: "Аня", lastName: "Иванова", primaryRole: "Аниматор", active: true }], useStudioTemplates: true }) });
+  assert.equal(result.performerCount, 1);
+  assert.equal(result.useStudioTemplates, true);
+  assert.deepEqual(result.autoMatchedNames, ["Аня Иванова"]);
+});
+
+test("orchestrator reports no auto-matched names when studio templates are off", async () => {
+  const responses = [validProfile(), validEstimate()];
+  const result = await runEstimateGeneration({ brief: "Brief", systemPrompt: "ORIGINAL", requestModel: async () => responses.shift(), getGenerationContext: async () => ({ personalization: "", shortlist: { projectTemplates: [], stageTemplates: [], taskTemplates: [], performers: [], historicalProjects: [] }, performers: [{ id: "p1", firstName: "Аня", lastName: "Иванова", primaryRole: "Аниматор", active: true }], useStudioTemplates: false }) });
+  assert.equal(result.useStudioTemplates, false);
+  assert.equal(result.performerCount, 1);
+  assert.deepEqual(result.autoMatchedNames, []);
+});
+
 test("personalization is absent from analysis and mandatory in final prompt", async () => {
   const calls = [];
   await runEstimateGeneration({ brief: "Brief", systemPrompt: "ORIGINAL", requestModel: async (messages) => { calls.push(messages); return calls.length === 1 ? validProfile() : validEstimate(); }, getGenerationContext: async () => ({ personalization: "Не дробить задачи", shortlist: { projectTemplates: [], stageTemplates: [], taskTemplates: [], performers: [], historicalProjects: [] } }) });

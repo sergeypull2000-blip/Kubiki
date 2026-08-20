@@ -14,6 +14,9 @@ export function normalizeAiSettings(value, { defaults = false } = {}) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const personalization = Object.hasOwn(source, "personalization") ? source.personalization : defaults ? DEFAULT_AI_PERSONALIZATION : "";
   const hasTemplatesChoice = Object.hasOwn(source, "useStudioTemplates") || Object.hasOwn(source, "use_studio_templates");
+  /* Дефолт true — только для нового пользователя без сохранённых настроек. При сбое
+     чтения из БД сервер обязан применять fail-closed настройки (useStudioTemplates: false)
+     через failClosedServerAiSettings/loadServerAiSettings в api/_lib/aiSettings.js. */
   return { personalization: sanitizePersonalization(personalization), useProjectHistory: source.useProjectHistory === true || source.use_project_history === true, useStudioTemplates: hasTemplatesChoice ? (source.useStudioTemplates === true || source.use_studio_templates === true) : true };
 }
 

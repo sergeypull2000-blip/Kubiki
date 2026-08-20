@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { AI_SETTINGS_KEY, AI_SETTINGS_OWNER_KEY, DEFAULT_AI_PERSONALIZATION, loadLocalAiSettings, normalizeAiSettings, sanitizePersonalization, saveLocalAiSettings } from "../src/aiSettings.js";
 import { createAiSettingsRepository } from "../src/repositories/aiSettingsRepository.js";
-import { loadOwnAiSettings, normalizeServerAiSettings } from "../api/_lib/aiSettings.js";
+import { failClosedServerAiSettings, loadOwnAiSettings, loadServerAiSettings, normalizeServerAiSettings } from "../api/_lib/aiSettings.js";
 
 const memoryStorage = (initial = {}) => { const values = new Map(Object.entries(initial)); return { values, getItem: (key) => values.has(key) ? values.get(key) : null, setItem: (key, value) => values.set(key, value) }; };
 
@@ -87,6 +87,22 @@ test("AI settings repository surfaces an upsert error without normalizing it int
 test("server settings loader rejects a foreign row", async () => {
   const client = repositoryClient(() => ({ data: { user_id: "u2", personalization: "foreign", use_project_history: true }, error: null }));
   await assert.rejects(() => loadOwnAiSettings(client, "u1"), /недоступны/);
+});
+
+test("fail-closed server settings keep studio templates off explicitly", () => {
+  assert.deepEqual(failClosedServerAiSettings(), { personalization: "", useProjectHistory: false, useStudioTemplates: false });
+});
+
+test("generation uses useStudioTemplates=false when the server settings read throws", async () => {
+  const client = repositoryClient(() => ({ data: null, error: { code: "42703", message: "column ai_settings.use_studio_templates does not exist" } }));
+  const settings = await loadServerAiSettings(client, "u1");
+  assert.deepEqual(settings, { personalization: "", useProjectHistory: false, useStudioTemplates: false });
+});
+
+test("loadServerAiSettings preserves saved settings when the read succeeds", async () => {
+  const client = repositoryClient(() => ({ data: { user_id: "u1", personalization: "x", use_project_history: true, use_studio_templates: true }, error: null }));
+  const settings = await loadServerAiSettings(client, "u1");
+  assert.deepEqual(settings, { personalization: "x", useProjectHistory: true, useStudioTemplates: true });
 });
 
 test("ai_settings migration is one narrow table with complete owner RLS", () => {

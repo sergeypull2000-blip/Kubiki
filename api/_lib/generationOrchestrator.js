@@ -7,6 +7,19 @@ export const TARGET_BUDGET_WARNING_DEVIATION = 0.2;
 export const MIN_BUDGET_CORRECTION_REMAINING_MS = 60_000;
 const emit = (logger, requestId, event, success, diagnostic = undefined) => { try { logger({ event, requestId, success, ...(diagnostic ? { diagnostic } : {}) }); } catch {} };
 
+/* Диагностика для generation_compile: имена, подставленные детерминированным
+   авто-матчем «Использовать шаблоны студии» (roleAutoMatch, ключи auto-role-*). */
+function collectAutoMatchedPerformerNames(estimate) {
+  const names = [];
+  for (const stage of estimate?.stages || []) {
+    for (const task of stage.tasks || []) {
+      for (const executor of task.executors || []) {
+        if (executor?.type === "performer_binding" && typeof executor?.key === "string" && executor.key.startsWith("auto-role-") && typeof executor?.performerName === "string") names.push(executor.performerName);
+      }
+    }
+  }
+  return names;
+}
 export function sumTaskCosts(estimate) {
   return estimate?.stages?.reduce((total, stage) => total + stage.tasks.reduce((stageTotal, task) => stageTotal
     + (task.executors ? task.executors.reduce((executorTotal, executor) => executorTotal + Number(executor.compensation || 0), 0) : Number(task.cost || 0)), 0), 0) ?? 0;
@@ -102,5 +115,6 @@ export async function runEstimateGeneration({ brief, instruction = "", systemPro
     if (Math.abs(total - profile.budget.amount) / profile.budget.amount > TARGET_BUDGET_WARNING_DEVIATION) appendWarning(estimate, `Внутренняя себестоимость ${formatBudget({ ...profile.budget, amount: total })} существенно отклоняется от целевого бюджета ${formatBudget(profile.budget)} (порог ${TARGET_BUDGET_WARNING_DEVIATION * 100}%).`);
   }
   if (estimate) estimate = autoMatchPerformersByRole(estimate, { performers: context?.performers || [], useStudioTemplates: context?.useStudioTemplates === true });
-  return { estimate, profile, profileFallbackUsed, shortlist };
+  const autoMatchedNames = collectAutoMatchedPerformerNames(estimate);
+  return { estimate, profile, profileFallbackUsed, shortlist, performerCount: Array.isArray(context?.performers) ? context.performers.length : 0, useStudioTemplates: context?.useStudioTemplates === true, autoMatchedNames };
 }

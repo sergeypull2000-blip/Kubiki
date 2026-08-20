@@ -6,7 +6,7 @@ import { runEstimateGeneration } from "./_lib/generationOrchestrator.js";
 import { loadOwnKnowledge } from "./_lib/knowledgeRepository.js";
 import { projectKnowledge } from "./_lib/knowledgeProjection.js";
 import { buildShortlist } from "./_lib/retrieval.js";
-import { loadOwnAiSettings, normalizeServerAiSettings } from "./_lib/aiSettings.js";
+import { loadServerAiSettings } from "./_lib/aiSettings.js";
 import { buildGenerationMetadata, serializeGenerationMetadata } from "./_lib/generationMetadata.js";
 import { createRequestBudget, RequestDeadlineError } from "./_lib/requestBudget.js";
 import { loadOwnPerformersForEdit } from "./_lib/editProject.js";
@@ -589,9 +589,7 @@ async function executeGeneration(req, budget) {
       requestModel,
       remainingRequestMs: () => budget.remainingMs(),
       getGenerationContext: async (profile) => {
-        let settings = normalizeServerAiSettings();
-        try { settings = await loadOwnAiSettings(auth.client, auth.user.id); }
-        catch (error) { console.error("AI settings loading failed", { name: error?.name || "Error" }); }
+        const settings = await loadServerAiSettings(auth.client, auth.user.id);
         let performers = [];
         if (settings.useStudioTemplates) {
           try { performers = await loadOwnPerformersForEdit(auth.client, auth.user.id); }
@@ -623,7 +621,7 @@ async function executeGeneration(req, budget) {
       if (!success) return { status: 422, body: { error: resolved.unresolvedSlots[0].question, code: "generated_performer_unresolved" } };
     } catch (error) { console.info({ event: "generation_performer_resolution", requestId: generationRequestId, success: false, diagnostic: { reason: "resolution_failed" } }); throw error; }
   } else console.info({ event: "generation_performer_resolution", requestId: generationRequestId, success: true, diagnostic: { reason: "not_required", unresolvedCount: 0 } });
-  console.info({ event: "generation_compile", requestId: generationRequestId, success: true, diagnostic: { reason: "initial_ui_adapter" } });
+  console.info({ event: "generation_compile", requestId: generationRequestId, success: true, diagnostic: { reason: "initial_ui_adapter", performerCount: result.performerCount, useStudioTemplates: result.useStudioTemplates, autoMatchedNames: result.autoMatchedNames } });
   console.info({ event: "generation_response_validation", requestId: generationRequestId, success: true, diagnostic: { reason: "generated_structure_valid" } });
   return { status: 200, body: result.estimate, metadata: serializeGenerationMetadata(buildGenerationMetadata(result)) };
 }
