@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Bookmark, BookmarkCheck, Mail, Pencil, Phone, Plus, Search, Trash2 } from "lucide-react";
 import { PAYMENT_LABEL } from "../constants.js";
+import { formatMoney } from "../utils.js";
 import { performerDisplayName, searchPerformers } from "../performerLibrary.js";
 import { AppTopNavigation } from "./AppTopNavigation.jsx";
 import { PerformerModal } from "./PerformerLibrary.jsx";
@@ -11,7 +12,7 @@ export function PerformerLibraryItem({ performer, inQuickAccess, onEdit, onToggl
   const name = performerDisplayName(performer);
   const title = name || performer.primaryRole || "Исполнитель";
   const payment = PAYMENT_LABEL[performer.defaultPaymentType] || "";
-  const rate = performer.defaultRate == null ? "" : Number(performer.defaultRate).toLocaleString("ru-RU");
+  const rate = performer.defaultRate == null ? "" : formatMoney(Number(performer.defaultRate));
   return <article className="kb-performer-card" onClick={() => onEdit(performer)}>
     <div className="kb-performer-card-main"><strong>{title}</strong>{name && performer.primaryRole && <span>{performer.primaryRole}</span>}
       <small>{[payment, rate].filter(Boolean).join(" · ")}</small></div>

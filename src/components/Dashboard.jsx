@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Plus, X, Box, FileText, Bookmark, Star, MoreHorizontal, Pencil, Trash2, UploadCloud } from "lucide-react";
-import { fmt } from "../utils.js";
+import { formatMoney } from "../utils.js";
 import { projectSum } from "../calculations.js";
 import { AppTopNavigation } from "./AppTopNavigation.jsx";
 import { createProjectTemplate } from "../templates.js";
@@ -63,7 +63,7 @@ function EntityCard({ item, template = false, onOpen, onDelete, onMakeTemplate, 
         aria-label={template ? "Название шаблона" : "Название проекта"}
         onClick={(event) => event.stopPropagation()}
         onChange={(event) => onRename(item.id, event.target.value)} />
-      <div className="kb-card-sum">{count <= 1 ? `${fmt(projectSum(item))} ₽` : sheetsLabel(count)}</div>
+      <div className="kb-card-sum">{count <= 1 ? `${formatMoney(projectSum(item))} ₽` : sheetsLabel(count)}</div>
       {count <= 1 && <div className="kb-card-meta">{`${item.stages?.length || 0} этапов`}</div>}
       {!template && <div className="kb-card-actions">
         <button type="button" className={`kb-icon-btn kb-card-favorite${item.favorite ? " is-active" : ""}`}

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Plus, X, Trash2, Bookmark } from "lucide-react";
-import { fmt, numVal } from "../utils.js";
+import { formatMoney, numVal } from "../utils.js";
 import { executorSum } from "../calculations.js";
 import { TAG_DEF, TAG_DEFS, PAYMENT_LABEL } from "../constants.js";
 import { DND_TYPES, dndPayload, useDragSource, useDropTarget, applyTagToExecutor, makeTag } from "../store.js";
@@ -388,10 +388,10 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
             <>
               <input className="kb-input kb-input-num kb-amount-input" value={executor.amount} placeholder="0"
                 onChange={(e) => setAmount(e.target.value)} onMouseDown={(e) => e.stopPropagation()} />
-              {taxPct > 0 && <span className="kb-erow-sum kb-erow-sum-strong kb-erow-taxed" title="Сумма с налогом — можно выделить и скопировать" onMouseDown={(e) => e.stopPropagation()}>{fmt(sum)} ₽</span>}
+              {taxPct > 0 && <span className="kb-erow-sum kb-erow-sum-strong kb-erow-taxed" title="Сумма с налогом — можно выделить и скопировать" onMouseDown={(e) => e.stopPropagation()}>{formatMoney(sum)} ₽</span>}
             </>
           ) : (
-            <span className={"kb-erow-sum" + (hasPay ? " kb-erow-sum-strong" : " kb-erow-sum-muted")}>{fmt(sum)} ₽</span>
+            <span className={"kb-erow-sum" + (hasPay ? " kb-erow-sum-strong" : " kb-erow-sum-muted")}>{formatMoney(sum)} ₽</span>
           )}
         </div>
 

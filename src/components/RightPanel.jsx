@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { fmt, numVal } from "../utils.js";
+import { fmt, numVal, formatMoney } from "../utils.js";
 import {
   executorSum, taskSum, stageSum, projectSum,
   projectFinancialCommission, projectHours, projectShifts,
@@ -24,7 +24,7 @@ function PersonRow({ label, total, items, cost }) {
           <div className="kb-person-name" title={label}>{label}</div>
         </div>
         <div className="kb-person-r">
-          <span className="kb-person-sum">{fmt(total)} ₽ · {pct(total)}</span>
+          <span className="kb-person-sum">{formatMoney(total)} ₽ · {pct(total)}</span>
           <span className="kb-person-cube">задач: {items.length}</span>
         </div>
       </div>
@@ -36,7 +36,7 @@ function PersonRow({ label, total, items, cost }) {
                 <span className="kb-person-taskname">{it.task}</span>
                 <span className="kb-person-taskcube"> · {cubeLabel(it.type)}</span>
               </span>
-              <span className="kb-person-cellsum">{fmt(it.sum)} ₽</span>
+              <span className="kb-person-cellsum">{formatMoney(it.sum)} ₽</span>
             </div>
           ))}
         </div>
@@ -47,7 +47,7 @@ function PersonRow({ label, total, items, cost }) {
 
 function PropertiesPanel({ project, activeStageId, activeTaskId, activeExecutorId }) {
   const execName = (e) => ((e.tags || []).find((t) => t.key === "name")?.value || "").trim();
-  const [structOpen, setStructOpen] = useState(true);
+  const [structOpen, setStructOpen] = useState(false);
   const [metricsOpen, setMetricsOpen] = useState(true);
 
   let stage = null, task = null, executor = null;
@@ -63,14 +63,14 @@ function PropertiesPanel({ project, activeStageId, activeTaskId, activeExecutorI
 
   if (executor) {
     const R = readExecutor(executor);
-    const detail = R.payType === "hourly" ? `${fmt(R.rate)} ₽/час × ${R.qty} ч`
-      : R.payType === "shift" ? `${fmt(R.rate)} ₽/смену × ${R.qty} смен` : "";
+    const detail = R.payType === "hourly" ? `${formatMoney(R.rate)} ₽/час × ${R.qty} ч`
+      : R.payType === "shift" ? `${formatMoney(R.rate)} ₽/смену × ${R.qty} смен` : "";
     return (
       <div className="kb-props">
         <div className="kb-props-kind">Исполнитель</div>
         <div className="kb-props-name">{R.name}</div>
         {(R.role || R.grade) && <div className="kb-props-meta">{[R.role, R.grade].filter(Boolean).join(" · ")}</div>}
-        <div className="kb-props-figure">{fmt(R.sum)} ₽</div>
+        <div className="kb-props-figure">{formatMoney(R.sum)} ₽</div>
         <div className="kb-props-row"><span>{R.payLabel || "Тип оплаты не задан"}</span>{detail && <span>{detail}</span>}</div>
       </div>
     );
@@ -83,7 +83,7 @@ function PropertiesPanel({ project, activeStageId, activeTaskId, activeExecutorI
         <div className="kb-props-kind">Задача</div>
         <div className="kb-props-name">{task.name || "Без названия"}</div>
         <div className="kb-props-meta">Исполнителей: {execs.length}</div>
-        <div className="kb-props-figure">{fmt(taskSum(task))} ₽</div>
+        <div className="kb-props-figure">{formatMoney(taskSum(task))} ₽</div>
         <>
           <div className="kb-props-sub">Исполнители</div>
           {execs.length === 0 && <div className="kb-props-empty-sm">Нет исполнителей</div>}
@@ -95,7 +95,7 @@ function PropertiesPanel({ project, activeStageId, activeTaskId, activeExecutorI
                   <span className="kb-person-taskname">{R.name}</span>
                   <span className="kb-person-taskcube"> · {R.payLabel}</span>
                 </span>
-                <span className="kb-person-cellsum">{fmt(R.sum)} ₽</span>
+                <span className="kb-person-cellsum">{formatMoney(R.sum)} ₽</span>
               </div>
             );
           })}
@@ -111,7 +111,7 @@ function PropertiesPanel({ project, activeStageId, activeTaskId, activeExecutorI
         <div className="kb-props-kind">Этап</div>
         <div className="kb-props-name">{stage.name || "Без названия"}</div>
         <div className="kb-props-meta">Задач: {tasks.length}</div>
-        <div className="kb-props-figure">{fmt(stageSum(stage))} ₽</div>
+        <div className="kb-props-figure">{formatMoney(stageSum(stage))} ₽</div>
         {tasks.length === 0 && <div className="kb-props-empty-sm">Нет задач</div>}
         {tasks.map((t) => {
           const names = (t.executors || []).map(execName).filter(Boolean);
@@ -119,7 +119,7 @@ function PropertiesPanel({ project, activeStageId, activeTaskId, activeExecutorI
             <div className="kb-props-taskblock" key={t.id}>
               <div className="kb-props-row kb-props-taskrow">
                 <span className="kb-person-task" title={t.name || "Без названия"}><span className="kb-person-taskname">{t.name || "Без названия"}</span></span>
-                <span className="kb-person-cellsum">{fmt(taskSum(t))} ₽</span>
+                <span className="kb-person-cellsum">{formatMoney(taskSum(t))} ₽</span>
               </div>
               {names.length > 0 && <div className="kb-props-names" title={names.join(", ")}>{names.join(", ")}</div>}
             </div>
@@ -164,11 +164,11 @@ function PropertiesPanel({ project, activeStageId, activeTaskId, activeExecutorI
   return (
     <div className="kb-props">
       <div className="kb-props-section-title">Сводка</div>
-      <div className="kb-props-row"><span>Сумма по смете</span><span>{fmt(cost)} ₽</span></div>
-      <div className="kb-props-row kb-props-row-nested"><span>в т.ч. финкомиссия</span><span>{fmt(financialCommission)} ₽</span></div>
-      <div className="kb-props-row"><span>Маркап ({fmt(project.globalMarkup ?? 0)}%)</span><span>{fmt(projectMarkupAmount(project))} ₽</span></div>
-      {projectTaxPct(project) > 0 && <div className="kb-props-row"><span>Налог на прибыль · {projectTaxSystemLabel(project)} ({fmt(projectTaxPct(project))}%)</span><span>{fmt(projectTaxAmount(project))} ₽</span></div>}
-      {projectVatPct(project) > 0 && <div className="kb-props-row"><span>НДС ({fmt(projectVatPct(project))}%)</span><span>{fmt(projectVatAmount(project))} ₽</span></div>}
+      <div className="kb-props-row"><span>Сумма по смете</span><span>{formatMoney(cost)} ₽</span></div>
+      <div className="kb-props-row kb-props-row-nested"><span>в т.ч. финкомиссия</span><span>{formatMoney(financialCommission)} ₽</span></div>
+      <div className="kb-props-row"><span>Маркап ({fmt(project.globalMarkup ?? 0)}%)</span><span>{formatMoney(projectMarkupAmount(project))} ₽</span></div>
+      {projectTaxPct(project) > 0 && <div className="kb-props-row"><span>Налог на прибыль · {projectTaxSystemLabel(project)} ({fmt(projectTaxPct(project))}%)</span><span>{formatMoney(projectTaxAmount(project))} ₽</span></div>}
+      {projectVatPct(project) > 0 && <div className="kb-props-row"><span>НДС ({fmt(projectVatPct(project))}%)</span><span>{formatMoney(projectVatAmount(project))} ₽</span></div>}
 
       <button type="button" className="kb-props-section-title kb-props-section-toggle" onClick={() => setMetricsOpen((open) => !open)}>
         <span>Метрики</span><ChevronDown size={12} strokeWidth={2} className={"kb-person-chev" + (metricsOpen ? " is-open" : "")} />

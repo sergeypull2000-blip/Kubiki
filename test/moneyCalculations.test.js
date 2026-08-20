@@ -7,7 +7,7 @@ import {
   projectVatAmount,
   projectTotalWithTax,
 } from "../src/calculations.js";
-import { fmt, numVal } from "../src/utils.js";
+import { fmt, numVal, formatMoney } from "../src/utils.js";
 
 const fixedExecutor = (amount, tax = "") => ({
   amount,
@@ -20,6 +20,12 @@ const fixedExecutor = (amount, tax = "") => ({
 test("денежный ввод и вывод сохраняют копейки", () => {
   assert.equal(numVal("1 234,56"), 1234.56);
   assert.equal(fmt(1234.56), "1 234,56");
+});
+
+test("форматирование денег всегда показывает две цифры после запятой", () => {
+  assert.equal(formatMoney(1000), "1 000,00");
+  assert.equal(formatMoney(1234.5), "1 234,50");
+  assert.equal(formatMoney(1234.567), "1 234,57");
 });
 
 test("налог исполнителя считается делением и округляется до копеек", () => {

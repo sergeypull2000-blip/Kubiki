@@ -6,7 +6,7 @@ import {
   X, Trash2, ChevronDown, AlertTriangle,
   Loader2, FileSpreadsheet, Download, FolderOpen, Paperclip, ArrowUp,
 } from "lucide-react";
-import { fmt, numVal } from "./utils.js";
+import { formatMoney, numVal } from "./utils.js";
 import { Logo } from "./Logo.jsx";
 import { useOutsideClose } from "./hooks.js";
 import { generateEstimateRequest } from "./ai/generationClient.js";
@@ -224,7 +224,7 @@ function EstimatePreviewStep({ editor, generationMetadata, noteText, draftNotice
                     <span className="kb-prev-executor-name">{executor.type === "performer_binding" ? executor.performerName : executor.name || "Без имени"}</span>
                     {executor.type === "performer_binding" && <small className="kb-prev-executor-field">Performer Library</small>}
                     {executor.role && <small className="kb-prev-executor-field"><b>Роль</b>{executor.role}</small>}
-                    {executor.compensation !== undefined && <small className="kb-prev-executor-field"><b>Оплата</b>{fmt(Number(executor.compensation))} ₽</small>}
+                    {executor.compensation !== undefined && <small className="kb-prev-executor-field"><b>Оплата</b>{formatMoney(Number(executor.compensation))} ₽</small>}
                     {(executor.paymentType || executor.compensation !== undefined) && <small className="kb-prev-executor-field"><b>Тип</b>{executor.paymentType || "fix_total"}</small>}
                     {executor.quantity !== undefined && ["fix_task", "hourly", "shift"].includes(executor.paymentType) && <small className="kb-prev-executor-field"><b>Количество</b>{executor.quantity}</small>}
                     {executor.tax !== undefined && <small className="kb-prev-executor-field"><b>Налог</b>{executor.tax}%</small>}
@@ -244,7 +244,7 @@ function EstimatePreviewStep({ editor, generationMetadata, noteText, draftNotice
         {localError && <div className="kb-modal-status is-error"><AlertTriangle size={16} strokeWidth={1.5} /> {localError}</div>}
       </div>
       <div className="kb-modal-foot">
-        <div className="kb-prev-summary">Этапов: {parsed.stages.length} · задач: {taskCount} · сумма: {fmt(total)} ₽</div>
+        <div className="kb-prev-summary">Этапов: {parsed.stages.length} · задач: {taskCount} · сумма: {formatMoney(total)} ₽</div>
         <div className="kb-modal-actions">
           <button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button>
           <button type="button" className="kb-btn kb-btn-primary" onClick={confirm} disabled={taskCount === 0}>{confirmLabel}</button>

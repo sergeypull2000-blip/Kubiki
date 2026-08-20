@@ -1,5 +1,6 @@
 import { diagnoseGeneratedStructure, ESTIMATE_REPAIR_PROMPT, parseEstimate } from "./estimateSchema.js";
 import { PROFILE_SYSTEM_PROMPT, fallbackProfile, parseProfile } from "./profile.js";
+import { autoMatchPerformersByRole } from "./roleAutoMatch.js";
 
 const EMPTY_SHORTLIST = { projectTemplates: [], stageTemplates: [], taskTemplates: [], performers: [], historicalProjects: [] };
 export const TARGET_BUDGET_WARNING_DEVIATION = 0.2;
@@ -100,5 +101,6 @@ export async function runEstimateGeneration({ brief, instruction = "", systemPro
     const total = sumTaskCosts(estimate);
     if (Math.abs(total - profile.budget.amount) / profile.budget.amount > TARGET_BUDGET_WARNING_DEVIATION) appendWarning(estimate, `Внутренняя себестоимость ${formatBudget({ ...profile.budget, amount: total })} существенно отклоняется от целевого бюджета ${formatBudget(profile.budget)} (порог ${TARGET_BUDGET_WARNING_DEVIATION * 100}%).`);
   }
+  if (estimate) estimate = autoMatchPerformersByRole(estimate, { performers: context?.performers || [], useStudioTemplates: context?.useStudioTemplates === true });
   return { estimate, profile, profileFallbackUsed, shortlist };
 }

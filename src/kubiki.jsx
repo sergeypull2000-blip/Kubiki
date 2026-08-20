@@ -631,8 +631,9 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     catch (error) { if (operationVersion !== quickAccessOperationVersionRef.current) return false; setQuickAccessState("save-error"); setQuickAccessMessage(`${error.message}. Изменение сохранено локально.`); return false; }
   };
   const savePerformer = async (draft, addToQuickAccess, existingId = null) => {
+    const card = { ...draft }; delete card.specializations; /* «Специализации» убраны из карточки исполнителя — поле больше не сохраняется */
     const current = performersRef.current;
-    const next = existingId ? updatePerformer(current, existingId, draft) : createPerformer(current, draft);
+    const next = existingId ? updatePerformer(current, existingId, card) : createPerformer(current, card);
     const saved = existingId ? next.find((item) => item.id === existingId) : next[next.length - 1];
     replacePerformers(next);
     if (!performerSyncEnabledRef.current) { setPerformerMessage("Серверная база ещё не готова. Изменение сохранено локально."); return null; }

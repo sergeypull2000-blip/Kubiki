@@ -1,14 +1,14 @@
 import { normalizeAiSettings } from "../aiSettings.js";
 
 function data(result, message) { if (result.error) throw new Error(`${message}: ${result.error.message}`, { cause: result.error }); return result.data; }
-const row = (userId, settings) => { const value = normalizeAiSettings(settings); return { user_id: userId, personalization: value.personalization, use_project_history: value.useProjectHistory }; };
+const row = (userId, settings) => { const value = normalizeAiSettings(settings); return { user_id: userId, personalization: value.personalization, use_project_history: value.useProjectHistory, use_studio_templates: value.useStudioTemplates }; };
 const owned = (value, userId) => { if (!value || value.user_id !== userId) throw new Error("Настройки ИИ недоступны"); return normalizeAiSettings(value); };
 
 export function createAiSettingsRepository(client) {
   if (!client) throw new Error("Supabase client is required");
   return {
     async loadAiSettings(userId) {
-      const result = await client.from("ai_settings").select("user_id,personalization,use_project_history,created_at,updated_at").eq("user_id", userId).maybeSingle();
+      const result = await client.from("ai_settings").select("user_id,personalization,use_project_history,use_studio_templates,created_at,updated_at").eq("user_id", userId).maybeSingle();
       const value = data(result, "Не удалось загрузить настройки ИИ");
       return value ? { exists: true, settings: owned(value, userId) } : { exists: false, settings: normalizeAiSettings(undefined, { defaults: true }) };
     },

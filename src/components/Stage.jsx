@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { Plus, Trash2, ChevronDown, ChevronRight, Bookmark, Pencil } from "lucide-react";
-import { fmt } from "../utils.js";
+import { formatMoney } from "../utils.js";
 import { stageSum } from "../calculations.js";
 import { useOutsideClose } from "../hooks.js";
 import { STAGE_PRESETS, CUSTOM_STAGE, stageTaskDictionary, stageFeaturedTasks } from "../constants.js";
@@ -153,7 +153,7 @@ export function StageCard({ stage, stageNumber, dispatch, activeStageId, activeT
           </>}
         </div>
         <span className="kb-stage-task-count">{stage.tasks.length} {stage.tasks.length === 1 ? "задача" : "задач"}</span>
-        <span className="kb-sum kb-sum-stage">{fmt(total)} ₽</span>
+        <span className="kb-sum kb-sum-stage">{formatMoney(total)} ₽</span>
         {onSaveStageTemplate && (
           <button type="button" className="kb-icon-btn" onClick={() => onSaveStageTemplate(stage)} title="Сохранить этап как шаблон">
             <Bookmark size={14} strokeWidth={1.5} />

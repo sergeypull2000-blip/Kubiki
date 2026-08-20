@@ -3,7 +3,7 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import pdfMake from "pdfmake/build/pdfmake.js";
 import pdfFonts from "pdfmake/build/vfs_fonts.js";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Loader2, UploadCloud, X } from "lucide-react";
-import { fmt } from "./utils.js";
+import { formatMoney } from "./utils.js";
 import { buildExportEstimateModel, normalizeExportSettings } from "./exportEstimate.js";
 import { activeSheet } from "./sheets.js";
 import { useOutsideClose } from "./hooks.js";
@@ -18,7 +18,7 @@ export { buildExcelRows, buildExcelWorkbook } from "./excelExport.js";
 
 pdfMake.addVirtualFileSystem(pdfFonts);
 
-const money = (amount) => `${fmt(amount)} ₽`;
+const money = (amount) => `${formatMoney(amount)} ₽`;
 const safeFile = (value) => (String(value || "smeta").replace(/[^\wа-яА-ЯёЁ\- ]+/g, "").trim().replace(/\s+/g, "_") || "smeta");
 const defaultFilename = (project, format) => {
   const sheet = activeSheet(project);

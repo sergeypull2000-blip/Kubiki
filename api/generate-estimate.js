@@ -592,12 +592,17 @@ async function executeGeneration(req, budget) {
         let settings = normalizeServerAiSettings();
         try { settings = await loadOwnAiSettings(auth.client, auth.user.id); }
         catch (error) { console.error("AI settings loading failed", { name: error?.name || "Error" }); }
+        let performers = [];
+        if (settings.useStudioTemplates) {
+          try { performers = await loadOwnPerformersForEdit(auth.client, auth.user.id); }
+          catch (error) { console.error("AI performers loading failed", { name: error?.name || "Error" }); }
+        }
         try {
           const rawKnowledge = await loadOwnKnowledge(auth.client, auth.user.id, { includeHistory: settings.useProjectHistory });
-          return { shortlist: buildShortlist(profile, projectKnowledge(rawKnowledge)), personalization: settings.personalization };
+          return { shortlist: buildShortlist(profile, projectKnowledge(rawKnowledge)), personalization: settings.personalization, performers, useStudioTemplates: settings.useStudioTemplates };
         } catch (error) {
           console.error("AI knowledge loading failed", { name: error?.name || "Error" });
-          return { shortlist: buildShortlist(profile, {}), personalization: settings.personalization };
+          return { shortlist: buildShortlist(profile, {}), personalization: settings.personalization, performers, useStudioTemplates: settings.useStudioTemplates };
         }
       },
       allowPerformerBindings: true,

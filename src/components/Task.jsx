@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Plus, Trash2, ChevronDown, ChevronRight, Bookmark, Pencil, MessageSquare } from "lucide-react";
-import { fmt } from "../utils.js";
+import { formatMoney } from "../utils.js";
 import { taskSum } from "../calculations.js";
 import { DND_TYPES, useDragSource, useDropTarget, makeExecutor, moveTask, withTask, moveExecutor, patchExecutorIn, withExecutorList } from "../store.js";
 import { SuggestInput } from "./SuggestInput.jsx";
@@ -96,7 +96,7 @@ export function TaskBlock({ task, taskNumber, stageId, dispatch, taskDict, taskF
             <span className="kb-task-directcost-cur">₽</span>
           </span>
         ) : (
-          <span className="kb-sum kb-sum-task">{fmt(total)} ₽</span>
+          <span className="kb-sum kb-sum-task">{formatMoney(total)} ₽</span>
         )}
         <button type="button" className={"kb-icon-btn kb-task-comment-btn" + (task.exportComment ? " is-active" : "")} onClick={() => setCommentOpen((open) => !open)} title="Комментарий к задаче">
           <MessageSquare size={13} strokeWidth={1.5} />

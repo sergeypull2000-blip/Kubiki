@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUp, X } from "lucide-react";
-import { fmt } from "../utils.js";
+import { fmt, formatMoney } from "../utils.js";
 import { buildAiEditContinuation } from "../ai/editContinuation.js";
 
 const METRICS = [
@@ -10,6 +10,9 @@ const METRICS = [
   ["projectTax", "Налог проекта", "₽"], ["vat", "НДС", "₽"], ["total", "Итого", "₽"],
   ["stages", "Этапы", ""], ["tasks", "Задачи", ""], ["executors", "Исполнители", ""],
 ];
+/* Метрики AI-редактирования: суммы («₽») всегда с двумя знаками после запятой,
+   счётчики (этапы/задачи/исполнители) остаются целыми. */
+const metricValue = (value, unit) => (unit === "₽" ? formatMoney(value) : fmt(value));
 const planLines = (plan) => plan ? [
   plan.stages.created.length ? `Создадутся Stage: ${plan.stages.created.join(", ")}` : "",
   plan.tasks.created.length ? `Создадутся Task: ${plan.tasks.created.join(", ")}` : "",
@@ -83,7 +86,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
         {result?.kind === "diff" && <div className="kb-ai-launcher-feedback-content"><strong>{result.summary}</strong>
           <div>{planLines(result.plan).map((line) => <div key={line} className="kb-modal-note">{line}</div>)}</div>
           <div>{result.operations.map((operation) => <div key={operation.id} className="kb-modal-note">• {operation.reason}</div>)}</div>
-          <div className="kb-ai-launcher-metrics">{METRICS.map(([key, label, unit]) => <div key={key} className="kb-modal-note">{label}: {fmt(result.before[key])}{unit} → {fmt(result.after[key])}{unit}</div>)}</div>
+          <div className="kb-ai-launcher-metrics">{METRICS.map(([key, label, unit]) => <div key={key} className="kb-modal-note">{label}: {metricValue(result.before[key], unit)}{unit} → {metricValue(result.after[key], unit)}{unit}</div>)}</div>
           {result.warnings.map((warning) => <div key={warning} className="kb-server-error">{warning}</div>)}
         </div>}
         <div className="kb-ai-launcher-feedback-actions">
@@ -119,7 +122,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
           {result?.kind === "diff" && <div className="kb-ai-launcher-feedback-content"><strong>{result.summary}</strong>
             <div>{planLines(result.plan).map((line) => <div key={line} className="kb-modal-note">{line}</div>)}</div>
             <div>{result.operations.map((operation) => <div key={operation.id} className="kb-modal-note">• {operation.reason}</div>)}</div>
-            <div className="kb-ai-launcher-metrics">{METRICS.map(([key, label, unit]) => <div key={key} className="kb-modal-note">{label}: {fmt(result.before[key])}{unit} → {fmt(result.after[key])}{unit}</div>)}</div>
+            <div className="kb-ai-launcher-metrics">{METRICS.map(([key, label, unit]) => <div key={key} className="kb-modal-note">{label}: {metricValue(result.before[key], unit)}{unit} → {metricValue(result.after[key], unit)}{unit}</div>)}</div>
             {result.warnings.map((warning) => <div key={warning} className="kb-server-error">{warning}</div>)}
           </div>}
           <div className="kb-ai-launcher-feedback-actions">
@@ -158,7 +161,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
           <div className="kb-modal-note"><strong>{result.summary}</strong></div>
           <div>{planLines(result.plan).map((line) => <div key={line} className="kb-modal-note">{line}</div>)}</div>
           <div>{result.operations.map((operation) => <div key={operation.id} className="kb-modal-note">• {operation.reason}</div>)}</div>
-          <div>{METRICS.map(([key, label, unit]) => <div key={key} className="kb-modal-note">{label}: {fmt(result.before[key])}{unit} → {fmt(result.after[key])}{unit}</div>)}</div>
+          <div>{METRICS.map(([key, label, unit]) => <div key={key} className="kb-modal-note">{label}: {metricValue(result.before[key], unit)}{unit} → {metricValue(result.after[key], unit)}{unit}</div>)}</div>
           {result.warnings.map((warning) => <div key={warning} className="kb-server-error">{warning}</div>)}
         </>}
         <div className="kb-modal-actions">

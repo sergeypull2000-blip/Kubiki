@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, ChevronDown, ChevronRight, FileText, Pencil, Pin, Plus, Trash2, UserRound, X } from "lucide-react";
 import { DND_TYPES, useDragSource } from "../store.js";
-import { fmt, uid } from "../utils.js";
+import { formatMoney, uid } from "../utils.js";
 
 function TemplateItem({ template, dndType, payloadKey, fallback, onApply, onRemove }) {
   const { isDragging, dragHandlers } = useDragSource(dndType, { [payloadKey]: template.id });
@@ -24,7 +24,7 @@ function QuickItem({ item, performer, onApply, onPin, onRemove }) {
   const label = name || performer.primaryRole || "Исполнитель";
   return <div className={`kb-template-item kb-performer-item${isDragging ? " kb-chip-dragging" : ""}`} {...dragHandlers} onClick={() => onApply(item)} title="Перетащите или нажмите, чтобы добавить в задачу">
     <UserRound size={15} strokeWidth={1.5} /><span className="kb-template-item-name">{label}</span>
-    {performer.defaultRate != null && <span className="kb-template-item-sum">{fmt(performer.defaultRate)} ₽</span>}
+    {performer.defaultRate != null && <span className="kb-template-item-sum">{formatMoney(performer.defaultRate)} ₽</span>}
     <button className={`kb-performer-item-action${item.pinned ? " is-active" : ""}`} title={item.pinned ? "Открепить" : "Закрепить"} onClick={(e) => { e.stopPropagation(); onPin(item); }}><Pin size={12} fill={item.pinned ? "currentColor" : "none"} /></button>
     <button className="kb-performer-item-action" title="Удалить из быстрого доступа" onClick={(e) => { e.stopPropagation(); onRemove(item); }}><Trash2 size={12} /></button>
   </div>;

@@ -7,10 +7,12 @@ import { loadOwnAiSettings, normalizeServerAiSettings } from "../api/_lib/aiSett
 
 const memoryStorage = (initial = {}) => { const values = new Map(Object.entries(initial)); return { values, getItem: (key) => values.has(key) ? values.get(key) : null, setItem: (key, value) => values.set(key, value) }; };
 
-test("AI settings are minimal and history is explicit opt-in", () => {
-  assert.deepEqual(normalizeAiSettings(), { personalization: "", useProjectHistory: false });
-  assert.deepEqual(normalizeAiSettings({ personalization: "  Делить на этапы ", use_project_history: true }), { personalization: "  Делить на этапы ", useProjectHistory: true });
-  assert.deepEqual(Object.keys(normalizeAiSettings({ universal: true, currency: "RUB" })), ["personalization", "useProjectHistory"]);
+test("AI settings are minimal, history is explicit opt-in and studio templates default on", () => {
+  assert.deepEqual(normalizeAiSettings(), { personalization: "", useProjectHistory: false, useStudioTemplates: true });
+  assert.deepEqual(normalizeAiSettings({ personalization: "  Делить на этапы ", use_project_history: true }), { personalization: "  Делить на этапы ", useProjectHistory: true, useStudioTemplates: true });
+  assert.deepEqual(normalizeAiSettings({ personalization: "x", use_studio_templates: true }), { personalization: "x", useProjectHistory: false, useStudioTemplates: true });
+  assert.deepEqual(normalizeAiSettings({ personalization: "x", use_studio_templates: false }), { personalization: "x", useProjectHistory: false, useStudioTemplates: false });
+  assert.deepEqual(Object.keys(normalizeAiSettings({ universal: true, currency: "RUB" })), ["personalization", "useProjectHistory", "useStudioTemplates"]);
 });
 
 test("new users get the performer-library default without overriding a saved empty personalization", () => {
@@ -41,7 +43,7 @@ test("local fallback is owner scoped and keeps opt-in", () => {
   saveLocalAiSettings({ personalization: "Учитывать препродакшн", useProjectHistory: true }, "u1", storage);
   assert.equal(storage.getItem(AI_SETTINGS_OWNER_KEY), "u1");
   assert.equal(loadLocalAiSettings("u1", storage).useProjectHistory, true);
-  assert.deepEqual(loadLocalAiSettings("u2", storage), { personalization: DEFAULT_AI_PERSONALIZATION, useProjectHistory: false });
+  assert.deepEqual(loadLocalAiSettings("u2", storage), { personalization: DEFAULT_AI_PERSONALIZATION, useProjectHistory: false, useStudioTemplates: true });
   assert.ok(storage.getItem(AI_SETTINGS_KEY));
 });
 
@@ -62,14 +64,15 @@ function repositoryClient(responseFactory) {
 
 test("AI settings repository scopes load/upsert to user_id", async () => {
   const calls = [];
-  const client = repositoryClient((state) => { calls.push(structuredClone(state)); return { data: { user_id: "u1", personalization: state.payload?.personalization || "Текст", use_project_history: state.payload?.use_project_history ?? false }, error: null }; });
+  const client = repositoryClient((state) => { calls.push(structuredClone(state)); return { data: { user_id: "u1", personalization: state.payload?.personalization || "Текст", use_project_history: state.payload?.use_project_history ?? false, use_studio_templates: state.payload?.use_studio_templates ?? false }, error: null }; });
   const repository = createAiSettingsRepository(client);
   assert.equal((await repository.loadAiSettings("u1")).settings.personalization, "Текст");
   const personalization = "Правило Stage\n\n\nДля всех исполнителей добавлять 6% налога\n";
-  const saved = await repository.upsertAiSettings("u1", { personalization, useProjectHistory: true });
+  const saved = await repository.upsertAiSettings("u1", { personalization, useProjectHistory: true, useStudioTemplates: true });
   assert.equal(saved.useProjectHistory, true);
-  assert.deepEqual(calls[1].payload, { user_id: "u1", personalization, use_project_history: true });
-  assert.deepEqual(saved, { personalization, useProjectHistory: true });
+  assert.equal(saved.useStudioTemplates, true);
+  assert.deepEqual(calls[1].payload, { user_id: "u1", personalization, use_project_history: true, use_studio_templates: true });
+  assert.deepEqual(saved, { personalization, useProjectHistory: true, useStudioTemplates: true });
 });
 
 test("AI settings repository surfaces an upsert error without normalizing it into empty settings", async () => {
@@ -95,6 +98,12 @@ test("ai_settings migration is one narrow table with complete owner RLS", () => 
   for (const operation of ["select", "insert", "update", "delete"]) assert.match(sql, new RegExp(`for ${operation}`));
   assert.match(sql, /using \(\(select auth\.uid\(\)\) = user_id\)/);
   assert.match(sql, /with check \(\(select auth\.uid\(\)\) = user_id\)/);
+});
+
+test("use_studio_templates migration adds a default-true boolean column", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/20260820090000_add_use_studio_templates.sql", import.meta.url), "utf8");
+  assert.match(sql, /alter table public\.ai_settings/);
+  assert.match(sql, /add column if not exists use_studio_templates boolean not null default true/);
 });
 
 test("Kubiki integrates owner-bound hydration, local fallback, save and logout cleanup", () => {

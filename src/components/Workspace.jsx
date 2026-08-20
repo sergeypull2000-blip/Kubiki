@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ArrowUp, ChevronsUp, ChevronsDown } from "lucide-react";
-import { fmt } from "../utils.js";
+import { formatMoney } from "../utils.js";
 import { projectTotalWithTax } from "../calculations.js";
 import { activeSheetId as getActiveSheetId } from "../sheets.js";
 import { CUSTOM_STAGE } from "../constants.js";
@@ -476,7 +476,7 @@ const toggleAllCollapsed = () =>
 
           <div className="kb-total-badge">
             <span className="kb-total-label">Итого</span>
-            <span className="kb-total-figure">{fmt(total)} ₽</span>
+            <span className="kb-total-figure">{formatMoney(total)} ₽</span>
           </div>
         </div>
       </header>
