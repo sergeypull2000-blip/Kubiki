@@ -330,7 +330,7 @@ export function applyTagToExecutor(tags, incoming) {
   const rest = tags.filter((t) => t.key !== incoming.key);
   // порядок тегов — по TAG_DEFS, чтобы строка не «прыгала»
   const next = [...rest, fresh];
-  const order = ["role", "name", "payment", "tax", "spec", "grade", "soft"];
+  const order = ["role", "payment", "name", "spec", "grade", "soft", "tax"];
   next.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
   return next;
 }

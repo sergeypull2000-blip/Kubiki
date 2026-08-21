@@ -486,7 +486,6 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     trackProductEvent("project_created", {}, { source: "estimate" });
   };
   const deleteProject = async (id) => {
-    if (!window.confirm("Удалить проект?")) return;
     if (syncEnabledRef.current) {
       try {
         await projectRepository.deleteProject(userId, id);

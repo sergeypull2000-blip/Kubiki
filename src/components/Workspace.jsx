@@ -460,7 +460,7 @@ const toggleAllCollapsed = () =>
   const accountControl = <AccountControl userAccount={userAccount} onOpenAiSettings={onOpenAiSettings} onOpenUsage={onOpenUsage} onOpenFeedback={onOpenFeedback} onSignOut={onSignOut} />;
 
   return (
-    <div className="kb-root kb-root-workspace">
+    <div className={`kb-root kb-root-workspace${editingTemplate ? " is-template-edit" : ""}`}>
       {importFile && (
         <ImportModal file={importFile.file} instruction={importFile.instruction} onClose={() => setImportFile(null)}
           onConfirm={(stages, meta) => { insertParsedStages(stages, meta); setImportFile(null); }} />
@@ -475,7 +475,7 @@ const toggleAllCollapsed = () =>
           <BetaBadge />
           <nav className="kb-crumbs">
             <button type="button" className="kb-crumb-link" onClick={onBack}>{editingTemplate ? "Шаблоны" : "Проекты"}</button>
-            <span className="kb-crumb-sep">/</span>
+            <span className="kb-crumb-sep">/</span>{editingTemplate && <span className="kb-template-context">Редактирование шаблона</span>}
             <input className="kb-input kb-project-name" value={editingTemplate ? (project.templateName || project.name) : project.name}
               onChange={(e) => dispatch((p) => editingTemplate ? { ...p, templateName: e.target.value, name: e.target.value } : { ...p, name: e.target.value })} />
           </nav>
@@ -495,7 +495,7 @@ const toggleAllCollapsed = () =>
       </header>
 
       <div className="kb-layout">
-        <div className="kb-panel-shell kb-panel-shell-left" style={{ width: leftPanelWidth, left: 0 }}>
+          <div className="kb-panel-shell kb-panel-shell-left" style={{ width: leftPanelWidth, left: 0 }}>
           <PalettePanel
             activeExecutorId={activeExecutorId}
             activeExecutorTags={activeExecutorTags}

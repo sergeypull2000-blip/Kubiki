@@ -10,7 +10,7 @@ import { SuggestInput } from "./SuggestInput.jsx";
 // «Ядро» строки исполнителя — всегда на виду, пока исполнитель выделен.
 // Остальные кубики (роль, специализация, грейд, софт) — по требованию, через «+».
 const CORE_TAG_KEYS = ["role", "payment"];
-const EXECUTOR_TAG_ORDER = ["role", "name", "payment", "tax", "spec", "grade", "soft"];
+const EXECUTOR_TAG_ORDER = ["role", "payment", "name", "spec", "grade", "soft", "tax"];
 const tagOrder = (key) => { const index = EXECUTOR_TAG_ORDER.indexOf(key); return index < 0 ? EXECUTOR_TAG_ORDER.length : index; };
 
 /* ============================================================
@@ -75,7 +75,7 @@ function ExecutorTag({ tag, onSetValue, onSetPayment, onRemove, isOpen, onOpenCh
   // перехватить выделение текста в инлайн-поле. Выключаем draggable в DOM
   // в фазе перехвата, если mousedown пришёлся на поле/кнопку внутри тега.
   const onTagMouseDownCapture = (e) => {
-    if (filled && wrapRef.current)
+    if (wrapRef.current)
       wrapRef.current.draggable = !e.target.closest("input, textarea, button");
   };
   const restoreTagDraggable = () => { if (wrapRef.current) wrapRef.current.draggable = true; };
@@ -130,26 +130,22 @@ function ExecutorTag({ tag, onSetValue, onSetPayment, onRemove, isOpen, onOpenCh
           <span className="kb-tag-taxlabel">{def.label}</span>
           <input className="kb-tag-input kb-tag-taxinput" placeholder="0" value={tag.value} inputMode="numeric"
             ref={inputRef}
+            onMouseDown={(e) => e.stopPropagation()}
             onChange={(e) => onSetValue(e.target.value)}
             onBlur={() => setEditing(false)}
             onKeyDown={(e) => { if (e.key === "Enter") setEditing(false); }} />
           <span className="kb-tag-taxpct">%</span>
         </span>
       ) : filled ? (
-        <span className="kb-tag-val" title={["name", "role"].includes(tag.key) ? displayValue() : undefined} onMouseDown={(e) => { e.stopPropagation(); openFilled(); }}>
+        <span className="kb-tag-val" title={["name", "role"].includes(tag.key) ? displayValue() : undefined}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); openFilled(); }}>
           {displayValue()}
         </span>
       ) : (
-        // Открываем на mousedown, а не на click. Если в строке уже открыт
-        // (сфокусирован) другой тег — клик по ЭТОЙ кнопке синхронно блюрит его
-        // ДО mouseup, тот сворачивается в span и строка перестраивается под
-        // курсором; к моменту mouseup/click браузер бьёт уже мимо кнопки (в
-        // соседний div), и click не долетает вовсе (preventDefault на mousedown
-        // это не лечит — блюр соседнего поля происходит независимо). На
-        // mousedown же элемент-цель определён гарантированно верно, до сдвига
-        // раскладки — поэтому именно здесь и переключаем editing.
         <button type="button" className="kb-tag-placeholder"
-          onMouseDown={(e) => { e.stopPropagation(); openStates(); }}>
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); openStates(); }}>
           {def.label}
         </button>
       )}

@@ -68,6 +68,7 @@ export const GRADE_OPTIONS = ["Джун", "Джун+", "Мидл", "Мидл+", 
 export const SOFTWARE_OPTIONS = [
   "Blender", "Houdini", "Cinema 4D", "Maya", "ZBrush", "Substance Painter",
   "Nuke", "After Effects", "DaVinci Resolve", "Unreal Engine", "Photoshop", "Premiere Pro",
+  "Figma",
 ];
 
 export const PAYMENT_OPTIONS = [

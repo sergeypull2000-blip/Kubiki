@@ -180,7 +180,7 @@ export function StageCard({ stage, stageNumber, dispatch, activeStageId, activeT
               onApplyTaskTemplate={onApplyTaskTemplate}
               quickAccessItems={quickAccessItems} onApplyQuickAccess={onApplyQuickAccess} onAiContext={onAiContext} />
           ))}
-          <button type="button" className="kb-add-btn" onClick={addTask} onMouseDown={(e) => e.stopPropagation()}>
+          <button type="button" className="kb-add-btn kb-add-task-btn" onClick={addTask} onMouseDown={(e) => e.stopPropagation()}>
             <Plus size={13} strokeWidth={1.75} /> Новая задача
           </button>
         </div>

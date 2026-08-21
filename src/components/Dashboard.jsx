@@ -6,6 +6,7 @@ import { AppTopNavigation } from "./AppTopNavigation.jsx";
 import { createProjectTemplate } from "../templates.js";
 import LeftPanel from "./LeftPanel.jsx";
 import { AccountControl } from "./AccountControl.jsx";
+import { ConfirmModal } from "./ConfirmModal.jsx";
 
 const DASH_SIDEBAR_MIN = 200;
 const DASH_SIDEBAR_MAX = 340;
@@ -147,6 +148,7 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, ai
   const [activeNav, setActiveNav] = useState("all");
   const [toast, setToast] = useState("");
   const [sourceModal, setSourceModal] = useState(null);
+  const [confirm, setConfirm] = useState(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const stored = Number(localStorage.getItem("kb-dashboard-sidebar-width"));
     return stored >= DASH_SIDEBAR_MIN && stored <= DASH_SIDEBAR_MAX ? stored : DASH_SIDEBAR_DEFAULT;
@@ -192,7 +194,7 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, ai
     setToast("Шаблон сохранён");
   }, [onTemplatesChange, projectTemplates]);
 
-  const deleteTemplate = (id) => onTemplatesChange(projectTemplates.filter((template) => template.id !== id));
+  const deleteTemplate = (id) => { const template = templates.find((item) => item.id === id); setConfirm({ title: "Удалить шаблон?", message: `«${template?.templateName || template?.name || "Шаблон"}» будет удалён. Это действие нельзя отменить.`, action: () => onTemplatesChange(templates.filter((item) => item.id !== id)) }); };
   const renameTemplate = (id, name) => onTemplatesChange(projectTemplates.map((template) => template.id === id ? { ...template, templateName: name, name } : template));
   const moveTemplate = (templateId, folderId) => onTemplatesChange(projectTemplates.map((template) => template.id === templateId ? { ...template, folderId } : template));
   const deleteCategory = (id) => {
@@ -221,15 +223,15 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, ai
       <LeftPanel activeNav={activeNav} onNavChange={setActiveNav} categories={categories} onCategoriesChange={onCategoriesChange}
         openCategoryIds={openCategoryIds} onOpenCategoryIdsChange={onOpenCategoryIdsChange}
         templates={templates} onMoveTemplate={moveTemplate} onDeleteCategory={deleteCategory}
-        onRenameTemplate={renameTemplate} onDeleteTemplate={deleteTemplate}
+        onRenameTemplate={renameTemplate} onDeleteTemplate={deleteTemplate} onOpenTemplate={onEditTemplate}
         width={sidebarWidth} accountControl={accountControl} onOpenFeedback={onOpenFeedback} />
       <div className="kb-dash-resizer" role="separator" aria-label="Изменить ширину панели" aria-orientation="vertical" onPointerDown={beginSidebarResize} />
       <main className="kb-dashboard"><div className="kb-board">
         {activeCategory ? (visibleTemplates.length ? visibleTemplates.map((template) =>
-          <EntityCard key={template.id} item={template} template onOpen={onCreate} onDelete={deleteTemplate} onEdit={onEditTemplate} onRename={renameTemplate} />
+          <EntityCard key={template.id} item={template} template onOpen={() => onEditTemplate(template.id)} onDelete={deleteTemplate} onEdit={onEditTemplate} onRename={renameTemplate} />
         ) : <div className="kb-dash-empty">В этой категории пока нет шаблонов</div>) : <>
           {activeNav === "all" && <NewProjectCard onCreate={() => onCreate(null)} />}
-          {visibleProjects.map((project) => <EntityCard key={project.id} item={project} onOpen={(item) => onOpen(item.id)} onDelete={onDelete}
+          {visibleProjects.map((project) => <EntityCard key={project.id} item={project} onOpen={(item) => onOpen(item.id)} onDelete={(id) => setConfirm({ title: "Удалить проект?", message: `«${project.name || "Проект"}» будет удалён. Это действие нельзя отменить.`, action: () => onDelete(id) })}
             onMakeTemplate={handleMakeTemplate} onToggleFavorite={onToggleFavorite} onRename={onRenameProject} />)}
           {!visibleProjects.length && <div className="kb-dash-empty">{activeNav === "recent" ? "Нет недавних проектов" : activeNav === "favorites" ? "Нет избранных проектов" : "Нет проектов"}</div>}
         </>}
@@ -242,5 +244,6 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, ai
         else onGenerate(description, file);
       }} />}
     {toast && <div className="kb-toast" role="status">{toast}</div>}
+    {confirm && <ConfirmModal {...confirm} onCancel={() => setConfirm(null)} onConfirm={() => { const action = confirm.action; setConfirm(null); action(); }} />}
   </div>;
 }

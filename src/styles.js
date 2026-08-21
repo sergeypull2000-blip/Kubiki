@@ -25,7 +25,7 @@ export const CSS = `
      были прижаты к рабочему поле, а не растянуты по краям экрана */
   --layout-max: 1602px;
   /* Ширина центрального Workspace рассчитана на полный ряд Executor-тегов и полей. */
-  --workspace-fixed-width: 1250px;
+  --workspace-fixed-width: 1350px;
   --workspace-sidebar-gap: 24px;
 
   /* dashboard sidebar */
@@ -155,6 +155,8 @@ export const CSS = `
    ограничена по ширине — палитра и правая панель «приклеены» к рабочему
    полю, а не растянуты по краям широкого экрана */
 .kb-layout{position:relative; display:flex; align-items:stretch; justify-content:center; height:calc(100vh - var(--kb-header-h)); overflow:hidden; width:100%; min-width:0}
+.kb-template-context{font-size:var(--fs-sm); color:var(--text-muted); white-space:nowrap}
+.kb-root-workspace.is-template-edit .kb-panel-shell{display:none}
 .kb-panel-shell{position:absolute; top:0; bottom:0; flex:0 0 auto; min-width:0; display:flex; overflow:visible}
 .kb-panel-shell-left{min-width:210px; max-width:calc((100vw - var(--workspace-fixed-width)) / 2 - var(--workspace-sidebar-gap))}.kb-panel-shell-right{min-width:250px; max-width:calc((100vw - var(--workspace-fixed-width)) / 2 - var(--workspace-sidebar-gap))}
 .kb-panel-shell>.kb-palette,.kb-panel-shell>.kb-rightpanel{width:100%; min-width:0}
@@ -236,8 +238,6 @@ export const CSS = `
 .kb-task-collapsed .kb-task-head{border-bottom:0; border-radius:8px}
 .kb-task-name{flex:1}
 .kb-task-body{padding:7px 9px 0; margin:0; min-height:3px; min-width:0}
-.kb-task-body > .kb-add-btn{display:flex; width:100%; min-height:35px; justify-content:flex-start; margin:0; padding:6px 8px; border:1px solid transparent; border-radius:5px}
-.kb-task-body > .kb-add-btn:hover{border-color:color-mix(in srgb,var(--line-strong) 72%,transparent); background:rgba(255,255,255,.48); color:var(--text)}
 .kb-entity-index{flex:0 0 auto; color:var(--text-muted); font-variant-numeric:tabular-nums; white-space:nowrap}
 .kb-stage-index{font-size:var(--fs-sm); font-weight:var(--fw-semibold)}
 .kb-task-index{font-size:var(--fs-xs); font-weight:var(--fw-medium)}
@@ -250,10 +250,12 @@ export const CSS = `
 .kb-stage-head:hover .kb-title-edit-btn,.kb-task-head:hover .kb-title-edit-btn,.kb-title-edit-btn:focus-visible{opacity:1;color:var(--text-muted)}
 .kb-title-edit-btn:hover{background:var(--surface);color:var(--text)}
 /* кнопки «+ Новый …» — единый вид для добавления вложенных элементов */
-.kb-add-btn{display:inline-flex; align-items:center; gap:6px; background:none; border:none;
+.kb-add-btn{display:inline-flex; align-items:center; justify-content:center; vertical-align:middle; min-height:35px; gap:6px; background:none; border:1px solid transparent;
   color:var(--text-muted); font-size:var(--fs-sm); font-weight:var(--fw-medium); cursor:pointer;
-  padding:3px 5px; border-radius:5px; transition:.12s}
+  margin:0; padding:6px 8px; border-radius:5px; transition:.12s}
 .kb-add-btn:hover{color:var(--text); background:var(--surface-sunken)}
+.kb-add-task-btn{padding-inline:18px}
+.kb-add-task-btn:hover{background:color-mix(in srgb,var(--surface-sunken) 76%,var(--line-strong));}
 /* комментарий задачи: иконка в ряду действий и компактный инлайн-редактор */
 .kb-task-comment-btn.is-active{color:var(--accent)}
 .kb-task-comment{padding:8px 10px 0; border-bottom:1px solid var(--line); background:var(--surface)}
@@ -288,8 +290,8 @@ export const CSS = `
   border-radius:5px; padding:3px 5px 3px 7px; background:var(--surface); font-size:var(--fs-xs); width:120px; flex:0 0 120px; min-width:120px; max-width:120px;
   transition:border-color .12s, background .12s, color .12s}
 .kb-tag-role,.kb-tag-name{width:132px; flex-basis:132px; min-width:132px; max-width:132px}
-.kb-tag-payment{width:132px; flex-basis:132px; min-width:132px; max-width:132px}
-.kb-tag-tax{width:104px; flex-basis:104px; min-width:104px; max-width:104px}
+.kb-tag-payment{width:182px; flex-basis:182px; min-width:182px; max-width:182px}
+.kb-tag-tax{width:147px; flex-basis:147px; min-width:147px; max-width:147px}
 .kb-tag-grade{width:92px; flex-basis:92px; min-width:92px; max-width:92px}
 .kb-tag-spec{width:132px; flex-basis:132px; min-width:132px; max-width:132px}
 .kb-tag-soft{width:120px; flex-basis:120px; min-width:120px; max-width:120px}
@@ -554,10 +556,10 @@ export const CSS = `
 .kb-task-dragging{opacity:.45}
 .kb-tree-collapse{flex-shrink:0}
 /* п.7 кубик налога у исполнителя */
-.kb-tag-taxwrap{display:inline-flex; align-items:center; gap:4px}
+.kb-tag-taxwrap{display:inline-flex; align-items:center; gap:5px; flex:1; min-width:0}
 .kb-tag-taxlabel{color:var(--text-muted); font-size:var(--fs-xs); white-space:nowrap}
-.kb-tag-taxinput{max-width:32px; text-align:right}
-.kb-tag-taxpct{color:var(--text-muted); font-size:12px; margin-left:1px}
+.kb-tag-taxinput{width:44px; min-width:44px; max-width:44px; flex:0 0 44px; text-align:right; cursor:text}
+.kb-tag-taxpct{color:var(--text-muted); font-size:12px; flex:0 0 auto}
 .kb-tpl-add{display:inline-flex; align-items:center; gap:5px; width:100%; justify-content:flex-start; margin-top:4px; padding:6px 8px; border:1px dashed var(--line-strong); border-radius:6px; background:none; color:var(--text-muted); font:inherit; font-size:11.5px; cursor:pointer}
 .kb-tpl-add:hover{color:var(--text); border-color:var(--text-faint)}
 .kb-tpl-soon{color:var(--accent); font-weight:var(--fw-medium)}
@@ -938,14 +940,16 @@ export const CSS = `
   .kb-task{padding:0 0 7.5px; margin-bottom:7px}
   .kb-task-head{min-height:29px; padding:3px 9px}
   .kb-task-body{padding:6.5px 8.5px 0}
-  .kb-task-body > .kb-add-btn{min-height:32px; padding:5.5px 7.5px}
+  .kb-add-btn{min-height:32px; padding:5.5px 7.5px}
+  .kb-add-task-btn{padding-inline:17.5px}
   .kb-task-comment-input{min-height:47px}
   .kb-erow-tags{min-height:24.5px}
   .kb-erow-amount{min-width:96px}
   .kb-erow-group + .kb-erow-group{margin-top:2.5px}
   .kb-tag{width:110px; flex:0 0 110px; min-width:110px; max-width:110px; padding:3px 4.5px 3px 6.5px}
-  .kb-tag-role,.kb-tag-name,.kb-tag-payment,.kb-tag-spec{width:120px; flex:0 0 120px; min-width:120px; max-width:120px}
-  .kb-tag-tax{width:96px; flex:0 0 96px; min-width:96px; max-width:96px}
+  .kb-tag-role,.kb-tag-name,.kb-tag-spec{width:120px; flex:0 0 120px; min-width:120px; max-width:120px}
+  .kb-tag-payment{width:170px; flex:0 0 170px; min-width:170px; max-width:170px}
+  .kb-tag-tax{width:135px; flex:0 0 135px; min-width:135px; max-width:135px}
   .kb-tag-grade{width:84px; flex:0 0 84px; min-width:84px; max-width:84px}
   .kb-tag-soft{width:110px; flex:0 0 110px; min-width:110px; max-width:110px}
   .kb-input-num{max-width:68px}
