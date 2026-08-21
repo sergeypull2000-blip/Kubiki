@@ -7,6 +7,7 @@ function resultData(result, operation) {
 
 export async function loadOwnKnowledge(client, userId, { includeHistory = false } = {}) {
   if (!client || !userId) throw new Error("Authenticated knowledge request is required");
+  if (typeof client.loadKnowledge === "function") return client.loadKnowledge(userId, { includeHistory });
   const requests = [
     client.from("performers").select("user_id,client_id,performer_data").eq("user_id", userId),
     client.from("template_libraries").select("user_id,library_data").eq("user_id", userId).maybeSingle(),

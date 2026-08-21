@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import pg from "pg";
 import { parseBackendConfig, parseBetterAuthConfig } from "./config.js";
+import { createAuthEmailSender } from "./email.js";
 
 const { Pool } = pg;
 
@@ -46,18 +47,27 @@ export const authPool =
         connectionTimeoutMillis: 5_000,
       });
 
-export const auth = betterAuth({
-  database: authPool,
-  secret: authConfig.secret,
-  baseURL: authConfig.baseUrl,
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: true,
-    revokeSessionsOnPasswordReset: true,
-  },
-  advanced: {
-    database: {
-      generateId: "uuid",
+export function createBetterAuth({ pool = authPool, config = authConfig, emailSender = createAuthEmailSender() } = {}) {
+  return betterAuth({
+    database: pool,
+    secret: config.secret,
+    baseURL: config.baseUrl,
+    emailVerification: {
+      sendVerificationEmail: emailSender.sendVerificationEmail,
+      sendOnSignUp: true,
     },
-  },
-});
+    emailAndPassword: {
+      enabled: true,
+      requireEmailVerification: true,
+      sendResetPassword: emailSender.sendPasswordResetEmail,
+      revokeSessionsOnPasswordReset: true,
+    },
+    advanced: {
+      database: {
+        generateId: "uuid",
+      },
+    },
+  });
+}
+
+export const auth = createBetterAuth();

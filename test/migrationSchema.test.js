@@ -26,12 +26,13 @@ test("application baseline preserves Stage 0 schema invariants", async () => {
   const tables = [
     "users", "projects", "performers", "quick_access_items", "template_libraries",
     "ai_settings", "studio_export_profiles", "export_presets", "ai_usage_events",
-    "product_events", "user_flags", "ai_usage_limits", "beta_feedback",
+    "product_events", "user_flags", "ai_usage_limits", "ai_usage_reservations", "beta_feedback",
   ];
   for (const table of tables) assert.match(sql, new RegExp(`create table public\\.${table} \\(`));
   assert.doesNotMatch(sql, /public\.profiles|auth\.users|storage\.|enable row level security|create policy/i);
-  assert.match(sql, /foreign key \(id\) references auth\."user" \(id\) on delete cascade/);
-  assert.equal((sql.match(/references public\.users \(id\)/g) || []).length, 12);
+  assert.match(sql, /auth_user_id uuid not null unique/);
+  assert.match(sql, /foreign key \(auth_user_id\) references auth\."user" \(id\) on delete cascade/);
+  assert.equal((sql.match(/references public\.users \(id\)/g) || []).length, 13);
   assert.match(sql, /foreign key \(user_id, performer_client_id\)[\s\S]*references public\.performers \(user_id, client_id\) on delete cascade/);
   for (const trigger of [
     "ai_settings", "ai_usage_limits", "performers", "projects",

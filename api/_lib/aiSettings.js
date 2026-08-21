@@ -5,6 +5,10 @@ export function normalizeServerAiSettings(value, options) {
 }
 
 export async function loadOwnAiSettings(client, userId) {
+  if (typeof client?.loadAiSettings === "function") {
+    const row = await client.loadAiSettings(userId);
+    return row ? normalizeServerAiSettings(row) : normalizeServerAiSettings(undefined, { defaults: true });
+  }
   const result = await client.from("ai_settings").select("user_id,personalization,use_project_history,use_studio_templates").eq("user_id", userId).maybeSingle();
   if (result.error) throw new Error("Не удалось загрузить настройки ИИ", { cause: result.error });
   if (!result.data) return normalizeServerAiSettings(undefined, { defaults: true });

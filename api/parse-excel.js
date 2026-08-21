@@ -123,5 +123,7 @@ export default async function handler(req, res) {
   } catch (e) {
     console.error("parse-excel error:", e);
     return res.status(500).json({ error: e.message || "Внутренняя ошибка сервера" });
+  } finally {
+    await usage.release();
   }
 }

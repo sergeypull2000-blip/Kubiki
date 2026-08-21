@@ -3,10 +3,11 @@
 set search_path = public, pg_catalog;
 
 create table public.users (
-  id uuid primary key,
+  id uuid primary key default gen_random_uuid(),
+  auth_user_id uuid not null unique,
   created_at timestamptz not null default now(),
   constraint users_better_auth_user_fkey
-    foreign key (id) references auth."user" (id) on delete cascade
+    foreign key (auth_user_id) references auth."user" (id) on delete cascade
 );
 
 create or replace function public.set_updated_at()
@@ -180,6 +181,17 @@ create table public.ai_usage_limits (
 );
 create trigger ai_usage_limits_set_updated_at before update on public.ai_usage_limits
 for each row execute function public.set_updated_at();
+
+-- One active metered provider call per user/month. The short lease makes a
+-- crashed request recoverable without holding a database transaction open
+-- while waiting for the provider.
+create table public.ai_usage_reservations (
+  user_id uuid not null references public.users (id) on delete cascade,
+  month_start date not null,
+  reservation_id uuid not null default gen_random_uuid(),
+  expires_at timestamptz not null,
+  primary key (user_id, month_start)
+);
 
 create table public.beta_feedback (
   id uuid primary key default gen_random_uuid(),

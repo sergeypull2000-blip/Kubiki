@@ -44,3 +44,14 @@ test("server makes body limit explicit and closes gracefully", async () => {
   await once(server, "close");
   assert.equal(server.listening, false);
 });
+
+test("standalone API rejects an unauthenticated request with 401", async (t) => {
+  const { server, baseUrl } = await listen({ query: async () => ({ rows: [] }) }, {
+    authenticate: async () => null,
+    serverData: {},
+  });
+  t.after(() => server.close());
+  const response = await fetch(`${baseUrl}/api/usage`);
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "authentication_required" });
+});

@@ -27,6 +27,10 @@ export default async function handler(req, res) {
 
   const limit = await loadEffectiveLimit(auth.client, auth.user.id);
 
+  let spentUsd;
+  if (typeof auth.client.loadMonthlySpent === "function") {
+    spentUsd = await auth.client.loadMonthlySpent(auth.user.id, monthStartUtc());
+  } else {
   const result = await auth.client.from("ai_usage_events")
     .select("cost_usd")
     .eq("user_id", auth.user.id)
@@ -34,7 +38,8 @@ export default async function handler(req, res) {
   if (result.error) return res.status(500).json({ error: "Не удалось загрузить использование ИИ" });
 
   const rows = result.data || [];
-  const spentUsd = rows.reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
+  spentUsd = rows.reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
+  }
 
   if (limit.unlimited) {
     return res.status(200).json({

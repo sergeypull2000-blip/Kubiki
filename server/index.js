@@ -2,13 +2,20 @@ import { createBackendServer } from "./app.js";
 import { pathToFileURL } from "node:url";
 import { parseBackendConfig } from "./config.js";
 import { closeDatabasePool, createDatabasePool } from "./db.js";
+import { toNodeHandler } from "better-auth/node";
+import { auth, authPool } from "./auth.js";
+import { createRequestAuthenticator } from "./requestAuth.js";
+import { createServerDataRepository } from "./repositories/serverDataRepository.js";
+import { createUsageRepository } from "./repositories/usageRepository.js";
 
 export async function startBackend({ env = process.env, logger = console } = {}) {
   const config = parseBackendConfig(env);
   const pool = createDatabasePool(config.databaseUrl);
   pool.on("error", () => logger.error("Unexpected PostgreSQL pool error"));
 
-  const server = createBackendServer({ pool, ...config });
+  const authenticate = createRequestAuthenticator({ auth, pool, logger });
+  const serverData = Object.assign(createServerDataRepository(pool), createUsageRepository(pool));
+  const server = createBackendServer({ pool, authHandler: toNodeHandler(auth), authenticate, serverData, logger, ...config });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, config.host, resolve);
@@ -18,9 +25,9 @@ export async function startBackend({ env = process.env, logger = console } = {})
   let stopping;
   const stop = () => {
     if (stopping) return stopping;
-    stopping = new Promise((resolve) => server.close(resolve)).finally(() =>
-      closeDatabasePool(pool),
-    );
+    stopping = new Promise((resolve) => server.close(resolve)).finally(async () => {
+      await Promise.all([closeDatabasePool(pool), closeDatabasePool(authPool)]);
+    });
     return stopping;
   };
 

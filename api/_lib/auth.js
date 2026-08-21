@@ -16,6 +16,9 @@ export function createServerSupabaseClient(token, env = process.env) {
 }
 
 export async function authenticateRequest(req, { createClientForToken = createServerSupabaseClient } = {}) {
+  if (req?.authContext?.user?.id && req?.serverData) {
+    return { ok: true, user: req.authContext.user, authUser: req.authContext.authUser, client: req.serverData };
+  }
   const token = bearerToken(req?.headers?.authorization);
   if (!token) return { ok: false, status: 401, error: "Требуется авторизация" };
   try {
@@ -28,4 +31,3 @@ export async function authenticateRequest(req, { createClientForToken = createSe
     return { ok: false, status: 503, error: "Не удалось проверить сессию. Попробуйте позже" };
   }
 }
-

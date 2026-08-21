@@ -26,6 +26,7 @@ export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https:/
     let lastError;
     for (let attempt = 0; attempt <= requestRetries; attempt += 1) {
       const remainingMs = budget?.remainingMs() ?? timeoutMs;
+      if (remainingMs < MIN_DEEPSEEK_ATTEMPT_BUDGET_MS) await usageGate?.release?.();
       if (remainingMs < MIN_DEEPSEEK_ATTEMPT_BUDGET_MS) throw new DeepSeekError("Недостаточно времени для завершения генерации. Попробуйте снова.", { status: 504, code: "request_deadline" });
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), Math.min(timeoutMs, remainingMs));
@@ -93,7 +94,10 @@ export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https:/
         return content;
       } catch (error) {
         const normalized = error?.name === "AbortError" ? new DeepSeekError("DeepSeek не ответил вовремя. Попробуйте позже.", { code: "timeout" }) : error;
-        if (!(normalized instanceof DeepSeekError) || attempt === requestRetries || !["timeout", "empty_response"].includes(normalized.code)) throw normalized;
+        if (!(normalized instanceof DeepSeekError) || attempt === requestRetries || !["timeout", "empty_response"].includes(normalized.code)) {
+          await usageGate?.release?.();
+          throw normalized;
+        }
         lastError = normalized;
       } finally {
         clearTimeout(timer);
