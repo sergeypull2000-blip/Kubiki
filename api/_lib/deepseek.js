@@ -100,6 +100,7 @@ export function createDeepSeekClient({ apiKey, fetchImpl = fetch, url = "https:/
         try {
           logger({
             event: "deepseek_attempt",
+            requestId,
             stage,
             model,
             thinkingMode,

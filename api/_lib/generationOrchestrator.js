@@ -65,7 +65,7 @@ export async function runEstimateGeneration({ brief, instruction = "", systemPro
     const rawProfile = await requestModel([
       { role: "system", content: PROFILE_SYSTEM_PROMPT },
       { role: "user", content: [`<brief>\n${brief}\n</brief>`, instruction ? `<current_user_instruction>\n${instruction}\n</current_user_instruction>` : ""].filter(Boolean).join("\n\n") },
-    ], { maxTokens: 900, stage: "profile" });
+    ], { maxTokens: 900, stage: "profile", requestId });
     profile = parseProfile(rawProfile);
   } catch {
     profile = null;
@@ -80,14 +80,14 @@ export async function runEstimateGeneration({ brief, instruction = "", systemPro
     { role: "user", content: finalUserPrompt(brief, instruction, personalization, shortlist, profile.budget, profile.pricingMode, profile.performerRateMode, allowPerformerBindings) },
   ];
   let raw;
-  try { raw = await requestModel(messages, { maxTokens: 4000, stage: "generation" }); emit(diagnosticLogger, requestId, "generation_model_response", true); }
+  try { raw = await requestModel(messages, { maxTokens: 4000, stage: "generation", requestId }); emit(diagnosticLogger, requestId, "generation_model_response", true); }
   catch (error) { emit(diagnosticLogger, requestId, "generation_model_response", false, { reason: "model_request_failed" }); throw error; }
   const rawDiagnostic = diagnoseGeneratedStructure(raw); emit(diagnosticLogger, requestId, "generation_parse_raw", rawDiagnostic.ok, rawDiagnostic);
   let estimate = parseEstimate(raw);
   if (!estimate) {
     let repairedRaw;
     try {
-      repairedRaw = await requestModel([...messages, { role: "assistant", content: raw || "{}" }, { role: "user", content: ESTIMATE_REPAIR_PROMPT }], { maxTokens: 4000, retries: 0, stage: "repair" });
+      repairedRaw = await requestModel([...messages, { role: "assistant", content: raw || "{}" }, { role: "user", content: ESTIMATE_REPAIR_PROMPT }], { maxTokens: 4000, retries: 0, stage: "repair", requestId });
       emit(diagnosticLogger, requestId, "generation_repair_response", true);
     } catch (error) { emit(diagnosticLogger, requestId, "generation_repair_response", false, { reason: "model_request_failed" }); throw error; }
     const repairDiagnostic = diagnoseGeneratedStructure(repairedRaw); emit(diagnosticLogger, requestId, "generation_parse_repair", repairDiagnostic.ok, repairDiagnostic);
@@ -100,7 +100,7 @@ export async function runEstimateGeneration({ brief, instruction = "", systemPro
         const correctedRaw = await requestModel([
           { role: "system", content: systemPrompt },
           { role: "user", content: `Скорректируй исходную смету под жёсткий бюджетный лимит. Исходная внутренняя себестоимость: ${formatBudget({ ...profile.budget, amount: originalTotal })}. Требуемый потолок суммы всех task.cost: ${formatBudget(profile.budget)}. Сохрани необходимую структуру Project → Stage → Task и прежнюю JSON-схему, но сократи объём, ставки или детализацию работ. Не учитывай маркап, налоги и клиентскую цену. Все сделанные упрощения и конфликтующие требования явно перечисли в warnings.\n\n<original_estimate>\n${JSON.stringify(estimate)}\n</original_estimate>` },
-        ], { maxTokens: 4000, retries: 0, stage: "budget_correction" });
+        ], { maxTokens: 4000, retries: 0, stage: "budget_correction", requestId });
         const corrected = parseEstimate(correctedRaw);
         if (corrected) estimate = corrected;
         else appendWarning(estimate, `Не удалось валидно скорректировать смету под жёсткий лимит ${formatBudget(profile.budget)}; текущая сумма ${formatBudget({ ...profile.budget, amount: sumTaskCosts(estimate) })}.`);

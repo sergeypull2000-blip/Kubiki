@@ -553,23 +553,33 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
+  const generationRequestId = randomUUID();
   const budget = createRequestBudget();
   try {
-    const response = await budget.run(executeGeneration(req, budget));
+    const response = await budget.run(executeGeneration(req, budget, generationRequestId));
     if (response.metadata) res.setHeader("X-Kubiki-Generation-Metadata", response.metadata);
     return res.status(response.status).json(response.body);
   } catch (e) {
-    console.error("generate-estimate error", { name: e?.name || "Error", code: e?.code || "unknown" });
-    const isUsageLimit = e instanceof UsageLimitError;
-    const isDeadline = e instanceof RequestDeadlineError || e?.code === "request_deadline";
-    const status = isUsageLimit ? 429 : isDeadline ? 504 : e instanceof DeepSeekError ? e.status : 500;
-    const error = isUsageLimit ? e.message : isDeadline ? "Генерация не успела завершиться. Попробуйте снова." : e instanceof DeepSeekError ? e.message : "Не удалось обработать ответ. Попробуйте снова";
-    return res.status(status).json({ error });
+    const response = generationErrorResponse(e, generationRequestId);
+    console.error("generate-estimate error", { requestId: generationRequestId, name: e?.name || "Error", code: response.body.code });
+    return res.status(response.status).json(response.body);
   }
 }
 
-async function executeGeneration(req, budget) {
-  const generationRequestId = randomUUID();
+export function generationErrorResponse(error, requestId) {
+  const isUsageLimit = error instanceof UsageLimitError;
+  const isDeadline = error instanceof RequestDeadlineError || error?.code === "request_deadline";
+  const code = error instanceof DeepSeekError ? (error.code || "provider_error") : "generation_internal_error";
+  const status = isUsageLimit ? 429 : isDeadline ? 504 : error instanceof DeepSeekError ? error.status : 500;
+  const message = isUsageLimit ? error.message : isDeadline ? "Генерация не успела завершиться. Попробуйте снова." : error instanceof DeepSeekError ? error.message : "Не удалось обработать ответ. Попробуйте снова";
+  return { status, body: { error: message, code, requestId } };
+}
+
+export function generatedStructureMissingResponse(requestId) {
+  return { status: 502, body: { error: "Не удалось обработать ответ. Попробуйте снова", code: "generated_structure_missing", requestId } };
+}
+
+export async function executeGeneration(req, budget, generationRequestId = randomUUID()) {
   const auth = await authenticateRequest(req);
   if (!auth.ok) return { status: auth.status, body: { error: auth.error } };
 
@@ -609,7 +619,7 @@ async function executeGeneration(req, budget) {
   if (!result.estimate) {
     console.error("generate-estimate: модель дважды вернула ответ, не соответствующий JSON-схеме");
     console.info({ event: "generation_response_validation", requestId: generationRequestId, success: false, diagnostic: { reason: "generated_structure_missing" } });
-    return { status: 502, body: { error: "Не удалось обработать ответ. Попробуйте снова" } };
+    return generatedStructureMissingResponse(generationRequestId);
   }
   const hasBindings = result.estimate.stages.some((stage) => stage.tasks.some((task) => task.executors.some((executor) => executor.type === "performer_binding")));
   if (hasBindings) {

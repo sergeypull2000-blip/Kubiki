@@ -29,6 +29,13 @@ test("generation client surfaces safe server error", async () => {
   }), /Сессия недействительна/);
 });
 
+test("generation client keeps safe error observability fields", async () => {
+  await assert.rejects(() => generateEstimateRequest({ description: "brief" }, {
+    getAccessToken: async () => "access-token",
+    fetchImpl: async () => ({ ok: false, status: 502, json: async () => ({ error: "Не удалось обработать ответ. Попробуйте снова", code: "generated_structure_missing", requestId: "request-debug-1" }) }),
+  }), (error) => error.code === "generated_structure_missing" && error.requestId === "request-debug-1");
+});
+
 test("generation client reads optional metadata header without changing JSON keys", async () => {
   const encoded = encodeURIComponent(JSON.stringify({ version: 1, generatedAt: "2026-08-04T12:00:00.000Z", knowledgeNames: ["Препродакшн"], profileFallbackUsed: false }));
   const result = await generateEstimateRequest({ description: "brief" }, {

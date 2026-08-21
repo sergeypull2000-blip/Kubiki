@@ -33,7 +33,7 @@ test("hard overrun triggers exactly one no-retry correction and revalidates its 
   const responses = [profile({ amount: 1_000_000, currency: "RUB", mode: "hard" }), estimate([700_000, 600_000]), estimate([500_000, 450_000], ["Сокращён объём работ"] )];
   const result = await runEstimateGeneration({ brief: "Не больше миллиона", systemPrompt: "ORIGINAL", remainingRequestMs: () => 60_000, requestModel: async (messages, options) => { calls.push({ messages, options }); return responses.shift(); } });
   assert.equal(calls.length, 3);
-  assert.deepEqual(calls[2].options, { maxTokens: 4000, retries: 0, stage: "budget_correction" });
+  assert.deepEqual(calls[2].options, { maxTokens: 4000, retries: 0, stage: "budget_correction", requestId: "untracked" });
   assert.equal(calls[2].messages[0].content, "ORIGINAL");
   assert.match(calls[2].messages[1].content, /1 300 000 ₽/);
   assert.equal(sumTaskCosts(result.estimate), 950_000);

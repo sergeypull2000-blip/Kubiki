@@ -21,8 +21,11 @@ export async function generateEstimateRequest(payload, { fetchImpl = fetch, getA
       signal: controller.signal,
     });
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(requestErrorMessage(response.status, error.error));
+      const body = await response.json().catch(() => ({}));
+      const error = new Error(requestErrorMessage(response.status, body.error));
+      if (typeof body.code === "string") error.code = body.code;
+      if (typeof body.requestId === "string") error.requestId = body.requestId;
+      throw error;
     }
     const estimate = await response.json().catch(() => { throw new Error("Сервер вернул некорректный ответ. Попробуйте ещё раз."); });
     const metadata = decodeGenerationMetadataHeader(response.headers?.get?.("X-Kubiki-Generation-Metadata"));
