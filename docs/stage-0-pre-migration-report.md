@@ -37,7 +37,7 @@ Authoritative `public.profiles`:
 - nullable `email text` and `display_name text`;
 - `created_at timestamptz DEFAULT now()` and `updated_at timestamptz DEFAULT now()`.
 
-Owner decision: do not reproduce `profiles`; replace the Supabase auth/profile model with internal `public.users` based on verified KeyDee subject.
+Owner decision: do not reproduce `profiles`; replace the Supabase auth/profile model with Better Auth's user identity plus a thin internal `public.users` ownership root.
 
 The composite FK `quick_access_items(user_id, performer_client_id) → performers(user_id, client_id) ON DELETE CASCADE` is explicitly preserved.
 
@@ -95,39 +95,34 @@ Owner decision: do not download, migrate or delete these objects. Target Timeweb
 The exact table/constraint/index mapping is recorded in `docs/target-postgres-schema-plan.md`. The clean baseline preserves current application data structures and ordinary PostgreSQL behavior while applying these architectural substitutions:
 
 - `auth.users` FK → `public.users` FK;
-- `public.profiles`/`handle_new_user()` → server-controlled KeyDee user provisioning;
+- Supabase Auth/KeyDee → Better Auth in the Kubiki Node backend;
+- `public.profiles`/`handle_new_user()` → Better Auth `auth.user` plus thin 1:1 `public.users` application identity;
 - `auth.uid()`/Supabase RLS → server-side owner authorization;
 - Supabase Storage → private empty Timeweb S3;
 - old Supabase migration history/data → no import into the clean baseline.
 
 No migration has been created.
 
-## Only remaining Stage 0 blocker: KeyDee sandbox
+## Better Auth decision and schema boundary
 
-No KeyDee sandbox issuer URL, client registration, client ID, registered redirect URI, disposable test account or recovery mailbox is available. Therefore the following remain unknown and are not inferred: issuer, JWKS URI, signing algorithm, audience, stable `sub`, `exp`, and refresh/session behavior. No production auth integration was written.
+KeyDee is removed from the target architecture. No OIDC sandbox, external CIAM or token-contract verification is required. Supabase Auth users remain disposable and are not migrated.
 
-Minimal owner steps:
+Target auth is Better Auth in the Kubiki Node backend, using the same Timeweb Managed PostgreSQL 16 database as application data. Better Auth owns a dedicated `auth` schema with its core `user`, `session`, `account`, and `verification` models. Their exact DDL must be generated from the pinned Better Auth version/configuration in Stage 1, not authored from memory.
 
-1. In the KeyDee sandbox/admin console, create one **public browser/SPA OIDC application** using Authorization Code flow with PKCE; do not create or share a client secret for the browser client.
-2. Register exact sandbox callback and post-logout redirect URIs for a local test harness, plus the allowed local web origin if KeyDee requires it.
-3. Enable signup, email verification, logout, password recovery/reset and refresh/offline session capabilities required for the test.
-4. Create or provide a disposable sandbox mailbox/test user and ensure the owner can receive verification and recovery messages.
-5. Share through a secure channel only the sandbox issuer/discovery URL and public client ID, together with the exact registered redirect URIs. Do not send tokens, passwords or secrets in chat or commit them.
-6. Keep the sandbox client isolated from production users and production redirect URIs.
+Kubiki business ownership is deliberately separated:
 
-With those inputs, complete and record:
+- `auth.user` is the stable authentication identity;
+- `public.users.id` is a UUID PK and 1:1 FK to `auth.user(id) ON DELETE CASCADE`;
+- all application `user_id` FKs point to `public.users(id)`;
+- application tables never reference or inspect `auth.session`, `auth.account`, password hashes, or `auth.verification`;
+- the Node backend derives the owner ID only from a successfully restored Better Auth session and performs owner-scoped authorization.
 
-- discovery `issuer` and `jwks_uri`;
-- JWKS public key metadata and the actual token signing algorithm;
-- validated `iss`, `aud`, stable `sub`, `exp` and optional time claims without logging token values;
-- signup and verification;
-- login through Authorization Code + PKCE (`S256`);
-- logout and observed access/refresh/session revocation;
-- recovery request and password reset completion;
-- refresh issuance, rotation, reuse and expiry behavior.
+Required beta flows use Better Auth framework capabilities: email/password signup, sign in, sign out, session restore, required email verification, forgot/reset password, and session revocation on reset via `revokeSessionsOnPasswordReset: true`. Password hashing, verification tokens, reset tokens, sessions and cookies are framework responsibilities; Kubiki must not implement custom authentication primitives.
+
+For the low-ops beta, core auth/session/verification data remains in PostgreSQL with no Redis/secondary store requirement. Transactional email delivery is a Stage 1 dependency. The Better Auth version, generated auth schema, supported `public.users` provisioning hook/transaction and email provider must be pinned/reviewed only after Stage 1 is explicitly authorized.
 
 ## Stage boundary
 
-Production DB/storage evidence and retention are resolved. Actual KeyDee sandbox verification is the sole remaining Stage 0 blocker.
+Production DB/storage evidence, retention, authentication framework, auth/application schema boundary and required beta flows are resolved. Stage 0 has no remaining architecture-discovery blocker.
 
 Stage 1 has not started. No backend implementation, `pg` dependency, REST CRUD API, repository rewrite, Supabase removal, Timeweb resource, database migration, production mutation, data copy, download or deletion was performed.
