@@ -163,7 +163,7 @@ export const CSS = `
 .kb-panel-resizer:hover::after,.kb-is-panel-resizing .kb-panel-resizer::after{background:var(--line-strong)}
 .kb-panel-resizer-left{right:-4px}.kb-panel-resizer-right{left:-4px}
 .kb-is-panel-resizing,.kb-is-panel-resizing *{cursor:col-resize!important; user-select:none!important}
-.kb-palette{width:248px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--line-strong);
+.kb-palette{width:298px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--line-strong);
   display:flex; flex-direction:column; overflow:hidden; min-height:0}
 .kb-palette-scroll{flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:14px 12px 22px; display:flex; flex-direction:column; gap:2px}
 .kb-canvas{flex:0 0 var(--workspace-fixed-width); width:var(--workspace-fixed-width); min-width:var(--workspace-fixed-width); display:flex; flex-direction:column; overflow:hidden}
@@ -482,7 +482,7 @@ export const CSS = `
 .kb-logomenu-item:hover{background:var(--surface-sunken)}
 
 /* ---- правая панель ---- */
-.kb-rightpanel{width:288px; flex-shrink:0; background:var(--surface); border-left:1px solid var(--line-strong); display:flex; flex-direction:column; overflow:hidden; padding:6px 0}
+.kb-rightpanel{width:338px; flex-shrink:0; background:var(--surface); border-left:1px solid var(--line-strong); display:flex; flex-direction:column; overflow:hidden; padding:6px 0}
 .kb-rp-grow{flex:1; min-height:0; overflow-y:auto}
 .kb-rp-sec{padding:16px 18px; border-bottom:1px solid var(--line)}
 .kb-rp-sec:last-child{border-bottom:none}

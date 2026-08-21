@@ -1,6 +1,6 @@
 import { parseAiEditResponse } from "./editSchema.js";
 import { sheetsOf } from "../sheets.js";
-import { requestErrorMessage } from "./requestErrors.js";
+import { aiEditErrorMessage, requestErrorMessage } from "./requestErrors.js";
 
 export const AI_EDIT_REQUEST_TIMEOUT_MS = 270_000;
 
@@ -33,7 +33,7 @@ export async function requestAiEdit(payload, { fetchImpl = fetch, getAccessToken
   const timer = setTimeout(() => timeoutController.abort(), AI_EDIT_REQUEST_TIMEOUT_MS);
   try {
     const response = await fetchImpl("/api/edit-estimate", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(payload), signal: timeoutController.signal });
-    if (!response.ok) { const error = await response.json().catch(() => ({})); const result = new Error(requestErrorMessage(response.status, error.error)); result.code = error.code || (response.status === 409 ? "stale_revision" : "request_failed"); if (typeof error.requestId === "string") result.requestId = error.requestId; throw result; }
+    if (!response.ok) { const error = await response.json().catch(() => ({})); const code = error.code || (response.status === 409 ? "stale_revision" : "request_failed"); const result = new Error(aiEditErrorMessage(code, error.error, requestErrorMessage(response.status))); result.code = code; if (typeof error.requestId === "string") result.requestId = error.requestId; throw result; }
     const value = await response.json().catch(() => null), parsed = parseAiEditResponse(value, payload);
     if (!parsed) throw new Error("Сервер вернул некорректный AI-diff.");
     return parsed;

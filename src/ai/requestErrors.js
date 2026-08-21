@@ -15,6 +15,17 @@ export function safeServerMessage(value) {
   return value.replace(/[\r\n\t]+/g, " ").replace(/\s{2,}/g, " ").trim().slice(0, 240);
 }
 
+const AI_SEMANTIC_MESSAGES = {
+  ai_semantic_invalid_schema: "Не удалось выполнить эту правку целиком. Попробуйте разбить её на несколько изменений.",
+  ai_semantic_invalid_json: "Не удалось понять эту правку. Попробуйте сформулировать её проще или разбить на несколько шагов.",
+  ai_semantic_unknown_command: "Не удалось понять эту правку. Попробуйте сформулировать её проще или разбить на несколько шагов.",
+};
+
+export function aiEditErrorMessage(code, serverMessage, fallback) {
+  if (typeof code === "string" && (code.startsWith("ai_semantic_") || code.startsWith("ai_compile_"))) return AI_SEMANTIC_MESSAGES[code] || "Не удалось понять эту правку. Попробуйте сформулировать её проще или разбить на несколько шагов.";
+  return requestErrorMessage(0, serverMessage, fallback);
+}
+
 export function requestErrorMessage(status, serverMessage, fallback = "Не удалось выполнить запрос. Попробуйте ещё раз.") {
   return safeServerMessage(serverMessage) || STATUS_MESSAGES[status] || fallback;
 }

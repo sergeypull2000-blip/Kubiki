@@ -89,7 +89,7 @@ async function executeEdit(req, budget) {
       const schemaDiagnostic = diagnoseAiEditSemanticStructure(raw);
       console.warn("AI semantic schema rejected", schemaDiagnostic);
     } catch {}
-    return { status: 502, body: { error: "Модель вернула некорректную semantic command", code: diagnoseAiEditSemanticResponse(raw) } };
+    return { status: 502, body: { error: "Модель вернула некорректную semantic command", code: diagnoseAiEditSemanticResponse(raw), requestId: request.requestId } };
   }
   if (semantic.kind === "commands") {
     try {
@@ -98,7 +98,7 @@ async function executeEdit(req, budget) {
       const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project: editProject, confirmedTargets: resolvedPlan.confirmedTargets, performers: ownPerformers });
       return { status: 200, body: diff };
     } catch (error) {
-      if (error instanceof AiEditSemanticPlanError || error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code } };
+      if (error instanceof AiEditSemanticPlanError || error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code, requestId: request.requestId } };
       throw error;
     }
   }
@@ -184,7 +184,7 @@ async function continueSemanticPlan({ request, project, auth }) {
     const diff = compileAiEditSemanticPlan({ semantic: materializeResolvedSemanticPlan(resolvedPlan), request, project: editProject, confirmedTargets: resolvedPlan.confirmedTargets, performers });
     return { status: 200, body: diff };
   } catch (error) {
-    if (error instanceof AiEditSemanticPlanError || error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code } };
+    if (error instanceof AiEditSemanticPlanError || error instanceof AiEditSemanticCompileError) return { status: 422, body: { error: error.message, code: error.code, requestId: request.requestId } };
     throw error;
   }
 }
