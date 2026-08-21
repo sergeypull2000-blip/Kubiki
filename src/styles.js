@@ -26,6 +26,7 @@ export const CSS = `
   --layout-max: 1602px;
   /* Ширина центрального Workspace рассчитана на полный ряд Executor-тегов и полей. */
   --workspace-fixed-width: 1250px;
+  --workspace-sidebar-gap: 24px;
 
   /* dashboard sidebar */
   --dash-sidebar-w: 240px;
@@ -155,7 +156,7 @@ export const CSS = `
    полю, а не растянуты по краям широкого экрана */
 .kb-layout{position:relative; display:flex; align-items:stretch; justify-content:center; height:calc(100vh - var(--kb-header-h)); overflow:hidden; width:100%; min-width:0}
 .kb-panel-shell{position:absolute; top:0; bottom:0; flex:0 0 auto; min-width:0; display:flex; overflow:visible}
-.kb-panel-shell-left{min-width:210px; max-width:300px}.kb-panel-shell-right{min-width:250px; max-width:300px}
+.kb-panel-shell-left{min-width:210px; max-width:calc((100vw - var(--workspace-fixed-width)) / 2 - var(--workspace-sidebar-gap))}.kb-panel-shell-right{min-width:250px; max-width:calc((100vw - var(--workspace-fixed-width)) / 2 - var(--workspace-sidebar-gap))}
 .kb-panel-shell>.kb-palette,.kb-panel-shell>.kb-rightpanel{width:100%; min-width:0}
 .kb-panel-resizer{position:absolute; z-index:20; top:0; bottom:0; width:9px; cursor:col-resize; touch-action:none}
 .kb-panel-resizer::after{content:""; position:absolute; top:0; bottom:0; left:4px; width:1px; background:transparent; transition:background .12s}

@@ -9,8 +9,8 @@ test("workspace uses edge-to-edge flex center and bounded panel resizers", async
   assert.match(styles, /\.kb-layout\{[^}]*width:100%; min-width:0/);
   assert.doesNotMatch(styles, /\.kb-layout\{[^}]*max-width/);
   assert.match(styles, /\.kb-canvas-inner\{width:100%; min-width:0/);
-  assert.match(workspace, /const LEFT_PANEL_RANGE = \[210, 320\]/);
-  assert.match(workspace, /const RIGHT_PANEL_RANGE = \[250, 360\]/);
+  assert.match(workspace, /const LEFT_PANEL_RANGE = \[210, Number\.POSITIVE_INFINITY\]/);
+  assert.match(workspace, /const RIGHT_PANEL_RANGE = \[250, Number\.POSITIVE_INFINITY\]/);
   assert.match(workspace, /side === "left" \? LEFT_PANEL_RANGE : RIGHT_PANEL_RANGE/);
   assert.match(workspace, /kb-panel-resizer-left/);
   assert.match(workspace, /kb-panel-resizer-right/);

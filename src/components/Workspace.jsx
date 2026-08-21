@@ -24,9 +24,12 @@ import { createTaskTemplate, createStageTemplate, cloneTaskTemplate, cloneStageT
 import { AccountControl } from "./AccountControl.jsx";
 import { BetaBadge } from "./BetaBadge.jsx";
 
-const LEFT_PANEL_RANGE = [210, 300];
-const RIGHT_PANEL_RANGE = [250, 300];
+const WORKSPACE_FIXED_WIDTH = 1250;
+const WORKSPACE_SIDEBAR_GAP = 24;
+const LEFT_PANEL_RANGE = [210, Number.POSITIVE_INFINITY];
+const RIGHT_PANEL_RANGE = [250, Number.POSITIVE_INFINITY];
 const clampPanelWidth = (value, [min, max], fallback) => Math.min(max, Math.max(min, Number(value) || fallback));
+const panelViewportMax = ([min]) => Math.max(min, Math.floor((window.innerWidth - WORKSPACE_FIXED_WIDTH) / 2 - WORKSPACE_SIDEBAR_GAP));
 
 /* ============================================================
    Вкладка сметы: single click переключает лист, double click — rename.
@@ -127,7 +130,9 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
     event.preventDefault(); event.stopPropagation();
     const startX = event.clientX;
     const startWidth = side === "left" ? leftPanelWidth : rightPanelWidth;
-    const [min, max] = side === "left" ? LEFT_PANEL_RANGE : RIGHT_PANEL_RANGE;
+    const range = side === "left" ? LEFT_PANEL_RANGE : RIGHT_PANEL_RANGE;
+    const [min] = range;
+    const max = panelViewportMax(range);
     const onMove = (moveEvent) => {
       const delta = (moveEvent.clientX - startX) * (side === "left" ? 1 : -1);
       const width = Math.min(max, Math.max(min, startWidth + delta));
@@ -141,6 +146,15 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, { once: true });
   }, [leftPanelWidth, rightPanelWidth]);
+  useEffect(() => {
+    const constrainPanels = () => {
+      setLeftPanelWidth((width) => Math.min(width, panelViewportMax(LEFT_PANEL_RANGE)));
+      setRightPanelWidth((width) => Math.min(width, panelViewportMax(RIGHT_PANEL_RANGE)));
+    };
+    constrainPanels();
+    window.addEventListener("resize", constrainPanels);
+    return () => window.removeEventListener("resize", constrainPanels);
+  }, []);
   useEffect(() => { localStorage.setItem("kb-workspace-left-width", String(leftPanelWidth)); }, [leftPanelWidth]);
   useEffect(() => { localStorage.setItem("kb-workspace-right-width", String(rightPanelWidth)); }, [rightPanelWidth]);
 

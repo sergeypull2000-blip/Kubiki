@@ -134,7 +134,7 @@ test("internal auto-role performer ids resolve and materialize duplicate display
   assert.deepEqual(resolved.bindings.map((item) => item.performerId), ["A"]);
   assert.equal(resolved.unresolvedSlots.length, 0);
   assert.equal(stagesFromGeneratedEstimate(draft, performers)[0].tasks[0].executors[0].performerId, "A");
-  const request = { requestId: "r", baseRevision: "rev", scope: { kind: "project", projectId: "p" }, instruction: "", knowledge: { selectedSources: [] }, idPool: { stages: ["s"], tasks: ["t"], executors: ["e"], tags: [] } };
+  const request = { requestId: "r", baseRevision: "rev", scope: { kind: "project", projectId: "p" }, instruction: "Добавь Эллу из базы", knowledge: { selectedSources: [] }, idPool: { stages: ["s"], tasks: ["t"], executors: ["e"], tags: Array.from({ length: 10 }, (_, index) => `g${index}`) } };
   const diff = compileGeneratedStructure({ resolved, request, project: { id: "p", stages: [] }, performers });
   assert.equal(diff.operations.find((item) => item.type === "executor.addFromPerformer").value.performerId, "A");
 });
