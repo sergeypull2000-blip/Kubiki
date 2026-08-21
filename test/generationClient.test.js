@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { generateEstimateRequest, GENERATION_REQUEST_TIMEOUT_MS } from "../src/ai/generationClient.js";
+import { requestAiEdit } from "../src/ai/editClient.js";
 
 test("generation client allows the bounded two-call DeepSeek budget", () => {
   assert.equal(GENERATION_REQUEST_TIMEOUT_MS, 270_000);
@@ -34,6 +35,13 @@ test("generation client keeps safe error observability fields", async () => {
     getAccessToken: async () => "access-token",
     fetchImpl: async () => ({ ok: false, status: 502, json: async () => ({ error: "Не удалось обработать ответ. Попробуйте снова", code: "generated_structure_missing", requestId: "request-debug-1" }) }),
   }), (error) => error.code === "generated_structure_missing" && error.requestId === "request-debug-1");
+});
+
+test("edit client keeps safe server error observability fields", async () => {
+  await assert.rejects(() => requestAiEdit({ projectId: "project-a" }, {
+    getAccessToken: async () => "access-token",
+    fetchImpl: async () => ({ ok: false, status: 404, json: async () => ({ error: "Смета не найдена", code: "project_not_found", requestId: "edit-request-1" }) }),
+  }), (error) => error.code === "project_not_found" && error.requestId === "edit-request-1");
 });
 
 test("generation client reads optional metadata header without changing JSON keys", async () => {

@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import handler from "../api/edit-estimate.js";
+import handler, { projectNotFoundResponse, resolveEditProjectLookup } from "../api/edit-estimate.js";
 import { AI_EDIT_SYSTEM_PROMPT, buildAiEditMessages } from "../api/_lib/editPrompt.js";
 import { hasExplicitPerformerLibraryIntent, needsClarificationForBareInput, resolveExplicitPerformers } from "../api/_lib/performerResolver.js";
-import { loadOwnProjectForEdit } from "../api/_lib/editProject.js";
+import { listOwnProjectClientIds, loadOwnProjectForEdit } from "../api/_lib/editProject.js";
 import { createAiEditIdPool, createAiEditRequest } from "../src/ai/editClient.js";
 import { globalAiEditScope } from "../src/ai/editScope.js";
 import { deserializeProjectFromServer } from "../src/projectServer.js";
@@ -39,6 +39,31 @@ test("global request keeps runtime Project id equal to scope and owner-scoped cl
   assert.equal(request.projectId, scope.projectId);
   assert.deepEqual(filters, [["user_id", "owner"], ["client_id", "saved-client-id"]]);
   assert.equal(loaded.id, "saved-client-id");
+});
+
+test("project lookup diagnostics return only owner-scoped client ids", async () => {
+  const calls = [];
+  const client = { from(table) { assert.equal(table, "projects"); return {
+    select(fields) { calls.push(["select", fields]); return this; },
+    eq(column, value) { calls.push(["eq", column, value]); return this; },
+    then(resolve) { return resolve({ data: [{ client_id: "project-a" }, { client_id: "project-b" }], error: null }); },
+  }; } };
+  assert.deepEqual(await listOwnProjectClientIds(client, "owner"), ["project-a", "project-b"]);
+  assert.deepEqual(calls, [["select", "client_id"], ["eq", "user_id", "owner"]]);
+});
+
+test("project lookup telemetry logs request id and found state", async () => {
+  const events = [];
+  const logger = { info(name, fields) { events.push({ name, fields }); }, error() {} };
+  const found = await resolveEditProjectLookup({ userId: "owner", projectId: "project-a", requestId: "edit-1", loadProject: async () => ({ id: "project-a" }), logger });
+  assert.deepEqual(found.project, { id: "project-a" });
+  assert.deepEqual(events[0], { name: "edit_project_lookup", fields: { requestId: "edit-1", projectId: "project-a", userId: "owner", lookupFound: true } });
+  events.length = 0;
+  const missing = await resolveEditProjectLookup({ userId: "owner", projectId: "project-missing", requestId: "edit-2", loadProject: async () => null, listClientIds: async () => ["project-a", "project-b"], logger });
+  assert.equal(missing.project, null);
+  assert.equal(events[0].name, "edit_project_lookup");
+  assert.deepEqual(events[0].fields, { requestId: "edit-2", projectId: "project-missing", userId: "owner", lookupFound: false, projectCount: 2, projectIdSample: ["project-a", "project-b"] });
+  assert.deepEqual(projectNotFoundResponse("edit-2"), { status: 404, body: { error: "Смета не найдена", code: "project_not_found", requestId: "edit-2" } });
 });
 
 test("ambiguous explicit Performer returns one clarification candidate set", () => {

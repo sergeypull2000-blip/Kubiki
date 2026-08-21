@@ -3,7 +3,7 @@ import { loadServerAiSettings } from "./_lib/aiSettings.js";
 import { createDeepSeekClient, DeepSeekError } from "./_lib/deepseek.js";
 import { createUsageRecorder, UsageLimitError } from "./_lib/aiUsage.js";
 import { buildAiEditMessages } from "./_lib/editPrompt.js";
-import { loadOwnPerformersForEdit, loadOwnProjectForEdit, loadOwnSelectedKnowledge } from "./_lib/editProject.js";
+import { listOwnProjectClientIds, loadOwnPerformersForEdit, loadOwnProjectForEdit, loadOwnSelectedKnowledge } from "./_lib/editProject.js";
 import { hasExplicitPerformerLibraryIntent, needsClarificationForBareInput } from "./_lib/performerResolver.js";
 import { createRequestBudget, RequestDeadlineError } from "./_lib/requestBudget.js";
 import { validateAiEditRequest } from "../src/ai/editSchema.js";
@@ -49,8 +49,9 @@ async function executeEdit(req, budget) {
   const parsedRequest = validateAiEditRequest(req.body);
   if (!parsedRequest.ok) return { status: parsedRequest.status, body: { error: parsedRequest.error } };
   const request = parsedRequest.value;
-  const project = await loadOwnProjectForEdit(auth.client, auth.user.id, request.projectId);
-  if (!project) return { status: 404, body: { error: "Смета не найдена" } };
+  const lookup = await resolveEditProjectLookup({ client: auth.client, userId: auth.user.id, requestId: request.requestId, projectId: request.projectId });
+  if (!lookup.project) return projectNotFoundResponse(request.requestId);
+  const project = lookup.project;
   if (!scopeExists(project, request.scope)) return { status: 400, body: { error: "Выбранный контекст не найден в смете" } };
   const serverRevision = await sheetRevision(project, request.scope?.sheetId);
   if (serverRevision !== request.baseRevision) return { status: 409, body: { error: "Смета изменилась. Сначала сохраните её и повторите запрос.", code: "stale_revision" } };
@@ -102,6 +103,22 @@ async function executeEdit(req, budget) {
     }
   }
   return { status: 200, body: attachTrustedAiEditMetadata(semantic, request) };
+}
+
+export async function resolveEditProjectLookup({ client, userId, requestId, projectId, loadProject = loadOwnProjectForEdit, listClientIds = listOwnProjectClientIds, logger = console }) {
+  const project = await loadProject(client, userId, projectId);
+  if (project) {
+    logger.info("edit_project_lookup", { requestId, projectId, userId, lookupFound: true });
+    return { project };
+  }
+  let clientIds = [];
+  try { clientIds = await listClientIds(client, userId); } catch (error) { logger.error("edit_project_lookup_diagnostic_failed", { requestId, name: error?.name || "Error" }); }
+  logger.info("edit_project_lookup", { requestId, projectId, userId, lookupFound: false, projectCount: clientIds.length, projectIdSample: clientIds.slice(0, 5) });
+  return { project: null };
+}
+
+export function projectNotFoundResponse(requestId) {
+  return { status: 404, body: { error: "Смета не найдена", code: "project_not_found", requestId } };
 }
 
 async function generateStructurePlan({ request, project, auth, settings, requestModel }) {

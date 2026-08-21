@@ -13,6 +13,12 @@ export async function loadOwnProjectForEdit(client, userId, projectId) {
   return deserializeProjectFromServer(row);
 }
 
+export async function listOwnProjectClientIds(client, userId) {
+  const result = await client.from("projects").select("client_id").eq("user_id", userId);
+  const rows = data(result, "Не удалось диагностировать проекты пользователя");
+  return (rows || []).map((row) => row?.client_id).filter((id) => typeof id === "string" && id.trim());
+}
+
 export async function loadOwnPerformersForEdit(client, userId) {
   const result = await client.from("performers").select("user_id,client_id,performer_data").eq("user_id", userId);
   return (data(result, "Не удалось загрузить Performer") || [])
