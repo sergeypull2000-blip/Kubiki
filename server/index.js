@@ -1,6 +1,6 @@
 import { createBackendServer } from "./app.js";
 import { pathToFileURL } from "node:url";
-import { parseBackendConfig } from "./config.js";
+import { parseBackendConfig, parseObjectStorageConfig } from "./config.js";
 import { closeDatabasePool, createDatabasePool } from "./db.js";
 import { toNodeHandler } from "better-auth/node";
 import { auth, authPool } from "./auth.js";
@@ -8,16 +8,18 @@ import { createRequestAuthenticator } from "./requestAuth.js";
 import { createServerDataRepository } from "./repositories/serverDataRepository.js";
 import { createUsageRepository } from "./repositories/usageRepository.js";
 import { createOwnerApiRepository } from "./repositories/ownerApiRepository.js";
+import { createObjectStorage } from "./objectStorage.js";
 
 export async function startBackend({ env = process.env, logger = console } = {}) {
   const config = parseBackendConfig(env);
+  const objectStorage = createObjectStorage(parseObjectStorageConfig(env));
   const pool = createDatabasePool(config.databaseUrl);
   pool.on("error", () => logger.error("Unexpected PostgreSQL pool error"));
 
   const authenticate = createRequestAuthenticator({ auth, pool, logger });
   const serverData = Object.assign(createServerDataRepository(pool), createUsageRepository(pool));
   const ownerApi = createOwnerApiRepository(pool);
-  const server = createBackendServer({ pool, authHandler: toNodeHandler(auth), authenticate, serverData, ownerApi, logger, ...config });
+  const server = createBackendServer({ pool, authHandler: toNodeHandler(auth), authenticate, serverData, ownerApi, objectStorage, logger, ...config });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, config.host, resolve);

@@ -24,6 +24,18 @@ function parseDatabaseUrl(value) {
   return value;
 }
 
+function required(value, name) {
+  if (!value) throw new Error(`${name} is required to start the backend`);
+  return value;
+}
+
+function parseBoolean(value, fallback, name) {
+  if (value === undefined || value === "") return fallback;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`${name} must be true or false`);
+}
+
 export function parseBackendConfig(env = process.env) {
   return {
     databaseUrl: parseDatabaseUrl(env.DATABASE_URL),
@@ -53,4 +65,32 @@ export function parseBetterAuthConfig(env = process.env) {
     throw new Error("BETTER_AUTH_URL must be a valid absolute URL");
   }
   return { secret: env.BETTER_AUTH_SECRET, baseUrl: baseUrl.toString() };
+}
+
+export function parseObjectStorageConfig(env = process.env) {
+  let endpoint;
+  try {
+    endpoint = new URL(required(env.S3_ENDPOINT, "S3_ENDPOINT"));
+  } catch (error) {
+    if (error.message?.startsWith("S3_ENDPOINT is required")) throw error;
+    throw new Error("S3_ENDPOINT must be a valid absolute URL");
+  }
+  if (!["http:", "https:"].includes(endpoint.protocol)) {
+    throw new Error("S3_ENDPOINT must use the http or https protocol");
+  }
+  const signedUrlTtlSeconds = parsePositiveInteger(
+    env.S3_SIGNED_URL_TTL_SECONDS,
+    300,
+    "S3_SIGNED_URL_TTL_SECONDS",
+  );
+  if (signedUrlTtlSeconds > 900) throw new Error("S3_SIGNED_URL_TTL_SECONDS must not exceed 900");
+  return {
+    endpoint: endpoint.toString(),
+    region: required(env.S3_REGION, "S3_REGION"),
+    bucket: required(env.S3_BUCKET, "S3_BUCKET"),
+    accessKeyId: required(env.S3_ACCESS_KEY_ID, "S3_ACCESS_KEY_ID"),
+    secretAccessKey: required(env.S3_SECRET_ACCESS_KEY, "S3_SECRET_ACCESS_KEY"),
+    forcePathStyle: parseBoolean(env.S3_FORCE_PATH_STYLE, false, "S3_FORCE_PATH_STYLE"),
+    signedUrlTtlSeconds,
+  };
 }

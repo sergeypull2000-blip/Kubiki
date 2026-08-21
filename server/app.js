@@ -5,6 +5,7 @@ import parseExcel from "../api/parse-excel.js";
 import extractDoc from "../api/extract-doc.js";
 import usage from "../api/usage.js";
 import { matchOwnerApiRoute, handleOwnerApiRoute } from "./ownerApiRoutes.js";
+import { MAX_LOGO_REQUEST_BYTES, handleLogoRoute, matchLogoRoute } from "./logoRoutes.js";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -64,10 +65,13 @@ async function isDatabaseReady(pool, timeoutMillis) {
   }
 }
 
-export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMillis, authHandler, authenticate, serverData, ownerApi, logger = console }) {
+export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMillis, authHandler, authenticate, serverData, ownerApi, objectStorage, logger = console }) {
   return createServer((request, response) => {
     const contentLength = Number(request.headers["content-length"] || 0);
-    if (Number.isFinite(contentLength) && contentLength > bodyLimitBytes) {
+    const pathname = new URL(request.url, "http://localhost").pathname;
+    const logoRoute = matchLogoRoute(request.method, pathname);
+    const requestLimit = logoRoute === "POST" ? MAX_LOGO_REQUEST_BYTES : bodyLimitBytes;
+    if (Number.isFinite(contentLength) && contentLength > requestLimit) {
       sendJson(response, 413, { error: "request_too_large" });
       request.resume();
       return;
@@ -87,9 +91,22 @@ export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMill
       return;
     }
 
-    const path = new URL(request.url, "http://localhost").pathname;
+    const path = pathname;
     if (path.startsWith("/api/auth/") && authHandler) {
       void authHandler(request, response);
+      return;
+    }
+
+    if (logoRoute && authenticate && ownerApi && objectStorage) {
+      void (async () => {
+        const authContext = await authenticate(request);
+        if (!authContext) return sendJson(response, 401, { error: "authentication_required" });
+        const result = await handleLogoRoute(logoRoute, request, ownerApi, objectStorage, authContext.user.id, logger);
+        sendJson(response, result.status, result.body);
+      })().catch((error) => {
+        logger.error("Logo API request failed", { name: error?.name || "Error" });
+        if (!response.headersSent) sendJson(response, error?.status || 500, { error: error?.code || "internal_error" });
+      });
       return;
     }
 
