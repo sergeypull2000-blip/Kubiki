@@ -1,5 +1,6 @@
 import { applyAiEditOperations, AiEditValidationError, indexProject } from "./editOperations.js";
-import { PAYMENT_OPTIONS, ROLE_OPTIONS } from "../constants.js";
+import { PAYMENT_OPTIONS } from "../constants.js";
+import { STUDIO_ROLES } from "../cgTaskRoleTaxonomy.js";
 import { sheetProject } from "../sheets.js";
 
 const source = { kind: "current_request" };
@@ -9,7 +10,7 @@ const taxValue = (value) => String(value).trim().replace("%", "").replace(",", "
 const normalized = (value) => String(value || "").normalize("NFKC").toLocaleLowerCase("ru-RU").replace(/ё/g, "е").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const explicitStageName = (name, instruction) => name && normalized(name) !== "новый этап" && normalized(instruction).includes(normalized(name)) ? name.trim() : "Новый этап";
 const roleValue = (value) => {
-  const query = normalized(value), matches = ROLE_OPTIONS.filter((role) => { const candidate = normalized(role); return candidate === query || candidate.startsWith(query) || query.startsWith(candidate); });
+  const query = normalized(value), matches = STUDIO_ROLES.filter((role) => { const candidate = normalized(role); return candidate === query || candidate.startsWith(query) || query.startsWith(candidate); });
   if (matches.length !== 1) throw new AiEditSemanticCompileError("ai_semantic_invalid_role", "Роль не поддерживается текущей моделью Executor");
   return matches[0];
 };

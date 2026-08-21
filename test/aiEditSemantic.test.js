@@ -133,6 +133,35 @@ test("basic Executor CRUD derives payment quantity field from current payment ty
   assert.equal(semantic({ type: "executor.setPaymentQuantity", field: "hours", value: 2 }), null);
 });
 
+test("AI edit sets every requested canonical studio role", () => {
+  for (const role of ["AI-артист", "Композер", "Колорист", "3D-моделлер"]) {
+    const current = project();
+    const diff = compileAiEditSemanticCommand({ semantic: semantic({ type: "executor.setRole", name: role }), request: request(), project: current, resolvedTarget: { kind: "executor", id: "e1" } });
+    const next = applyAiEditOperations(current, diff, { idPool: ids });
+    assert.equal(next.stages[0].tasks[0].executors[0].tags.find((tag) => tag.key === "role").value, role);
+  }
+});
+
+test("AI edit creates an anonymous Executor with a canonical studio-only role", () => {
+  const current = project();
+  const diff = compileAiEditSemanticCommand({ semantic: semantic({ type: "executor.createAnonymous", taskId: "t", role: "Клинапер" }), request: request(), project: current, resolvedTask: { id: "t" } });
+  const next = applyAiEditOperations(current, diff, { idPool: ids });
+  assert.equal(next.stages[0].tasks[0].executors.at(-1).tags.find((tag) => tag.key === "role").value, "Клинапер");
+});
+
+test("AI edit rejects a non-canonical explicit role and preserves an untouched legacy role", () => {
+  assert.throws(
+    () => compileAiEditSemanticCommand({ semantic: semantic({ type: "executor.setRole", name: "Новая произвольная роль" }), request: request(), project: project(), resolvedTarget: { kind: "executor", id: "e1" } }),
+    (error) => error?.code === "ai_semantic_invalid_role",
+  );
+
+  const current = project();
+  current.stages[0].tasks[0].executors[0].tags.push({ id: "e1-role", key: "role", value: "Креативный директор" });
+  const diff = compileAiEditSemanticCommand({ semantic: semantic({ type: "executor.setTax", percent: 6 }), request: request(), project: current, resolvedTarget: { kind: "executor", id: "e1" } });
+  const next = applyAiEditOperations(current, diff, { idPool: ids });
+  assert.equal(next.stages[0].tasks[0].executors[0].tags.find((tag) => tag.key === "role").value, "Креативный директор");
+});
+
 test("local hard scopes pin resolution and strict validation rejects outside targets", () => {
   const current = project();
   current.stages.push({ id: "s2", name: "Продакшн", presetKey: "custom", tasks: [{ id: "t2", name: "Концепт", executors: [executor("e3", "Анна", "hourly")] }] });

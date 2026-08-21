@@ -8,8 +8,8 @@ import { numVal, roundMoney } from "../utils.js";
 export const AI_EDIT_MAX_MONEY = 1_000_000_000;
 const PAYMENT_TYPES = new Set(PAYMENT_OPTIONS.map((item) => item.key));
 const TAG_RULES = {
-  // Executor roles are bounded user text. ROLE_OPTIONS drives suggestions and
-  // semantic-model normalization, but imported/generated roles may be custom.
+  // Executor roles use canonical choices for explicit UI/AI selection, while
+  // imported/generated roles may remain custom historical text.
   role: null,
   name: null,
   spec: new Set(SPECIALIZATION_OPTIONS),

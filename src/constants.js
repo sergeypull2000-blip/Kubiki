@@ -4,6 +4,7 @@ import {
   Type, Briefcase, Palette,
   BadgeCheck, Monitor, Wallet, Percent,
 } from "lucide-react";
+import { STUDIO_ROLES } from "./cgTaskRoleTaxonomy.js";
 
 /* ---------- этапы ---------- */
 export const STAGE_PRESETS = [
@@ -56,13 +57,6 @@ export const stageFeaturedTasks = (presetKey) => {
 };
 
 /* ---------- словари состояний тегов ---------- */
-export const ROLE_OPTIONS = [
-  "Продюсер", "Арт-директор", "Супервайзер", "Режиссёр",
-  "Проджект-менеджер", "Аккаунт-менеджер", "Продакшн-директор", "Креативный директор",
-  "3D артист", "2D моушн-дизайнер", "Графический дизайнер",
-  "Композитор",
-];
-
 export const SPECIALIZATION_OPTIONS = [
   "Моделлер", "Текстурщик", "Риггер", "Аниматор", "FX / симуляции", "Гудинщик",
   "Композер", "Моушн-дизайнер", "Кеер", "Трекер", "Колорист", "Дженералист",
@@ -93,7 +87,7 @@ export const PAY_SHORT = { fix_total: "Фиксированная ставка",
      "payment"   — кубик оплаты, несёт расчёт
    value  — строcovое состояние (для payment хранится в payment.*)         */
 export const TAG_DEFS = [
-  { key: "role",    label: "Роль",           short: "Роль",          icon: Briefcase,  kind: "select", options: ROLE_OPTIONS },
+  { key: "role",    label: "Роль",           short: "Роль",          icon: Briefcase,  kind: "select", options: STUDIO_ROLES },
   { key: "name",    label: "Имя / название", short: "Имя",           icon: Type,       kind: "text" },
   { key: "spec",    label: "Специализация",  short: "Специализация", icon: Palette,    kind: "select", options: SPECIALIZATION_OPTIONS },
   { key: "grade",   label: "Грейд",          short: "Грейд",         icon: BadgeCheck, kind: "select", options: GRADE_OPTIONS },

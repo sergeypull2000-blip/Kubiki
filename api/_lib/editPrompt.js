@@ -1,4 +1,5 @@
-import { TAG_DEFS, PAYMENT_OPTIONS, ROLE_OPTIONS } from "../../src/constants.js";
+import { TAG_DEFS, PAYMENT_OPTIONS } from "../../src/constants.js";
+import { STUDIO_ROLES } from "../../src/cgTaskRoleTaxonomy.js";
 
 export const AI_EDIT_SYSTEM_PROMPT = `
 Ты — semantic interpreter редактора существующей сметы Kubiki. Ты не изменяешь Project и никогда не возвращаешь low-level operations, diff, JSON patch или готовый Project.
@@ -57,7 +58,7 @@ function performerData(performer) {
 }
 
 export function buildAiEditMessages({ request, project, personalization, performers, knowledge, resolvedProjectTarget = null, resolvedTask = null }) {
-  const policy = { roles: ROLE_OPTIONS, paymentTypes: PAYMENT_OPTIONS.map((item) => item.key), maxMoney: 1_000_000_000 };
+  const policy = { roles: STUDIO_ROLES, paymentTypes: PAYMENT_OPTIONS.map((item) => item.key), maxMoney: 1_000_000_000 };
   const content = [
     `<scope>${JSON.stringify(request.scope)}</scope>`,
     `<current_user_instruction>${request.instruction}</current_user_instruction>`,
