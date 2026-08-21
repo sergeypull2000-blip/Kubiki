@@ -4,6 +4,7 @@ import editEstimate from "../api/edit-estimate.js";
 import parseExcel from "../api/parse-excel.js";
 import extractDoc from "../api/extract-doc.js";
 import usage from "../api/usage.js";
+import { matchOwnerApiRoute, handleOwnerApiRoute } from "./ownerApiRoutes.js";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -63,7 +64,7 @@ async function isDatabaseReady(pool, timeoutMillis) {
   }
 }
 
-export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMillis, authHandler, authenticate, serverData, logger = console }) {
+export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMillis, authHandler, authenticate, serverData, ownerApi, logger = console }) {
   return createServer((request, response) => {
     const contentLength = Number(request.headers["content-length"] || 0);
     if (Number.isFinite(contentLength) && contentLength > bodyLimitBytes) {
@@ -89,6 +90,24 @@ export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMill
     const path = new URL(request.url, "http://localhost").pathname;
     if (path.startsWith("/api/auth/") && authHandler) {
       void authHandler(request, response);
+      return;
+    }
+
+    const ownerRoute = matchOwnerApiRoute(request.method, path);
+    if (ownerRoute && authenticate && ownerApi) {
+      void (async () => {
+        const authContext = await authenticate(request);
+        if (!authContext) return sendJson(response, 401, { error: "authentication_required" });
+        request.body = ["POST", "PUT", "PATCH"].includes(request.method) ? await readJson(request, bodyLimitBytes) : undefined;
+        const result = await handleOwnerApiRoute(ownerRoute, request, ownerApi, authContext.user.id);
+        sendJson(response, result.status, result.body);
+      })().catch((error) => {
+        logger.error("Owner API request failed", { name: error?.name || "Error" });
+        const conflict = error?.code === "23505";
+        const status = error?.status || (conflict ? 409 : 500);
+        const code = error?.code || (error?.message === "invalid_json" ? "invalid_json" : conflict ? "conflict" : "internal_error");
+        if (!response.headersSent) sendJson(response, status, { error: code });
+      });
       return;
     }
 

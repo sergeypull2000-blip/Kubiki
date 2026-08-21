@@ -7,6 +7,7 @@ import { auth, authPool } from "./auth.js";
 import { createRequestAuthenticator } from "./requestAuth.js";
 import { createServerDataRepository } from "./repositories/serverDataRepository.js";
 import { createUsageRepository } from "./repositories/usageRepository.js";
+import { createOwnerApiRepository } from "./repositories/ownerApiRepository.js";
 
 export async function startBackend({ env = process.env, logger = console } = {}) {
   const config = parseBackendConfig(env);
@@ -15,7 +16,8 @@ export async function startBackend({ env = process.env, logger = console } = {})
 
   const authenticate = createRequestAuthenticator({ auth, pool, logger });
   const serverData = Object.assign(createServerDataRepository(pool), createUsageRepository(pool));
-  const server = createBackendServer({ pool, authHandler: toNodeHandler(auth), authenticate, serverData, logger, ...config });
+  const ownerApi = createOwnerApiRepository(pool);
+  const server = createBackendServer({ pool, authHandler: toNodeHandler(auth), authenticate, serverData, ownerApi, logger, ...config });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, config.host, resolve);
