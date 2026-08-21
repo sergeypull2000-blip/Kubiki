@@ -24,8 +24,8 @@ import { createTaskTemplate, createStageTemplate, cloneTaskTemplate, cloneStageT
 import { AccountControl } from "./AccountControl.jsx";
 import { BetaBadge } from "./BetaBadge.jsx";
 
-const LEFT_PANEL_RANGE = [210, 320];
-const RIGHT_PANEL_RANGE = [250, 360];
+const LEFT_PANEL_RANGE = [210, 300];
+const RIGHT_PANEL_RANGE = [250, 300];
 const clampPanelWidth = (value, [min, max], fallback) => Math.min(max, Math.max(min, Number(value) || fallback));
 
 /* ============================================================
@@ -482,7 +482,7 @@ const toggleAllCollapsed = () =>
       </header>
 
       <div className="kb-layout">
-        <div className="kb-panel-shell kb-panel-shell-left" style={{ width: leftPanelWidth }}>
+        <div className="kb-panel-shell kb-panel-shell-left" style={{ width: leftPanelWidth, left: 0 }}>
           <PalettePanel
             activeExecutorId={activeExecutorId}
             activeExecutorTags={activeExecutorTags}
@@ -565,7 +565,7 @@ const toggleAllCollapsed = () =>
               )}
               </div>
             </div>
-            {!editingTemplate && onRequestAiEdit && project.stages.length > 0 && <div ref={globalAiBoundaryRef} className="kb-ai-launcher-wrap" style={{ right: aiAnchor.right, "--kb-ai-panel-width": `${aiAnchor.width}px` }}>
+            {!editingTemplate && onRequestAiEdit && project.stages.length > 0 && <div ref={globalAiBoundaryRef} className="kb-ai-launcher-wrap" style={{ right: Math.max(0, aiAnchor.right - 10), "--kb-ai-panel-width": `${aiAnchor.width}px` }}>
               {globalAiOpen && <AiEditTechnicalModal variant="launcher" closing={globalAiClosing} submitRef={globalAiSubmitRef} outsideBoundaryRef={globalAiBoundaryRef} scope={globalScope} contextLabel="Вся смета" onRequest={onRequestAiEdit} onCancelRequest={onCancelAiEdit} onApply={onApplyAiEdit} onUndo={onUndoAiEdit} canUndo={canUndoAiEdit} onClose={closeGlobalAi} />}
               {canUndoAiEdit && !globalAiOpen && <button type="button" className="kb-ai-undo-chip" onClick={onUndoAiEdit}>Undo AI</button>}
               <button type="button" className={`kb-ai-launcher${globalAiOpen && !globalAiClosing ? " is-open" : ""}`} aria-label={globalAiOpen ? "Предпросмотр изменений" : "Открыть AI-ассистента"} onClick={() => { setLocalAiPopover(null); if (globalAiOpen) globalAiSubmitRef.current?.(); else setGlobalAiOpen(true); }}><ArrowUp size={20} strokeWidth={1.8} /></button>
@@ -588,7 +588,7 @@ const toggleAllCollapsed = () =>
               </div>
             )}
           </main>
-          <div className="kb-panel-shell kb-panel-shell-right" style={{ width: rightPanelWidth }}>
+          <div className="kb-panel-shell kb-panel-shell-right" style={{ width: rightPanelWidth, right: 0 }}>
             <div className="kb-panel-resizer kb-panel-resizer-right" role="separator" aria-label="Изменить ширину правой панели" aria-orientation="vertical" onPointerDown={(event) => beginPanelResize("right", event)} />
             {rightPanel}
           </div>

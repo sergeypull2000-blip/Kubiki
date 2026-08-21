@@ -46,7 +46,7 @@ test("AI-артист — единственная специализирова�
   assert.equal(isStudioRole("GenAI Specialist"), false);
   assert.equal(isStudioRole("AI Designer"), false);
   // AI-артист — основной исполнитель для всех AI-задач (формальные названия).
-  for (const task of ["AI-генерация", "AI-анимация", "AI-видео", "Image-to-video", "Video-to-video", "GenAI production", "text to image", "text to video"]) {
+  for (const task of ["AI-генерация", "Генерация AI-элементов", "AI-анимация", "AI-видео", "Image-to-video", "Video-to-video", "GenAI production", "text to image", "text to video"]) {
     assert.equal(matchTaskToRoles(task)[0], "AI-артист");
   }
   // Естественно-языковые варианты пользовательского ввода.

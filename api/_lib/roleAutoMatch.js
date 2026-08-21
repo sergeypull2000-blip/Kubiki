@@ -31,11 +31,6 @@ function uniqueCandidateByPriority(roles, performers) {
   return null;
 }
 
-function uniqueName(performer, performers) {
-  const name = displayName(performer);
-  return Boolean(name) && performers.filter((item) => displayName(item) === name).length === 1;
-}
-
 export function autoMatchPerformersByRole(estimate, { performers = [], useStudioTemplates = false } = {}) {
   if (!estimate || !useStudioTemplates || !Array.isArray(performers) || !performers.length) return estimate;
   const active = performers.filter((performer) => performer?.id && performer?.active !== false);
@@ -49,10 +44,11 @@ export function autoMatchPerformersByRole(estimate, { performers = [], useStudio
         if (executor.type !== "anonymous_unnamed") continue;
         const candidateRoles = taskRoles.length ? taskRoles : executor.role ? [executor.role] : [];
         const match = uniqueCandidateByPriority(candidateRoles, active);
-        if (!match || !uniqueName(match, active)) continue;
+        if (!match) continue;
         executor.type = "performer_binding";
         executor.key = nextKey();
         executor.performerName = displayName(match);
+        executor.performerId = match.id;
         delete executor.name;
         delete executor.role;
         delete executor.paymentType;

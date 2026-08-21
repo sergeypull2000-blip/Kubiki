@@ -7,7 +7,7 @@ const payment = (type) => ({ id: uid(), key: "payment", payment: { type, rate: "
 
 function materializeDraft(draft, performers, policy) {
   if (draft.type === "performer_binding") {
-    const query = normalized(draft.performerName), matches = performers.filter((item) => {
+    const query = normalized(draft.performerName), matches = draft.performerId ? performers.filter((item) => item.id === draft.performerId) : performers.filter((item) => {
       const full = normalized([item.firstName, item.lastName].filter(Boolean).join(" "));
       return query === normalized(item.firstName) || query === full || full.startsWith(`${query} `);
     });

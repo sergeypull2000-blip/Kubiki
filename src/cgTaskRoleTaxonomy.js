@@ -23,7 +23,7 @@ export const CROSS_CUTTING_ROLES = Object.freeze([
 // Порядок записей задаёт приоритет: первая совпавшая роль становится основной.
 const TASK_ROLE_MAP = Object.freeze([
   /* «AI-артист» идёт первым: он основной для любых AI-задач (ai анимация, ai видео, ai генерация, image-to-video, genai …). */
-  { role: "AI-артист", keywords: ["ai артист", "ai анимация", "ai видео", "ai генерация", "genai", "image to video", "video to video", "text to image", "text to video", "нейронк", "нейросет", "нейросеть", "через ии", "через нейронку", "иишка", "иишк"] },
+  { role: "AI-артист", keywords: ["ai артист", "ai анимация", "ai видео", "ai генерация", "генерация ai", "genai", "image to video", "video to video", "text to image", "text to video", "нейронк", "нейросет", "нейросеть", "через ии", "через нейронку", "иишка", "иишк"] },
   { role: "Арт-директор", keywords: ["арт директор", "визуальный стиль", "мудборд", "стайлфрейм", "референсы", "креатив", "идея", "концепция"] },
   { role: "Супервайзер", keywords: ["супервайзер", "супервайз", "контроль качества"] },
   { role: "Продюсер", keywords: ["продюсер", "продакшн", "производство", "управление производством", "линейный продюсер", "исполнительный продюсер", "препродакшн", "постановка", "режиссер", "режиссёр"] },
@@ -98,4 +98,3 @@ export function matchTaskToRoles(taskName, { includeCrossCutting = true } = {}) 
   if (includeCrossCutting) for (const role of CROSS_CUTTING_ROLES) if (!roles.includes(role)) roles.push(role);
   return roles;
 }
-

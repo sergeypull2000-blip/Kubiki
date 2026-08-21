@@ -13,7 +13,7 @@ export function resolveGeneratedStructure({ draft, performers, prior = null, ans
   draft.stages.forEach((stage, stageIndex) => stage.tasks.forEach((task, taskIndex) => task.executors.forEach((executor, executorIndex) => {
     if (executor.type !== "performer_binding") return;
     const id = `binding-${stageIndex}-${taskIndex}-${executorIndex}`, selected = slotValues[id], query = normalized(executor.performerName);
-    const matches = selected ? performers.filter((item) => item.id === selected) : performers.filter((item) => {
+    const matches = executor.performerId ? performers.filter((item) => item.id === executor.performerId) : selected ? performers.filter((item) => item.id === selected) : performers.filter((item) => {
       const full = normalized(displayName(item)), first = normalized(item.firstName);
       return query === full || query === first || full.startsWith(`${query} `);
     });

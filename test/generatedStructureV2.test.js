@@ -124,6 +124,21 @@ test("Performer binding and ordinary Executor coexist and unsafe model fields ar
   assert.equal(parseGeneratedStructure({ ...mixed, operations: [] }), null);
 });
 
+test("internal auto-role performer ids resolve and materialize duplicate display names safely", () => {
+  const draft = {
+    schemaVersion: 2, kind: "generated_structure", generationScope: "fragment", projectName: "P", warnings: [],
+    stages: [{ name: "S", tasks: [{ name: "T", executors: [{ type: "performer_binding", key: "auto-role-1", performerName: "Элла", performerId: "A" }] }] }],
+  };
+  const performers = [{ id: "A", firstName: "Элла", lastName: "", primaryRole: "Арт-директор", active: true }, { id: "B", firstName: "Элла", lastName: "", primaryRole: "Графический дизайнер", active: true }];
+  const resolved = resolveGeneratedStructure({ draft, performers });
+  assert.deepEqual(resolved.bindings.map((item) => item.performerId), ["A"]);
+  assert.equal(resolved.unresolvedSlots.length, 0);
+  assert.equal(stagesFromGeneratedEstimate(draft, performers)[0].tasks[0].executors[0].performerId, "A");
+  const request = { requestId: "r", baseRevision: "rev", scope: { kind: "project", projectId: "p" }, instruction: "", knowledge: { selectedSources: [] }, idPool: { stages: ["s"], tasks: ["t"], executors: ["e"], tags: [] } };
+  const diff = compileGeneratedStructure({ resolved, request, project: { id: "p", stages: [] }, performers });
+  assert.equal(diff.operations.find((item) => item.type === "executor.addFromPerformer").value.performerId, "A");
+});
+
 test("strict v2 parser accepts the production anonymous_named shape", () => {
   const productionShape = {
     schemaVersion: 2, kind: "generated_structure", generationScope: "fragment", projectName: "P", warnings: [],

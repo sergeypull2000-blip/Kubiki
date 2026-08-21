@@ -17,6 +17,7 @@ test("auto-match converts an anonymous executor to a performer_binding by exact 
   const executor = out.stages[0].tasks[0].executors[0];
   assert.equal(executor.type, "performer_binding");
   assert.equal(executor.performerName, "Аня Иванова");
+  assert.equal(executor.performerId, "a");
   assert.ok(executor.key);
   assert.equal(executor.role, undefined);
   assert.equal(executor.compensation, undefined);
@@ -44,8 +45,16 @@ test("auto-match skips inactive performers", () => {
   assert.equal(out.stages[0].tasks[0].executors[0].type, "anonymous_unnamed");
 });
 
-test("auto-match requires a unique display name to avoid ambiguous bindings", () => {
-  const out = autoMatchPerformersByRole(estimate("Анимация", "Аниматор"), { performers: [performer("a", "Аня", "Иванова", "Аниматор"), performer("b", "Аня", "Иванова", "Графический дизайнер")], useStudioTemplates: true });
+test("auto-match binds the unique role candidate by id despite a duplicate display name", () => {
+  const out = autoMatchPerformersByRole(estimate("Арт-дирекшн", "Арт-директор"), { performers: [performer("A", "Элла", "", "Арт-директор"), performer("B", "Элла", "", "Графический дизайнер")], useStudioTemplates: true });
+  const executor = out.stages[0].tasks[0].executors[0];
+  assert.equal(executor.type, "performer_binding");
+  assert.equal(executor.performerName, "Элла");
+  assert.equal(executor.performerId, "A");
+});
+
+test("auto-match still does not bind when two performers match the same role", () => {
+  const out = autoMatchPerformersByRole(estimate("Арт-дирекшн", "Арт-директор"), { performers: [performer("A", "Элла", "", "Арт-директор"), performer("B", "Элла", "", "Арт-директор")], useStudioTemplates: true });
   assert.equal(out.stages[0].tasks[0].executors[0].type, "anonymous_unnamed");
 });
 

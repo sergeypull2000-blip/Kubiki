@@ -24,6 +24,8 @@ export const CSS = `
      держит шапку (лого / «ИТОГО») и layout в одной сетке, чтобы панели
      были прижаты к рабочему поле, а не растянуты по краям экрана */
   --layout-max: 1602px;
+  /* Ширина центрального Workspace рассчитана на полный ряд Executor-тегов и полей. */
+  --workspace-fixed-width: 1250px;
 
   /* dashboard sidebar */
   --dash-sidebar-w: 240px;
@@ -151,9 +153,9 @@ export const CSS = `
 /* п.2: вся группа (палитра + рабочее поле + правая панель) центрирована и
    ограничена по ширине — палитра и правая панель «приклеены» к рабочему
    полю, а не растянуты по краям широкого экрана */
-.kb-layout{display:flex; align-items:stretch; height:calc(100vh - var(--kb-header-h)); overflow:hidden; width:100%; min-width:0}
-.kb-panel-shell{position:relative; flex:0 0 auto; min-width:0; display:flex; overflow:visible}
-.kb-panel-shell-left{min-width:210px; max-width:320px}.kb-panel-shell-right{min-width:250px; max-width:360px}
+.kb-layout{position:relative; display:flex; align-items:stretch; justify-content:center; height:calc(100vh - var(--kb-header-h)); overflow:hidden; width:100%; min-width:0}
+.kb-panel-shell{position:absolute; top:0; bottom:0; flex:0 0 auto; min-width:0; display:flex; overflow:visible}
+.kb-panel-shell-left{min-width:210px; max-width:300px}.kb-panel-shell-right{min-width:250px; max-width:300px}
 .kb-panel-shell>.kb-palette,.kb-panel-shell>.kb-rightpanel{width:100%; min-width:0}
 .kb-panel-resizer{position:absolute; z-index:20; top:0; bottom:0; width:9px; cursor:col-resize; touch-action:none}
 .kb-panel-resizer::after{content:""; position:absolute; top:0; bottom:0; left:4px; width:1px; background:transparent; transition:background .12s}
@@ -163,10 +165,13 @@ export const CSS = `
 .kb-palette{width:248px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--line-strong);
   display:flex; flex-direction:column; overflow:hidden; min-height:0}
 .kb-palette-scroll{flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:14px 12px 22px; display:flex; flex-direction:column; gap:2px}
-.kb-canvas{flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden}
+.kb-canvas{flex:0 0 var(--workspace-fixed-width); width:var(--workspace-fixed-width); min-width:var(--workspace-fixed-width); display:flex; flex-direction:column; overflow:hidden}
 .kb-canvas-scroll{flex:1 1 auto; min-height:0; overflow-y:auto; padding:20px 28px 120px}
 /* рабочее поле центрировано в своей колонке между палитрой и правой панелью */
 .kb-canvas-inner{width:100%; min-width:0; margin:0 auto}
+
+/* Fallback: когда панели и фиксированный Workspace физически не помещаются,
+   возвращаемся к обычной адаптивной сетке с горизонтальным скроллом контента. */
 .kb-generation-knowledge{margin:0 0 10px; color:var(--text-muted); font-size:11px; line-height:1.4}
 .kb-ai-hydration-note{margin-right:auto; color:var(--text-muted); font-size:11px}
 
@@ -921,7 +926,7 @@ export const CSS = `
   .kb-chip{padding:6.5px 7.5px}
   .kb-suggest-item{padding:6.5px 8.5px}
   .kb-canvas-scroll{padding:18px 24px 108px}
-  .kb-canvas-inner{max-width:1130px}
+  .kb-canvas-inner{max-width:none}
   .kb-dropzone{padding:11px}
   .kb-dropzone-empty{padding:36px 18px}
   .kb-stage{margin-bottom:12px}
