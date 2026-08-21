@@ -33,10 +33,10 @@ test("auto-match falls back to additional roles", () => {
   assert.equal(out.stages[0].tasks[0].executors[0].performerName, "Аня Иванова");
 });
 
-test("auto-match prefers exact primary role over additional", () => {
+test("auto-match does not bind when primary and additional role matches are both available", () => {
   const performers = [performer("b", "Боря", "Боков", "Аниматор"), performer("a", "Аня", "Иванова", "Графический дизайнер", ["Аниматор"])];
   const out = autoMatchPerformersByRole(estimate("Анимация", "Аниматор"), { performers, useStudioTemplates: true });
-  assert.equal(out.stages[0].tasks[0].executors[0].performerName, "Боря Боков");
+  assert.equal(out.stages[0].tasks[0].executors[0].type, "anonymous_unnamed");
 });
 
 test("auto-match skips inactive performers", () => {
@@ -49,10 +49,46 @@ test("auto-match requires a unique display name to avoid ambiguous bindings", ()
   assert.equal(out.stages[0].tasks[0].executors[0].type, "anonymous_unnamed");
 });
 
-test("auto-match is stable regardless of performer order", () => {
+test("auto-match does not break same-role ties by performer id", () => {
   const performers = [performer("z", "Зоя", "Зетова", "Аниматор"), performer("a", "Аня", "Аниматорова", "Аниматор")];
   const first = autoMatchPerformersByRole(estimate("Анимация", "Аниматор"), { performers, useStudioTemplates: true });
   const second = autoMatchPerformersByRole(estimate("Анимация", "Аниматор"), { performers: [...performers].reverse(), useStudioTemplates: true });
-  assert.equal(first.stages[0].tasks[0].executors[0].performerName, "Аня Аниматорова");
-  assert.equal(first.stages[0].tasks[0].executors[0].performerName, second.stages[0].tasks[0].executors[0].performerName);
+  assert.equal(first.stages[0].tasks[0].executors[0].type, "anonymous_unnamed");
+  assert.equal(second.stages[0].tasks[0].executors[0].type, "anonymous_unnamed");
+});
+
+test("task taxonomy takes priority over a free LLM role", () => {
+  const out = autoMatchPerformersByRole(estimate("AI-анимация", "AI-аниматор"), { performers: [performer("a", "Маша", "Иванова", "AI-артист")], useStudioTemplates: true });
+  assert.equal(out.stages[0].tasks[0].executors[0].performerName, "Маша Иванова");
+});
+
+test("technical tasks do not auto-bind cross-cutting performers", () => {
+  for (const taskName of ["Цветокоррекция", "Монтаж", "Моделирование"]) {
+    const out = autoMatchPerformersByRole(estimate(taskName, ""), { performers: [performer("a", "Сергей", "Иванов", "Продюсер")], useStudioTemplates: true });
+    assert.equal(out.stages[0].tasks[0].executors[0].type, "anonymous_unnamed", taskName);
+  }
+});
+
+test("specialized performer wins without using cross-cutting fallback", () => {
+  const performers = [performer("a", "Сергей", "Иванов", "Продюсер"), performer("b", "Коля", "Петров", "Колорист")];
+  const out = autoMatchPerformersByRole(estimate("Цветокоррекция", ""), { performers, useStudioTemplates: true });
+  assert.equal(out.stages[0].tasks[0].executors[0].performerName, "Коля Петров");
+});
+
+test("an ambiguous higher-priority task role prevents fallback to later roles", () => {
+  const performers = [performer("a", "Маша", "Иванова", "AI-артист"), performer("b", "Катя", "Петрова", "AI-артист"), performer("c", "Петя", "Сидоров", "Аниматор")];
+  const out = autoMatchPerformersByRole(estimate("AI-анимация", ""), { performers, useStudioTemplates: true });
+  assert.equal(out.stages[0].tasks[0].executors[0].type, "anonymous_unnamed");
+});
+
+test("a single additional-role performer can be auto-bound", () => {
+  const out = autoMatchPerformersByRole(estimate("AI-анимация", ""), { performers: [performer("a", "Олег", "Иванов", "Моушн-дизайнер", ["AI-артист"])], useStudioTemplates: true });
+  assert.equal(out.stages[0].tasks[0].executors[0].performerName, "Олег Иванов");
+});
+
+test("an unknown task may use its free LLM role only when it has one exact performer", () => {
+  const one = autoMatchPerformersByRole(estimate("Неизвестная задача", "Some Existing Studio Role"), { performers: [performer("a", "Аня", "Иванова", "Some Existing Studio Role")], useStudioTemplates: true });
+  const many = autoMatchPerformersByRole(estimate("Неизвестная задача", "Some Existing Studio Role"), { performers: [performer("a", "Аня", "Иванова", "Some Existing Studio Role"), performer("b", "Боря", "Иванов", "Some Existing Studio Role")], useStudioTemplates: true });
+  assert.equal(one.stages[0].tasks[0].executors[0].type, "performer_binding");
+  assert.equal(many.stages[0].tasks[0].executors[0].type, "anonymous_unnamed");
 });

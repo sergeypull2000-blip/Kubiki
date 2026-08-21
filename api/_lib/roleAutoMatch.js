@@ -6,13 +6,6 @@ import { matchTaskToRoles, normalizeRoleText } from "../../src/cgTaskRoleTaxonom
 
 const displayName = (performer) => [performer?.firstName, performer?.lastName].filter(Boolean).join(" ").trim();
 
-function stable(performers) {
-  return [...performers].sort((a, b) => {
-    const x = String(a.id ?? ""), y = String(b.id ?? "");
-    return x === y ? 0 : x < y ? -1 : 1;
-  });
-}
-
 function exactPrimary(role, performers) {
   const target = normalizeRoleText(role);
   return target ? performers.filter((performer) => normalizeRoleText(performer.primaryRole) === target) : [];
@@ -23,23 +16,17 @@ function exactAdditional(role, performers) {
   return target ? performers.filter((performer) => (performer.additionalRoles || []).some((item) => normalizeRoleText(item) === target)) : [];
 }
 
-function fuzzy(role, performers) {
-  const target = normalizeRoleText(role);
-  if (!target) return [];
-  const tokens = target.split(" ").filter((token) => token.length >= 3);
-  if (!tokens.length) return [];
-  return performers.filter((performer) => {
-    const roles = [performer.primaryRole, ...(performer.additionalRoles || [])].map(normalizeRoleText).filter(Boolean);
-    return roles.some((item) => tokens.some((token) => item.includes(token) || item.split(" ").some((part) => part.startsWith(token) || token.startsWith(part))));
-  });
+function candidatesForRole(role, performers) {
+  const primary = exactPrimary(role, performers);
+  const additional = exactAdditional(role, performers).filter((performer) => !primary.includes(performer));
+  return { primary, additional, all: [...primary, ...additional] };
 }
 
-function firstByPriority(roles, performers) {
+function uniqueCandidateByPriority(roles, performers) {
   for (const role of roles) {
-    for (const matcher of [exactPrimary, exactAdditional, fuzzy]) {
-      const matches = stable(matcher(role, performers));
-      if (matches.length) return matches[0];
-    }
+    const candidates = candidatesForRole(role, performers);
+    if (candidates.all.length === 1) return candidates.all[0];
+    if (candidates.all.length > 1) return null;
   }
   return null;
 }
@@ -57,11 +44,11 @@ export function autoMatchPerformersByRole(estimate, { performers = [], useStudio
   const nextKey = () => `auto-role-${++counter}`;
   for (const stage of estimate.stages || []) {
     for (const task of stage.tasks || []) {
-      const taskRoles = matchTaskToRoles(task.name);
+      const taskRoles = matchTaskToRoles(task.name, { includeCrossCutting: false });
       for (const executor of task.executors || []) {
         if (executor.type !== "anonymous_unnamed") continue;
-        const candidateRoles = executor.role ? [executor.role, ...taskRoles] : taskRoles;
-        const match = firstByPriority(candidateRoles, active);
+        const candidateRoles = taskRoles.length ? taskRoles : executor.role ? [executor.role] : [];
+        const match = uniqueCandidateByPriority(candidateRoles, active);
         if (!match || !uniqueName(match, active)) continue;
         executor.type = "performer_binding";
         executor.key = nextKey();
