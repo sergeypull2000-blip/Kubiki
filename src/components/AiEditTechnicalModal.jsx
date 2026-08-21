@@ -76,7 +76,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
     return <div ref={panelRef} className={`kb-ai-launcher-panel${closing ? " is-closing" : ""}`}>
       {feedbackVisible && <div className="kb-ai-launcher-feedback">
         {state === "loading" && <div className="kb-modal-note">Готовим предложение…</div>}
-        {error && <div className="kb-server-error">{error}{errorCode ? <> · <code>{errorCode}</code></> : null}</div>}
+        {error && <div className="kb-ai-edit-error">{error}</div>}
         {result?.kind === "clarification" && <div className="kb-ai-launcher-feedback-content"><strong>Нужно уточнение</strong><div className="kb-modal-note">{result.question}</div>
           <div className="kb-ai-launcher-choices">{result.choices?.map((choice) => <button type="button" className="kb-btn kb-btn-ghost" key={choice.id} onClick={() => request({ source: choice.source, label: choice.label })}>{choice.label}</button>)}</div>
           <div className="kb-ai-launcher-answer"><input autoFocus className="kb-input" value={clarificationAnswer} onChange={(event) => setClarificationAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && clarificationAnswer.trim()) request({ answer: clarificationAnswer.trim() }); }} placeholder="Короткий ответ на уточнение" /><button type="button" className="kb-btn kb-btn-primary" disabled={!clarificationAnswer.trim()} onClick={() => request({ answer: clarificationAnswer.trim() })}>Продолжить</button></div>
@@ -112,7 +112,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
       <div ref={panelRef} className="kb-ai-inline-panel kb-ai-inline-surface">
         {feedbackVisible && <div className="kb-ai-launcher-feedback kb-ai-inline-feedback">
           {state === "loading" && <div className="kb-modal-note">Готовим предложение…</div>}
-          {error && <div className="kb-server-error">{error}{errorCode ? <> · <code>{errorCode}</code></> : null}</div>}
+          {error && <div className="kb-ai-edit-error">{error}</div>}
           {result?.kind === "clarification" && <div className="kb-ai-launcher-feedback-content"><strong>Нужно уточнение</strong><div className="kb-modal-note">{result.question}</div>
             <div className="kb-ai-launcher-choices">{result.choices?.map((choice) => <button type="button" className="kb-btn kb-btn-ghost" key={choice.id} onClick={() => request({ source: choice.source, label: choice.label })}>{choice.label}</button>)}</div>
             <div className="kb-ai-launcher-answer"><input autoFocus className="kb-input" value={clarificationAnswer} onChange={(event) => setClarificationAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && clarificationAnswer.trim()) request({ answer: clarificationAnswer.trim() }); }} placeholder="Короткий ответ" /><button type="button" className="kb-btn kb-btn-primary" disabled={!clarificationAnswer.trim()} onClick={() => request({ answer: clarificationAnswer.trim() })}>Продолжить</button></div>
@@ -150,7 +150,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
         <div className="kb-modal-note">Контекст: <strong>{contextLabel}</strong>. Изменения появятся только после подтверждения.</div>
         <textarea autoFocus className="kb-input kb-ai-settings-text" rows={variant === "inline" ? 3 : 5} maxLength={4000} value={instruction} disabled={busy || result?.kind === "diff"} onChange={(event) => setInstruction(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape" && !busy) onClose(); if (event.key === "Enter" && !event.shiftKey && !busy && !result?.kind) { event.preventDefault(); request(); } }} placeholder="Например: добавь задачу «Ретопология» в этот этап" />
         {state === "loading" && <div className="kb-modal-note">Готовим предложение…</div>}
-        {error && <div className="kb-server-error">{error}{errorCode ? <> · <code>{errorCode}</code></> : null}</div>}
+        {error && <div className="kb-ai-edit-error">{error}</div>}
         {result?.kind === "clarification" && <div className="kb-modal-note"><strong>Нужно уточнение:</strong> {result.question}
           {result.choices?.map((choice) => <button type="button" className="kb-btn kb-btn-ghost" key={choice.id} onClick={() => request({ source: choice.source, label: choice.label })}>{choice.label}</button>)}
           <div><input className="kb-input" value={clarificationAnswer} onChange={(event) => setClarificationAnswer(event.target.value)} placeholder="Короткий ответ на уточнение" /><button type="button" className="kb-btn kb-btn-primary" disabled={!clarificationAnswer.trim()} onClick={() => request({ answer: clarificationAnswer.trim() })}>Продолжить</button></div>

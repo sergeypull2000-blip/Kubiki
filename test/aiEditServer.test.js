@@ -189,9 +189,10 @@ test("same-name Performer does not turn a short anonymous intent into library in
   assert.deepEqual(resolveExplicitPerformers("добавь Мишу", performers).performers, []);
 });
 
-test("technical modal renders only normalized error code beside generic message", () => {
+test("technical modal renders only the human-readable AI Edit error", () => {
   const source = readFileSync(new URL("../src/components/AiEditTechnicalModal.jsx", import.meta.url), "utf8");
-  assert.match(source, /errorCode[^\n]*<code>\{errorCode\}<\/code>/);
+  assert.match(source, /className="kb-ai-edit-error">\{error\}/);
+  assert.doesNotMatch(source, /<code>\{errorCode\}<\/code>/);
   assert.doesNotMatch(source, /raw model|stack trace|project_data/i);
 });
 

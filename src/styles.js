@@ -796,27 +796,27 @@ export const CSS = `
 .kb-dashboard-layout{display:flex; align-items:stretch; flex:1; min-height:0; overflow:hidden;
   width:100%; max-width:none; margin:0}
 .kb-dash-sidebar{width:var(--dash-sidebar-w); flex-shrink:0; background:var(--surface);
-  border-right:1px solid var(--line);
+  border-right:1px solid var(--line-strong);
   display:flex; flex-direction:column; gap:0; overflow:hidden; min-height:0}
-.kb-dash-sidebar-scroll{flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:18px 14px 24px}
+.kb-dash-sidebar-scroll{flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:14px 12px 22px; display:flex; flex-direction:column; gap:2px}
 .kb-dash-sidebar-foot{flex:0 0 auto; position:relative; margin-top:0; padding:14px; border-top:1px solid var(--line)}
 .kb-dash-resizer{position:relative; flex:0 0 9px; cursor:col-resize; touch-action:none; background:transparent}
 .kb-dash-resizer::after{content:""; position:absolute; top:0; bottom:0; left:4px; width:1px; background:transparent; transition:background .12s}
 .kb-dash-resizer:hover::after,.kb-is-panel-resizing .kb-dash-resizer::after{background:var(--line-strong)}
 
 /* метка секции навигации */
-.kb-dash-nav-section-label{font-size:var(--fs-xs); font-weight:var(--fw-medium);
-  letter-spacing:0; color:var(--text-faint);
-  padding:2px 6px 7px; user-select:none}
+.kb-dash-nav-section-label{font-size:12px; font-weight:var(--fw-semibold);
+  letter-spacing:normal; color:var(--text);
+  padding:8px 6px; user-select:none}
 
 /* пункт навигации */
 .kb-dash-nav-item{display:flex; align-items:center; gap:8px; width:100%;
-  border:none; border-radius:4px; padding:6px 7px; background:transparent;
-  font:inherit; font-size:var(--fs-sm); font-weight:var(--fw-regular);
-  color:var(--text); cursor:pointer; transition:background .12s ease; text-align:left}
-.kb-dash-nav-item:hover{background:var(--surface-sunken)}
+  border:none; border-radius:6px; padding:7px 8px; background:transparent;
+  font:inherit; font-size:var(--fs-sm); font-weight:var(--fw-medium);
+  color:var(--text-muted); cursor:pointer; transition:background .12s ease; text-align:left}
+.kb-dash-nav-item:hover{background:var(--accent-soft)}
 .kb-dash-nav-item > span{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.kb-dash-nav-item-active{background:var(--surface-sunken); color:var(--text); box-shadow:inset 1px 0 0 var(--line-strong)}
+.kb-dash-nav-item-active{background:var(--accent-soft); color:var(--text-muted); box-shadow:none}
 
 /* разделитель секций */
 .kb-dash-nav-divider{height:1px; background:var(--line); margin:12px 4px 16px}
@@ -824,18 +824,18 @@ export const CSS = `
 /* строка папки категории с действиями */
 .kb-dash-nav-folder-row{display:flex; align-items:center; gap:2px;
   min-height:30px; border-radius:4px; transition:background .12s ease}
-.kb-dash-nav-folder-row:hover{background:var(--surface-sunken)}
+.kb-dash-nav-folder-row:hover{background:var(--accent-soft)}
 .kb-dash-nav-folder-row:hover .kb-dash-nav-folder-actions{opacity:1}
 .kb-dash-nav-folder-row > .kb-dash-nav-item{flex:1; min-width:0}
 .kb-dash-nav-folder-actions{display:flex; align-items:center; gap:1px;
   opacity:0; padding-right:2px; transition:opacity .12s ease}
-.kb-dash-nav-folder-row.kb-dash-nav-item-active{background:var(--surface-sunken); box-shadow:inset 1px 0 0 var(--line-strong)}
+.kb-dash-nav-folder-row.kb-dash-nav-item-active{background:var(--accent-soft); box-shadow:none}
 .kb-tree-toggle{display:flex; align-items:center; justify-content:center; flex:none; width:22px; align-self:stretch; padding:0 0 0 4px; border:0; background:transparent; color:var(--text-faint); cursor:pointer}
 .kb-tree-toggle:hover{color:var(--text-muted)}
 .kb-tree-folder-btn{padding-left:2px}
 .kb-template-tree-files{display:flex; flex-direction:column; margin-left:23px; padding:1px 0 5px 7px; gap:0; border-left:1px solid var(--line)}
 .kb-template-tree-file{display:flex; align-items:center; gap:6px; width:100%; min-width:0; padding:5px 6px; border:0; border-radius:5px; background:transparent; color:var(--text-muted); font:inherit; font-size:12px; text-align:left; cursor:grab}
-.kb-template-tree-file:hover{background:var(--surface-sunken); color:var(--text)}
+.kb-template-tree-file:hover{background:var(--accent-soft); color:var(--text)}
 .kb-template-tree-file span{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .kb-template-tree-file svg{flex:none}
 .kb-template-tree-actions{display:flex; flex:none; gap:1px; opacity:0; transition:opacity .12s ease}
@@ -983,5 +983,6 @@ export const CSS = `
 .kb-usage-figures{display:flex;align-items:baseline;gap:8px;margin-top:10px}.kb-usage-figures strong{font-size:20px;letter-spacing:-.02em}.kb-usage-figures span{color:var(--text-muted);font-size:var(--fs-sm)}
 .kb-usage-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}.kb-usage-stats div{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border:1px solid var(--line);border-radius:8px}.kb-usage-stats span{color:var(--text-muted);font-size:var(--fs-xs)}.kb-usage-stats strong{font-size:var(--fs-md)}
 .kb-usage-limit-note{margin-top:12px;padding:8px 10px;border-radius:7px;background:#fff0ef;color:#9f2e25;font-size:var(--fs-xs)}
+.kb-ai-edit-error{margin-top:10px;color:#2563eb;font-size:13px}
 
 `;
