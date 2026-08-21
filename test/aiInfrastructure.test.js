@@ -63,6 +63,8 @@ test("orchestrator performs analysis then final generation on normal path", asyn
   assert.equal(calls.length, 2);
   assert.match(calls[0].messages[0].content, /анализируешь бриф/);
   assert.equal(calls[0].options.maxTokens, 900);
+  assert.equal(calls[1].options.maxTokens, 8000);
+  assert.equal(calls[1].options.stage, "generation");
   assert.equal(calls[1].messages[0].content, "ORIGINAL");
   assert.match(calls[1].messages[1].content, /<brief>/);
   assert.match(calls[1].messages[1].content, /<current_user_instruction>/);

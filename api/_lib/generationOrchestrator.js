@@ -5,6 +5,7 @@ import { autoMatchPerformersByRole } from "./roleAutoMatch.js";
 const EMPTY_SHORTLIST = { projectTemplates: [], stageTemplates: [], taskTemplates: [], performers: [], historicalProjects: [] };
 export const TARGET_BUDGET_WARNING_DEVIATION = 0.2;
 export const MIN_BUDGET_CORRECTION_REMAINING_MS = 60_000;
+export const GENERATED_ESTIMATE_MAX_TOKENS = 8000;
 const emit = (logger, requestId, event, success, diagnostic = undefined) => { try { logger({ event, requestId, success, ...(diagnostic ? { diagnostic } : {}) }); } catch {} };
 
 /* Диагностика для generation_compile: имена, подставленные детерминированным
@@ -80,14 +81,14 @@ export async function runEstimateGeneration({ brief, instruction = "", systemPro
     { role: "user", content: finalUserPrompt(brief, instruction, personalization, shortlist, profile.budget, profile.pricingMode, profile.performerRateMode, allowPerformerBindings) },
   ];
   let raw;
-  try { raw = await requestModel(messages, { maxTokens: 4000, stage: "generation", requestId }); emit(diagnosticLogger, requestId, "generation_model_response", true); }
+  try { raw = await requestModel(messages, { maxTokens: GENERATED_ESTIMATE_MAX_TOKENS, stage: "generation", requestId }); emit(diagnosticLogger, requestId, "generation_model_response", true); }
   catch (error) { emit(diagnosticLogger, requestId, "generation_model_response", false, { reason: "model_request_failed" }); throw error; }
   const rawDiagnostic = diagnoseGeneratedStructure(raw); emit(diagnosticLogger, requestId, "generation_parse_raw", rawDiagnostic.ok, rawDiagnostic);
   let estimate = parseEstimate(raw);
   if (!estimate) {
     let repairedRaw;
     try {
-      repairedRaw = await requestModel([...messages, { role: "assistant", content: raw || "{}" }, { role: "user", content: ESTIMATE_REPAIR_PROMPT }], { maxTokens: 4000, retries: 0, stage: "repair", requestId });
+      repairedRaw = await requestModel([...messages, { role: "assistant", content: raw || "{}" }, { role: "user", content: ESTIMATE_REPAIR_PROMPT }], { maxTokens: GENERATED_ESTIMATE_MAX_TOKENS, retries: 0, stage: "repair", requestId });
       emit(diagnosticLogger, requestId, "generation_repair_response", true);
     } catch (error) { emit(diagnosticLogger, requestId, "generation_repair_response", false, { reason: "model_request_failed" }); throw error; }
     const repairDiagnostic = diagnoseGeneratedStructure(repairedRaw); emit(diagnosticLogger, requestId, "generation_parse_repair", repairDiagnostic.ok, repairDiagnostic);
