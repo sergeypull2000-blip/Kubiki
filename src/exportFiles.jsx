@@ -52,12 +52,13 @@ async function imageDataUrl(url) {
   return await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob); });
 }
 
-function addExcelLogo(workbook, sheet, dataUrl) {
+function addExcelLogo(workbook, sheet, dataUrl, position = "left") {
   const match = /^data:image\/(png|jpe?g|gif);base64,/i.exec(dataUrl || "");
   if (!match) return false;
   const extension = match[1].toLowerCase() === "jpg" ? "jpeg" : match[1].toLowerCase();
   const imageId = workbook.addImage({ base64: dataUrl, extension });
-  sheet.addImage(imageId, { tl: { col: 1, row: 0 }, ext: { width: 96, height: 42 } });
+  const col = { left: 0, center: 1.5, right: 3 }[position] ?? 0;
+  sheet.addImage(imageId, { tl: { col, row: 0 }, ext: { width: 96, height: 42 } });
   sheet.getRow(1).height = 34;
   return true;
 }
@@ -97,13 +98,13 @@ function pdfDefinition(model) {
   return {
     pageSize: "A4", pageMargins: [40, 40, 40, 40], defaultStyle: { font: "Roboto", fontSize: 10, color: colors.text },
     content: [
-      ...(model.brand?.logoUrl ? [{ image: model.brand.logoUrl, fit: [110, 52], alignment: "right", margin: [0, 0, 0, 8] }] : []),
+      ...(model.brand?.logoUrl ? [{ image: model.brand.logoUrl, fit: [110, 52], alignment: model.brand.logoPosition || "left", margin: [0, 0, 0, 8] }] : []),
       ...(model.brand?.companyName ? [{ text: model.brand.companyName, bold: true, fontSize: 12, margin: [0, 0, 0, 3] }] : []),
       ...([model.brand?.phone, model.brand?.email, model.brand?.website].some(Boolean) ? [{ text: [model.brand.phone, model.brand.email, model.brand.website].filter(Boolean).join(" · "), color: colors.muted, fontSize: 9, margin: [0, 0, 0, 10] }] : []),
       { text: model.proposal.title, bold: true, fontSize: model.typography.title.size, margin: [0, 0, 0, model.sheetName ? 3 : 14] },
       ...(model.sheetName ? [{ text: model.sheetName, fontSize: model.typography.stage.size, color: colors.muted, margin: [0, 0, 0, 14] }] : []),
       { table: { widths: model.display.showComments ? ["auto", "*", "30%", "auto"] : ["auto", "*", "auto"], body }, layout: { hLineWidth: () => 0.5, vLineWidth: () => 0, hLineColor: () => colors.line } },
-      { table: { widths: ["*", "auto"], body: [[{ text: "Итого", bold: true, fontSize: model.typography.total.size, fillColor: model.brand.colors.total, color: model.brand.colors.totalText, margin: [6, 6, 6, 6] }, { text: money(model.summary.total), bold: true, fontSize: model.typography.total.size, alignment: "right", fillColor: model.brand.colors.total, color: model.brand.colors.totalText, margin: [6, 6, 6, 6] }]] }, layout: "noBorders", margin: [0, 14, 0, 0] },
+      { table: { widths: ["*", "auto"], body: [[{ text: model.totalLabel, bold: true, fontSize: model.typography.total.size, fillColor: model.brand.colors.total, color: model.brand.colors.totalText, margin: [6, 6, 6, 6] }, { text: money(model.summary.total), bold: true, fontSize: model.typography.total.size, alignment: "right", fillColor: model.brand.colors.total, color: model.brand.colors.totalText, margin: [6, 6, 6, 6] }]] }, layout: "noBorders", margin: [0, 14, 0, 0] },
       ...model.serviceBlocks.map((text) => ({ text, fontSize: model.typography.service.size, color: colors.muted, margin: [0, 8, 0, 0] })),
     ],
   };
@@ -335,7 +336,7 @@ function PresentationControls({ draft, onChange, project, dispatch, userId, logo
   const patch = (section, value) => onChange({ ...draft, [section]: { ...draft[section], ...value } });
   const uploadLogo = async (file) => { if (!file || !userId) return; setLogoBusy(true); setLogoError(""); try { const previousPath = draft.branding.logoAssetPath; const path = await exportProfileRepository.uploadLogo(userId, file); await exportProfileRepository.upsertProfile(userId, { ...draft.branding, logoAssetPath: path }); const url = await exportProfileRepository.createLogoUrl(path, 3600); patch("branding", { logoAssetPath: path }); onLogoUrl(url); if (previousPath && previousPath !== path) await exportProfileRepository.removeLogo(previousPath); } catch (error) { setLogoError(error.message); } finally { setLogoBusy(false); } };
   const removeLogo = async () => { if (!userId) return; setLogoBusy(true); setLogoError(""); try { await exportProfileRepository.removeLogo(draft.branding.logoAssetPath); await exportProfileRepository.upsertProfile(userId, { ...draft.branding, logoAssetPath: "" }); patch("branding", { logoAssetPath: "" }); onLogoUrl(""); } catch (error) { setLogoError(error.message); } finally { setLogoBusy(false); } };
-  const persistProfile = () => { if (userId) exportProfileRepository.upsertProfile(userId, draft.branding).catch((error) => setLogoError(error.message)); };
+  const persistProfile = (branding = draft.branding) => { if (userId) exportProfileRepository.upsertProfile(userId, branding).catch((error) => setLogoError(error.message)); };
   const typeSize = (key, label) => (
     <label className="kb-export-field">
       <span>{label}</span>
@@ -357,6 +358,14 @@ function PresentationControls({ draft, onChange, project, dispatch, userId, logo
         <label className="kb-export-field-stacked">
           <span>Компания</span>
           <input className="kb-input" value={draft.branding.companyName} onChange={(event) => patch("branding", { companyName: event.target.value })} onBlur={persistProfile} />
+        </label>
+        <label className="kb-export-field">
+          <span>Позиция логотипа</span>
+          <select className="kb-select" value={draft.branding.logoPosition} onChange={(event) => { const branding = { ...draft.branding, logoPosition: event.target.value }; onChange({ ...draft, branding }); persistProfile(branding); }}>
+            <option value="left">Слева</option>
+            <option value="center">По центру</option>
+            <option value="right">Справа</option>
+          </select>
         </label>
         <div className="kb-export-colors">
           <span aria-hidden="true" />
@@ -424,7 +433,7 @@ function ExportPreview({ model }) {
     <div className="kb-export-preview">
       {model.warnings.map((warning) => <div className="kb-export-warning" key={warning}>{warning}</div>)}
       <div style={{ fontFamily: model.brand.fontFamily, color: model.brand.colors.text }}>
-      <div className="kb-export-preview-brand">{model.brand.logoUrl && <img src={model.brand.logoUrl} alt="Логотип компании" />}{model.brand.companyName && <strong>{model.brand.companyName}</strong>}</div>
+      <div className="kb-export-preview-brand" style={{ justifyContent: model.brand.logoPosition || "left" }}>{model.brand.logoUrl && <img src={model.brand.logoUrl} alt="Логотип компании" />}{model.brand.companyName && <strong>{model.brand.companyName}</strong>}</div>
       <h2 style={{ fontSize: model.typography.title.size }}>{model.proposal.title}</h2>
       <div className="kb-export-preview-row kb-export-preview-head"><span>№</span><span>Наименование</span>{model.display.showComments && <span className="kb-export-preview-comment">Комментарии</span>}<span>Сумма</span></div>
       {model.stages.map((stage) => <div className="kb-export-preview-stage" key={stage.id}>
@@ -435,7 +444,7 @@ function ExportPreview({ model }) {
         </div>)}
       </div>)}
       {model.separateRows.map((row, index) => <div className="kb-export-preview-separate" key={`${row.type}-${index}`}><span>{row.label}</span><span>{money(row.amount)}</span></div>)}
-      <div className="kb-export-preview-total" style={{ background: model.brand.colors.total, color: model.brand.colors.totalText, fontSize: model.typography.total.size }}><b>Итого</b><b>{money(model.summary.total)}</b></div>
+      <div className="kb-export-preview-total" style={{ background: model.brand.colors.total, color: model.brand.colors.totalText, fontSize: model.typography.total.size }}><b>{model.totalLabel}</b><b>{money(model.summary.total)}</b></div>
       {model.serviceBlocks.map((text) => <small style={{ fontSize: model.typography.service.size }} key={text}>{text}</small>)}
       </div>
     </div>
@@ -455,7 +464,7 @@ function ExportModal({ project, format, dispatch, userId, onClose, onExport }) {
   const [presetName, setPresetName] = useState("");
   const [presetError, setPresetError] = useState("");
   useEffect(() => { if (!userId) return; let active = true; exportPresetsRepository.list(userId).then((items) => { if (active) setPresets(items); }).catch((error) => { if (active) setPresetError(error.message); }); return () => { active = false; }; }, [userId]);
-  useEffect(() => { if (!userId) return; let active = true; exportProfileRepository.loadProfile(userId).then(async ({ profile }) => { if (!active || !profile) return; const branding = { companyName: profile.company_name, logoAssetPath: profile.logo_asset_path || "", phone: profile.phone, email: profile.email, website: profile.website, colors: profile.default_colors, fontFamily: profile.default_font }; setDraft((current) => ({ ...current, branding: { ...current.branding, ...branding } })); if (profile.logo_asset_path) setLogoUrl(await exportProfileRepository.createLogoUrl(profile.logo_asset_path, 3600)); }).catch((error) => { if (active) setPresetError(error.message); }); return () => { active = false; }; }, [userId]);
+  useEffect(() => { if (!userId) return; let active = true; exportProfileRepository.loadProfile(userId).then(async ({ profile }) => { if (!active || !profile) return; const branding = { companyName: profile.company_name, logoAssetPath: profile.logo_asset_path || "", logoPosition: profile.logo_position || "left", phone: profile.phone, email: profile.email, website: profile.website, colors: profile.default_colors, fontFamily: profile.default_font }; setDraft((current) => ({ ...current, branding: { ...current.branding, ...branding } })); if (profile.logo_asset_path) setLogoUrl(await exportProfileRepository.createLogoUrl(profile.logo_asset_path, 3600)); }).catch((error) => { if (active) setPresetError(error.message); }); return () => { active = false; }; }, [userId]);
   const save = (next) => { setDraft(next); dispatch((current) => ({ ...current, exportSettings: normalizeExportSettings(next) })); };
   const applyPreset = (settings) => save({ ...draft, ...settings, branding: { ...draft.branding, ...settings.branding }, typography: { ...draft.typography, ...settings.typography }, content: { ...draft.content, ...settings.content, visibleExecutorIds: draft.content.visibleExecutorIds, rowColorOverrides: draft.content.rowColorOverrides }, service: { ...draft.service, ...settings.service } });
   const savePreset = async () => { if (!userId || !presetName.trim()) return; try { const item = presetId ? await exportPresetsRepository.update(userId, presetId, presetName, draft) : await exportPresetsRepository.create(userId, presetName, draft); setPresets((items) => [item, ...items.filter((value) => value.id !== item.id)]); setPresetId(item.id); setPresetError(""); } catch (error) { setPresetError(error.message); } };

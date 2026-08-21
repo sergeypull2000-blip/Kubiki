@@ -225,7 +225,7 @@ test("all separate markup, tax and VAT rows are formulas with canonical coordina
   };
   const stageCells = model.stages.map((stage) => byLabel(stage.name));
   const derivedCells = model.separateRows.map((row) => byLabel(row.label));
-  const totalCell = byLabel("ИТОГО");
+  const totalCell = byLabel(model.totalLabel);
   const taskLabels = new Set(model.stages.flatMap((stage) => stage.rows).map((row) => row.name));
   const taskCells = [];
   sheet.eachRow((row) => { if (taskLabels.has(row.getCell(2).value)) taskCells.push(row.getCell(sheet.columnCount)); });

@@ -2,6 +2,7 @@ import {
   projectMarkupAmount,
   projectSum,
   projectTaxBreakdown,
+  projectVatPct,
   projectTotalWithTax,
   taskPrice,
   taskSum,
@@ -194,6 +195,7 @@ export function buildExportEstimateModel(project, rawSettings = project?.exportS
     ...buildSeparateTaxRows(separateTaxComponents),
   ];
   const totalMinor = toMinor(projectTotalWithTax(project));
+  const vatPct = projectVatPct(project);
   const model = {
     version: 2, settings, projectId: project?.id, projectName: project?.name || "Проект", sheetName: activeSheet(project)?.name || "",
     proposal: { title: project?.exportMetadata?.title || project?.name || "Коммерческое предложение", startDate: project?.exportMetadata?.startDate || "", endDate: project?.exportMetadata?.endDate || "", durationDays: project?.exportMetadata?.durationDays || "", createdAt: project?.exportMetadata?.createdAt || new Date().toISOString().slice(0, 10), validUntil: project?.exportMetadata?.validUntil || "", producer: project?.exportMetadata?.producer || "", artDirector: project?.exportMetadata?.artDirector || "", supervisor: project?.exportMetadata?.supervisor || "" },
@@ -207,6 +209,7 @@ export function buildExportEstimateModel(project, rawSettings = project?.exportS
     ].filter(Boolean),
     stages, separateRows, warnings,
     display: { markupPresentation: settings.markupPresentation, taxPresentation: settings.taxPresentation, showComments: settings.content.showComments, performerVisibility: settings.content.performerVisibility },
+    totalLabel: vatPct > 0 ? `ИТОГО С НДС ${vatPct}%` : "ИТОГО",
     summary: {
       baseSubtotal: fromMinor(baseTotalMinor), baseSubtotalMinor: baseTotalMinor,
       markupAmount: fromMinor(markupMinor), markupAmountMinor: markupMinor,

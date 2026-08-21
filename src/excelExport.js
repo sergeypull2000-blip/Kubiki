@@ -41,7 +41,7 @@ export function buildExcelWorkbook(model, addLogo) {
   const amountColumn = showComments ? 4 : 3;
   sheet.columns = [{ width: 8 }, { width: 48 }, ...(showComments ? [{ width: 40 }] : []), { width: 20 }];
   const brand = model.brand || {};
-  if (brand.logoUrl && addLogo) addLogo(workbook, sheet, brand.logoUrl);
+  if (brand.logoUrl && addLogo) addLogo(workbook, sheet, brand.logoUrl, brand.logoPosition);
   if (brand.companyName) { sheet.addRow([brand.companyName]); sheet.mergeCells(1, 1, 1, sheet.columnCount); }
   const contacts = [brand.phone, brand.email, brand.website].filter(Boolean).join(" · ");
   if (contacts) { sheet.addRow([contacts]); sheet.mergeCells(sheet.rowCount, 1, sheet.rowCount, sheet.columnCount); }
@@ -97,7 +97,7 @@ export function buildExcelWorkbook(model, addLogo) {
     derivedBaseAmount += row.amount;
   }
   sheet.addRow([]);
-  const totalRow = sheet.addRow([null, "ИТОГО", ...(showComments ? [""] : []), { formula: `SUM(${totalReferences.join(",")})` }]);
+  const totalRow = sheet.addRow([null, model.totalLabel || "ИТОГО", ...(showComments ? [""] : []), { formula: `SUM(${totalReferences.join(",")})` }]);
   totalRow.font = { bold: true, size: model.typography?.total?.size || 13, name: brand.fontFamily || "Roboto", color: { argb: excelColor(model.settings?.branding?.colors?.totalText, "#1A2230") } }; totalRow.getCell(amountColumn).numFmt = RUB_FMT;
   paintRow(totalRow, amountColumn, excelColor(model.settings?.branding?.colors?.total, "#E8EEF7"));
   for (const serviceText of model.serviceBlocks || []) { const row = sheet.addRow([serviceText]); sheet.mergeCells(row.number, 1, row.number, sheet.columnCount); row.font = { size: model.typography?.service?.size || 8, name: brand.fontFamily || "Roboto" }; }

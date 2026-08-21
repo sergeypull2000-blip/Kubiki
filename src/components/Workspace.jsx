@@ -23,6 +23,7 @@ import { sortQuickAccessItems } from "../quickAccess.js";
 import { createTaskTemplate, createStageTemplate, cloneTaskTemplate, cloneStageTemplate } from "../templates.js";
 import { AccountControl } from "./AccountControl.jsx";
 import { BetaBadge } from "./BetaBadge.jsx";
+import { shouldHandleExecutorCopy } from "../keyboardShortcuts.js";
 
 const WORKSPACE_FIXED_WIDTH = 1250;
 const WORKSPACE_SIDEBAR_GAP = 24;
@@ -204,10 +205,8 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
       const mod = e.ctrlKey || e.metaKey;
       if (!mod) return;
       const code = e.code; // физическая клавиша, не зависит от раскладки (RU/EN)
-      const inField = e.target.closest && e.target.closest("input, textarea, select, [contenteditable]");
-
       if (code === "KeyC") {
-        if (inField) return; // не мешаем копировать текст в поле
+        if (!shouldHandleExecutorCopy(e, window.getSelection?.())) return;
         if (!activeExecutorId) return;
         const found = findExecutor(project, activeExecutorId);
         if (found) { clipboardRef.current = found.executor; e.preventDefault(); }
