@@ -6,6 +6,7 @@ import { createHttpLogoRepository } from "../src/backend/logoRepository.js";
 import { createSessionGateway } from "../src/backend/betterAuthClient.js";
 import { cleanupLegacySupabaseOwnerMarkers, CLEANUP_KEY, LEGACY_OWNER_KEYS } from "../src/backend/legacyCleanup.js";
 import { describeAuthError } from "../src/authErrors.js";
+import fs from "node:fs";
 
 const jsonResponse = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -126,6 +127,12 @@ test("auth errors are always localized and never expose Better Auth details", ()
   assert.equal(describeAuthError({ message: "password too short" }), "Пароль не соответствует требованиям");
   assert.equal(describeAuthError({ message: "too many requests" }), "Слишком много попыток. Попробуйте немного позже.");
   assert.equal(describeAuthError({ message: "SQLSTATE 42P01 secret internal code" }), "Что-то пошло не так. Попробуйте ещё раз.");
+});
+
+test("successful signup switches directly to verify-email view", () => {
+  const source = fs.readFileSync(new URL("../src/AuthScreen.jsx", import.meta.url), "utf8");
+  assert.match(source, /setVerificationEmail\(email\)\s*\n\s*setView\('verify-email'\)/);
+  assert.doesNotMatch(source, /setNotice\('Аккаунт создан[\s\S]*?setView\('signin'\)/);
 });
 
 test("legacy Supabase owner markers are neutralized exactly once without touching local data", () => {

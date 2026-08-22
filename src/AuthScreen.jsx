@@ -38,7 +38,10 @@ export function AuthScreen({ mode = 'signin', resetToken, onPasswordUpdated, onA
       const { error } = await auth.signIn(email, password)
       if (error) {
         const message = describeAuthError(error)
-        if (message === 'EMAIL_NOT_VERIFIED') setVerificationEmail(email)
+        if (message === 'EMAIL_NOT_VERIFIED') {
+          setVerificationEmail(email)
+          setView('verify-email')
+        }
         else setError(message)
       }
       else await onAuthenticated?.()
@@ -64,6 +67,7 @@ export function AuthScreen({ mode = 'signin', resetToken, onPasswordUpdated, onA
       const { error } = await auth.signUp(email, password, email)
       if (error) { setError(describeAuthError(error)); return }
       setVerificationEmail(email)
+      setView('verify-email')
     } finally {
       setSubmitting(false)
     }
@@ -114,7 +118,7 @@ export function AuthScreen({ mode = 'signin', resetToken, onPasswordUpdated, onA
     }
   }
 
-  if (verificationEmail) return (
+  if (view === 'verify-email' && verificationEmail) return (
     <div className="kb-auth-screen"><div className="kb-auth-card">
       <div className="kb-auth-heading">Подтвердите email</div>
       <div className="kb-auth-subtext">Мы отправили письмо со ссылкой для подтверждения на {verificationEmail}.</div>
@@ -122,7 +126,7 @@ export function AuthScreen({ mode = 'signin', resetToken, onPasswordUpdated, onA
       {notice && <div className="kb-auth-notice" role="status">{notice}</div>}
       {error && <div className="kb-auth-error" role="alert">{error}</div>}
       <button className="kb-auth-submit" type="button" onClick={resendVerification} disabled={submitting}>Отправить письмо повторно</button>
-      <button type="button" className="kb-auth-link" onClick={() => { setVerificationEmail(''); switchView('signup') }}>Указали неверный email? Вернуться назад</button>
+      <button type="button" className="kb-auth-link" onClick={() => { switchView('signup') }}>Указали неверный email? Вернуться назад</button>
     </div></div>
   )
 
