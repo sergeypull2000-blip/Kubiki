@@ -38,3 +38,11 @@ test("branded export exposes the three logo position choices and uses the canoni
   assert.match(source, /model\.brand\.logoPosition/);
   assert.match(source, /model\.totalLabel/);
 });
+
+test("final PDF export creates a download with the expected filename", async () => {
+  const source = await readFile(new URL("../src/exportFiles.jsx", import.meta.url), "utf8");
+  assert.match(source, /const blob = await pdf\.getBlob\(\)/);
+  assert.match(source, /download\(blob, filename\)/);
+  assert.match(source, /anchor\.download = filename/);
+  assert.match(source, /URL\.revokeObjectURL\(url\)/);
+});

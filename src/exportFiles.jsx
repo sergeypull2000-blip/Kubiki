@@ -30,10 +30,18 @@ function brandColors() {
   return { text: read("--text", "#1A2230"), muted: read("--text-muted", "#64748B"), line: read("--line", "#E3E9F0"), sunken: read("--surface-sunken", "#F7FAFC") };
 }
 
-function downloadBlob(blob, filename) {
+export function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
-  anchor.href = url; anchor.download = filename; document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
+  try {
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+  } finally {
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
 }
 
 async function imageDataUrl(url) {
@@ -108,9 +116,11 @@ function pdfDefinition(model) {
   };
 }
 
-async function exportPdf(model, filename) {
+export async function exportPdf(model, filename, { pdfMakeImpl = pdfMake, download = downloadBlob } = {}) {
   const logoUrl = await imageDataUrl(model.brand.logoUrl);
-  pdfMake.createPdf(pdfDefinition({ ...model, brand: { ...model.brand, logoUrl } })).download(filename);
+  const pdf = pdfMakeImpl.createPdf(pdfDefinition({ ...model, brand: { ...model.brand, logoUrl } }));
+  const blob = await pdf.getBlob();
+  download(blob, filename);
   return model.summary.total;
 }
 
@@ -461,6 +471,7 @@ function ExportModal({ project, format, dispatch, userId, onClose, onExport }) {
   const [presetId, setPresetId] = useState("");
   const [presetName, setPresetName] = useState("");
   const [presetError, setPresetError] = useState("");
+  const [exportError, setExportError] = useState("");
   useEffect(() => { if (!userId) return; let active = true; exportPresetsRepository.list(userId).then((items) => { if (active) setPresets(items); }).catch((error) => { if (active) setPresetError(error.message); }); return () => { active = false; }; }, [userId]);
   useEffect(() => { if (!userId) return; let active = true; exportProfileRepository.loadProfile(userId).then(async ({ profile }) => { if (!active || !profile) return; const branding = { companyName: profile.company_name, logoAssetPath: profile.logo_asset_path || "", logoPosition: profile.logo_position || "left", phone: profile.phone, email: profile.email, website: profile.website, colors: profile.default_colors, fontFamily: profile.default_font }; setDraft((current) => ({ ...current, branding: { ...current.branding, ...branding } })); if (profile.logo_asset_path) setLogoUrl(await exportProfileRepository.createLogoUrl(profile.logo_asset_path, 3600)); }).catch((error) => { if (active) setPresetError(error.message); }); return () => { active = false; }; }, [userId]);
   const save = (next) => { setDraft(next); dispatch((current) => ({ ...current, exportSettings: normalizeExportSettings(next) })); };
@@ -470,9 +481,12 @@ function ExportModal({ project, format, dispatch, userId, onClose, onExport }) {
   const duplicatePreset = async () => { const selected = presets.find((item) => item.id === presetId); if (!userId || !selected) return; try { const copy = await exportPresetsRepository.duplicate(userId, selected); setPresets((items) => [copy, ...items]); setPresetId(copy.id); setPresetName(copy.name); } catch (error) { setPresetError(error.message); } };
   const run = async () => {
     setBusy(true);
+    setExportError("");
     try {
       await onExport(model);
       if (userId) productEventsRepository.track(userId, "export_completed", {}, { format }).catch(() => {});
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Не удалось сформировать PDF-файл.");
     } finally { setBusy(false); }
   };
   return <div className="kb-modal-backdrop" onMouseDown={onClose}>
@@ -504,6 +518,7 @@ function ExportModal({ project, format, dispatch, userId, onClose, onExport }) {
           <PresentationControls draft={draft} onChange={save} project={project} dispatch={dispatch} userId={userId} logoUrl={logoUrl} onLogoUrl={setLogoUrl} />
         </div>
       </div>
+      {exportError && <div className="kb-export-error" role="alert">{exportError}</div>}
       <div className="kb-export-modal-actions"><button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button><button type="button" className="kb-export-go2" disabled={busy || !model.validation.valid} onClick={run}>{busy ? <><Loader2 className="kb-spin" size={13} /> Экспорт…</> : "Экспорт"}</button></div>
     </div>
   </div>;
