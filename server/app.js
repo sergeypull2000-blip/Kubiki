@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { fileURLToPath } from "node:url";
 import generateEstimate from "../api/generate-estimate.js";
 import editEstimate from "../api/edit-estimate.js";
 import parseExcel from "../api/parse-excel.js";
@@ -6,6 +7,9 @@ import extractDoc from "../api/extract-doc.js";
 import usage from "../api/usage.js";
 import { matchOwnerApiRoute, handleOwnerApiRoute } from "./ownerApiRoutes.js";
 import { MAX_LOGO_REQUEST_BYTES, handleLogoRoute, matchLogoRoute } from "./logoRoutes.js";
+import { serveFrontend } from "./frontend.js";
+
+const DEFAULT_FRONTEND_DIST_PATH = fileURLToPath(new URL("../dist", import.meta.url));
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -65,9 +69,10 @@ async function isDatabaseReady(pool, timeoutMillis) {
   }
 }
 
-export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMillis, authHandler, authenticate, serverData, ownerApi, objectStorage, logger = console }) {
+export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMillis, authHandler, authenticate, serverData, ownerApi, objectStorage, frontendDistPath = DEFAULT_FRONTEND_DIST_PATH, logger = console }) {
   return createServer((request, response) => {
     const contentLength = Number(request.headers["content-length"] || 0);
+    const rawPathname = request.url.split("?", 1)[0];
     const pathname = new URL(request.url, "http://localhost").pathname;
     const logoRoute = matchLogoRoute(request.method, pathname);
     const requestLimit = logoRoute === "POST" ? MAX_LOGO_REQUEST_BYTES : bodyLimitBytes;
@@ -77,12 +82,12 @@ export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMill
       return;
     }
 
-    if (request.method === "GET" && request.url === "/healthz") {
+    if (request.method === "GET" && pathname === "/healthz") {
       sendJson(response, 200, { status: "ok" });
       return;
     }
 
-    if (request.method === "GET" && request.url === "/readyz") {
+    if (request.method === "GET" && pathname === "/readyz") {
       void isDatabaseReady(pool, readinessTimeoutMillis).then((ready) => {
         sendJson(response, ready ? 200 : 503, {
           status: ready ? "ready" : "unavailable",
@@ -153,6 +158,17 @@ export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMill
       return;
     }
 
-    sendJson(response, 404, { error: "not_found" });
+    if (path === "/api" || path.startsWith("/api/")) {
+      sendJson(response, 404, { error: "not_found" });
+      return;
+    }
+
+    void serveFrontend(request, response, { distPath: frontendDistPath, rawPathname, pathname }).then((served) => {
+      if (!served && !response.writableEnded) sendJson(response, 404, { error: "not_found" });
+    }).catch((error) => {
+      logger.error("Frontend request failed", { name: error?.name || "Error" });
+      if (!response.headersSent) sendJson(response, 500, { error: "internal_error" });
+      else if (!response.writableEnded) response.destroy(error);
+    });
   });
 }
