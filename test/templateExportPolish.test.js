@@ -31,3 +31,12 @@ test("same branding zone is represented as one non-overlapping zone group", () =
   assert.match(files, /companyPosition === "center"/);
   assert.match(files, /companyPosition === "right"/);
 });
+
+test("branding editor uses labels, compact remove and inline position controls", () => {
+  const files = source("../src/exportFiles.jsx");
+  assert.match(files, /kb-export-brand-label/);
+  assert.match(files, /Название компании/);
+  assert.match(files, /kb-brand-remove/);
+  assert.match(files, /PositionSegmented/);
+  assert.doesNotMatch(files, /KubikiDropdown value=\{draft\.branding\.(logoPosition|companyPosition)/);
+});

@@ -352,6 +352,10 @@ function KubikiDropdown({ value, onChange, options, label }) {
 }
 const POSITION_OPTIONS = [{ value: "left", label: "Слева" }, { value: "center", label: "По центру" }, { value: "right", label: "Справа" }];
 
+function PositionSegmented({ value, onChange, label }) {
+  return <div className="kb-position-segmented" role="group" aria-label={label}>{POSITION_OPTIONS.map((option) => <button type="button" key={option.value} className={option.value === value ? "is-active" : ""} aria-pressed={option.value === value} onClick={() => onChange(option.value)}>{option.label}</button>)}</div>;
+}
+
 function PresentationControls({ draft, onChange, project, dispatch, userId, logoUrl, onLogoUrl }) {
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoError, setLogoError] = useState("");
@@ -369,23 +373,23 @@ function PresentationControls({ draft, onChange, project, dispatch, userId, logo
     <details className="kb-export-section" open>
       <summary>Брендинг</summary>
       <div className="kb-export-section-body">
-        <div className="kb-export-logo-row">
+        <div className="kb-export-brand-row"><span className="kb-export-brand-label">Логотип</span><div className="kb-export-logo-row">
           <label className="kb-export-logo" title="Загрузить логотип">
             {logoUrl ? <img src={logoUrl} alt="Логотип компании" className="kb-brand-logo-img" /> : <><UploadCloud size={18} /><span>Логотип</span></>}
             <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={!userId || logoBusy} onChange={(event) => uploadLogo(event.target.files?.[0])} />
           </label>
-          {logoUrl && <button type="button" className="kb-btn kb-btn-ghost" disabled={logoBusy} onClick={removeLogo}>Удалить</button>}
-        </div>
+          {logoUrl && <button type="button" className="kb-brand-remove" disabled={logoBusy} onClick={removeLogo} title="Удалить логотип" aria-label="Удалить логотип">×</button>}
+        </div><PositionSegmented value={draft.branding.logoPosition} label="Позиция логотипа" onChange={(value) => { const branding = { ...draft.branding, logoPosition: value }; onChange({ ...draft, branding }); persistProfile(branding); }} /></div>
         {logoError && <small className="kb-export-control-error">{logoError}</small>}
-        <label className="kb-export-field-stacked">
-          <span>Компания</span>
+        <div className="kb-export-brand-row"><label className="kb-export-field-stacked">
+          <span>Название компании</span>
           <input className="kb-input" value={draft.branding.companyName} onChange={(event) => patch("branding", { companyName: event.target.value })} onBlur={() => persistProfile()} />
-        </label>
-        <label className="kb-export-field">
+        </label><PositionSegmented value={draft.branding.companyPosition} label="Позиция названия компании" onChange={(value) => { const branding = { ...draft.branding, companyPosition: value }; onChange({ ...draft, branding }); persistProfile(branding); }} /></div>
+        <label className="kb-export-field" hidden>
           <span>Позиция логотипа</span>
-          <KubikiDropdown value={draft.branding.logoPosition} options={POSITION_OPTIONS} label="Позиция логотипа" onChange={(value) => { const branding = { ...draft.branding, logoPosition: value }; onChange({ ...draft, branding }); persistProfile(branding); }} />
+          <PositionSegmented value={draft.branding.logoPosition} label="Позиция логотипа" onChange={(value) => { const branding = { ...draft.branding, logoPosition: value }; onChange({ ...draft, branding }); persistProfile(branding); }} />
         </label>
-        <label className="kb-export-field"><span>Позиция названия компании</span><KubikiDropdown value={draft.branding.companyPosition} options={POSITION_OPTIONS} label="Позиция названия компании" onChange={(value) => { const branding = { ...draft.branding, companyPosition: value }; onChange({ ...draft, branding }); persistProfile(branding); }} /></label>
+        <label className="kb-export-field" hidden><span>Позиция названия компании</span><PositionSegmented value={draft.branding.companyPosition} label="Позиция названия компании" onChange={(value) => { const branding = { ...draft.branding, companyPosition: value }; onChange({ ...draft, branding }); persistProfile(branding); }} /></label>
         <div className="kb-export-colors">
           <span aria-hidden="true" />
           <span className="kb-export-color-head kb-export-color-head-bg">Фон</span>
