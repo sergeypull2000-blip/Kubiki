@@ -1,26 +1,23 @@
 import { attachGenerationMetadata, decodeGenerationMetadataHeader } from "./generationMetadata.js";
 import { requestErrorMessage } from "./requestErrors.js";
+import { kubikiApiUrl, notifyKubikiUnauthorized } from "../backend/apiTransport.js";
 
 export const GENERATION_REQUEST_TIMEOUT_MS = 270_000;
 
 export async function generateEstimateRequest(payload, { fetchImpl = fetch, getAccessToken } = {}) {
-  const resolveToken = getAccessToken || (async () => {
-    const { supabase } = await import("../supabaseClient.js");
-    const { data, error } = await supabase.auth.getSession();
-    if (error || !data?.session?.access_token) throw new Error("Сессия недействительна. Войдите снова.");
-    return data.session.access_token;
-  });
-  const token = await resolveToken();
+  const token = getAccessToken ? await getAccessToken() : null;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), GENERATION_REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetchImpl("/api/generate-estimate", {
+    const response = await fetchImpl(kubikiApiUrl("/api/generate-estimate"), {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      credentials: "include",
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
     if (!response.ok) {
+      notifyKubikiUnauthorized(response.status);
       const body = await response.json().catch(() => ({}));
       const error = new Error(requestErrorMessage(response.status, body.error));
       if (typeof body.code === "string") error.code = body.code;

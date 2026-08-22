@@ -1,4 +1,5 @@
 import { requestErrorMessage } from "./requestErrors.js";
+import { kubikiApiUrl, notifyKubikiUnauthorized } from "../backend/apiTransport.js";
 
 export const MAX_WORD_FILE_BYTES = 3 * 1024 * 1024;
 export const MAX_WORD_TEXT_CHARS = 40_000;
@@ -53,18 +54,15 @@ function arrayBufferToBase64(buffer) {
 
 export async function extractLegacyDocText(file, { fetchImpl = fetch, getAccessToken } = {}) {
   validateWordFile(file, "doc");
-  const resolveToken = getAccessToken || (async () => {
-    const { supabase } = await import("../supabaseClient.js");
-    const { data, error } = await supabase.auth.getSession();
-    if (error || !data?.session?.access_token) throw new Error("Сессия недействительна. Войдите снова.");
-    return data.session.access_token;
-  });
-  const response = await fetchImpl("/api/extract-doc", {
+  const token = getAccessToken ? await getAccessToken() : null;
+  const response = await fetchImpl(kubikiApiUrl("/api/extract-doc"), {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${await resolveToken()}` },
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    credentials: "include",
     body: JSON.stringify({ filename: file.name, contentBase64: arrayBufferToBase64(await file.arrayBuffer()) }),
   });
   const body = await response.json().catch(() => ({}));
+  notifyKubikiUnauthorized(response.status);
   if (!response.ok) throw new Error(requestErrorMessage(response.status, body.error, "Не удалось прочитать старый .doc. Пересохраните документ в .docx и попробуйте снова."));
   return normalizeExtractedWordText(body.text);
 }

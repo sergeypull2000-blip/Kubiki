@@ -59,15 +59,3 @@ export function createTemplateLibraryRepository(client, { retryDelayMs = 1500 } 
     async deleteTemplateLibrary(userId) { const result = await client.from("template_libraries").delete().eq("user_id", userId).select("user_id"); const deleted = data(result, "Не удалось удалить библиотеку шаблонов"); if (!deleted?.some((item) => item.user_id === userId)) throw new Error("Библиотека шаблонов не найдена"); return true; },
   };
 }
-const withDefaultRepository = async (operation, ...args) => {
-  const { supabase } = await import("../supabaseClient.js");
-  return createTemplateLibraryRepository(supabase)[operation](...args);
-};
-
-export const templateLibraryRepository = {
-  loadTemplateLibrary: (...args) => withDefaultRepository("loadTemplateLibrary", ...args),
-  createTemplateLibrary: (...args) => withDefaultRepository("createTemplateLibrary", ...args),
-  updateTemplateLibrary: (...args) => withDefaultRepository("updateTemplateLibrary", ...args),
-  upsertTemplateLibrary: (...args) => withDefaultRepository("upsertTemplateLibrary", ...args),
-  deleteTemplateLibrary: (...args) => withDefaultRepository("deleteTemplateLibrary", ...args),
-};

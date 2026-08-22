@@ -25,14 +25,3 @@ export function createUserFlagsRepository(client) {
     },
   };
 }
-
-const withDefaultRepository = async (operation, ...args) => {
-  const { supabase } = await import("../supabaseClient.js");
-  return createUserFlagsRepository(supabase)[operation](...args);
-};
-
-export const userFlagsRepository = {
-  getFlags: (...args) => withDefaultRepository("getFlags", ...args),
-  ensureFlags: (...args) => withDefaultRepository("ensureFlags", ...args),
-  markBetaWelcomeSeen: (...args) => withDefaultRepository("markBetaWelcomeSeen", ...args),
-};

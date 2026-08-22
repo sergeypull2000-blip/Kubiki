@@ -7,7 +7,8 @@ test("parse-excel endpoint authenticates before touching request body", () => {
   assert.ok(source.indexOf("authenticateRequest(req)") < source.indexOf("req.body"));
 });
 
-test("import client sends bearer token to parse-excel", () => {
+test("import client uses the cookie-session API transport", () => {
   const source = readFileSync(new URL("../src/importExcel.jsx", import.meta.url), "utf8");
-  assert.match(source, /Authorization: `Bearer \$\{token\}`/);
+  assert.match(source, /kubikiApiRequest\("\/api\/parse-excel"/);
+  assert.doesNotMatch(source, /Authorization|supabaseClient|access_token/);
 });

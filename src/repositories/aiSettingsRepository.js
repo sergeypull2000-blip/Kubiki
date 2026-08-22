@@ -18,13 +18,3 @@ export function createAiSettingsRepository(client) {
     },
   };
 }
-
-const withDefaultRepository = async (operation, ...args) => {
-  const { supabase } = await import("../supabaseClient.js");
-  return createAiSettingsRepository(supabase)[operation](...args);
-};
-
-export const aiSettingsRepository = {
-  loadAiSettings: (...args) => withDefaultRepository("loadAiSettings", ...args),
-  upsertAiSettings: (...args) => withDefaultRepository("upsertAiSettings", ...args),
-};

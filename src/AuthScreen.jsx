@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { supabase } from './supabaseClient.js'
-import { userFlagsRepository } from './repositories/userFlagsRepository.js'
-import { productEventsRepository } from './repositories/productEventsRepository.js'
+import { createSessionGateway } from './backend/betterAuthClient.js'
 
-/* Минимальная длина пароля (совпадает с требованием Supabase). */
-const MIN_PASSWORD_LENGTH = 6
+const auth = createSessionGateway()
 
-/* Превращаем англоязычные ошибки Supabase Auth в понятные пользователю. */
+/* Минимальная длина пароля Better Auth. */
+const MIN_PASSWORD_LENGTH = 8
+
+/* Превращаем англоязычные ошибки Better Auth в понятные пользователю. */
 function describeAuthError(error) {
   const code = error?.code
   const msg = error?.message || ''
@@ -29,9 +29,9 @@ function describeAuthError(error) {
    Экран аутентификации: вход / регистрация / сброс пароля / установка нового
    пароля после перехода по recovery-ссылке. Управляет собственным loading/
    error/notice состоянием; факт успешного входа/регистрации обрабатывает
-   родитель через onAuthStateChange (session становится непустой).
+   родитель через обновление Better Auth session.
 */
-export function AuthScreen({ mode = 'signin', onPasswordUpdated }) {
+export function AuthScreen({ mode = 'signin', resetToken, onPasswordUpdated, onAuthenticated }) {
   const [view, setView] = useState(mode === 'reset' ? 'reset' : 'signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -51,9 +51,9 @@ export function AuthScreen({ mode = 'signin', onPasswordUpdated }) {
     setError('')
     setSubmitting(true)
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      const { error } = await auth.signIn(email, password)
       if (error) setError(describeAuthError(error))
-      // успех → onAuthStateChange выставит session, App отрисует Kubiki
+      else await onAuthenticated?.()
     } finally {
       setSubmitting(false)
     }
@@ -73,24 +73,10 @@ export function AuthScreen({ mode = 'signin', onPasswordUpdated }) {
     }
     setSubmitting(true)
     try {
-      // emailRedirectTo важен на случай, если позже включим email confirmation:
-      // сейчас (confirmation off) signUp сразу возвращает сессию.
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: window.location.origin },
-      })
+      const { error } = await auth.signUp(email, password, email)
       if (error) { setError(describeAuthError(error)); return }
-      if (data?.session) {
-        // confirmation выключен → сессия уже есть, App сам переключит на Kubiki.
-        // Свежая регистрация: создаём строку user_flags (beta_welcome_seen=false),
-        // чтобы при первом входе показать одноразовое приветствие Beta.
-        userFlagsRepository.ensureFlags(data.session.user.id).catch(() => {})
-        productEventsRepository.track(data.session.user.id, 'signup').catch(() => {})
-      } else {
-        setNotice('Аккаунт создан. Проверьте почту и подтвердите email, затем войдите.')
-        setView('signin')
-      }
+      setNotice('Аккаунт создан. Проверьте почту и подтвердите email, затем войдите.')
+      setView('signin')
     } finally {
       setSubmitting(false)
     }
@@ -102,9 +88,7 @@ export function AuthScreen({ mode = 'signin', onPasswordUpdated }) {
     setNotice('')
     setSubmitting(true)
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin,
-      })
+      const { error } = await auth.requestPasswordReset(email, `${window.location.origin}/reset-password`)
       if (error) setError(describeAuthError(error))
       else setNotice('Ссылка для сброса пароля отправлена на почту.')
     } finally {
@@ -125,7 +109,7 @@ export function AuthScreen({ mode = 'signin', onPasswordUpdated }) {
     }
     setSubmitting(true)
     try {
-      const { error } = await supabase.auth.updateUser({ password })
+      const { error } = await auth.resetPassword(password, resetToken)
       if (error) setError(describeAuthError(error))
       else if (onPasswordUpdated) onPasswordUpdated()
     } finally {

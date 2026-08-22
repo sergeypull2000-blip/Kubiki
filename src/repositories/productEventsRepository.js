@@ -30,13 +30,3 @@ export function createProductEventsRepository(client) {
     },
   };
 }
-
-const withDefaultRepository = async (operation, ...args) => {
-  const { supabase } = await import("../supabaseClient.js");
-  return createProductEventsRepository(supabase)[operation](...args);
-};
-
-export const productEventsRepository = {
-  track: (...args) => withDefaultRepository("track", ...args),
-  trackSessionActive: (...args) => withDefaultRepository("trackSessionActive", ...args),
-};

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
+import { usageRepository } from "../backend/runtimeRepositories.js";
 
 /* «Использование ИИ» — только оставшийся процент лимита и дата сброса.
    Технические метрики (доллары, токены, число вызовов) намеренно скрыты. */
@@ -12,12 +13,7 @@ export function UsageLimitsModal({ onClose }) {
     let cancelled = false;
     (async () => {
       try {
-        const { supabase } = await import("../supabaseClient.js");
-        const { data, error } = await supabase.auth.getSession();
-        if (error || !data?.session?.access_token) throw new Error("Сессия недействительна. Войдите снова.");
-        const response = await fetch("/api/usage", { headers: { Authorization: `Bearer ${data.session.access_token}` } });
-        const body = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(body?.error || "Не удалось загрузить использование ИИ");
+        const body = await usageRepository.load();
         const unlimited = Boolean(body?.unlimited);
         const remainingPct = unlimited ? 100 : Number(body?.remainingPct);
         if (!Number.isFinite(remainingPct)) throw new Error("Не удалось загрузить использование ИИ");

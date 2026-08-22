@@ -1,4 +1,3 @@
-import { supabase } from "../supabaseClient.js";
 import { buildProjectRow, deserializeProjectFromServer, normalizeServerProjects } from "../projectServer.js";
 
 function assertResult(result, operation) {
@@ -6,7 +5,8 @@ function assertResult(result, operation) {
   return result.data;
 }
 
-export function createProjectRepository(client = supabase) {
+export function createProjectRepository(client) {
+  if (!client) throw new Error("Supabase client is required");
   const repository = {
     async listProjects(userId) {
       const result = await client.from("projects").select("id,user_id,client_id,name,data_version,project_data")
@@ -41,5 +41,3 @@ export function createProjectRepository(client = supabase) {
   };
   return repository;
 }
-
-export const projectRepository = createProjectRepository();

@@ -9,10 +9,8 @@ import { activeSheet } from "./sheets.js";
 import { useOutsideClose } from "./hooks.js";
 import { clamp, hexToRgb, hsvToHex, normalizeHex, rgbToHsv } from "./color.js";
 import { buildExcelRows, buildExcelWorkbook } from "./excelExport.js";
-import { exportPresetsRepository } from "./repositories/exportPresetsRepository.js";
+import { exportPresetsRepository, exportProfileRepository, productEventsRepository } from "./backend/runtimeRepositories.js";
 import { normalizePresentationSettings } from "./exportSettings.js";
-import { exportProfileRepository } from "./repositories/exportProfileRepository.js";
-import { productEventsRepository } from "./repositories/productEventsRepository.js";
 
 export { buildExcelRows, buildExcelWorkbook } from "./excelExport.js";
 
@@ -334,8 +332,8 @@ function PresentationControls({ draft, onChange, project, dispatch, userId, logo
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoError, setLogoError] = useState("");
   const patch = (section, value) => onChange({ ...draft, [section]: { ...draft[section], ...value } });
-  const uploadLogo = async (file) => { if (!file || !userId) return; setLogoBusy(true); setLogoError(""); try { const previousPath = draft.branding.logoAssetPath; const path = await exportProfileRepository.uploadLogo(userId, file); await exportProfileRepository.upsertProfile(userId, { ...draft.branding, logoAssetPath: path }); const url = await exportProfileRepository.createLogoUrl(path, 3600); patch("branding", { logoAssetPath: path }); onLogoUrl(url); if (previousPath && previousPath !== path) await exportProfileRepository.removeLogo(previousPath); } catch (error) { setLogoError(error.message); } finally { setLogoBusy(false); } };
-  const removeLogo = async () => { if (!userId) return; setLogoBusy(true); setLogoError(""); try { await exportProfileRepository.removeLogo(draft.branding.logoAssetPath); await exportProfileRepository.upsertProfile(userId, { ...draft.branding, logoAssetPath: "" }); patch("branding", { logoAssetPath: "" }); onLogoUrl(""); } catch (error) { setLogoError(error.message); } finally { setLogoBusy(false); } };
+  const uploadLogo = async (file) => { if (!file || !userId) return; setLogoBusy(true); setLogoError(""); try { const path = await exportProfileRepository.uploadLogo(userId, file); const url = await exportProfileRepository.createLogoUrl(path); patch("branding", { logoAssetPath: path }); onLogoUrl(url); } catch (error) { setLogoError(error.message); } finally { setLogoBusy(false); } };
+  const removeLogo = async () => { if (!userId) return; setLogoBusy(true); setLogoError(""); try { await exportProfileRepository.removeLogo(); patch("branding", { logoAssetPath: "" }); onLogoUrl(""); } catch (error) { setLogoError(error.message); } finally { setLogoBusy(false); } };
   const persistProfile = (branding = draft.branding) => { if (userId) exportProfileRepository.upsertProfile(userId, branding).catch((error) => setLogoError(error.message)); };
   const typeSize = (key, label) => (
     <label className="kb-export-field">

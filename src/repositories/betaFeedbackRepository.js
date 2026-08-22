@@ -20,12 +20,3 @@ export function createBetaFeedbackRepository(client) {
     },
   };
 }
-
-const withDefaultRepository = async (operation, ...args) => {
-  const { supabase } = await import("../supabaseClient.js");
-  return createBetaFeedbackRepository(supabase)[operation](...args);
-};
-
-export const betaFeedbackRepository = {
-  insert: (...args) => withDefaultRepository("insert", ...args),
-};

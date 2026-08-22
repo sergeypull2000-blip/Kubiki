@@ -17,6 +17,14 @@ function requestUrl(baseUrl, path) {
   return `${baseUrl}${path}`;
 }
 
+export function kubikiApiUrl(path, baseUrl = resolveKubikiApiBaseUrl()) {
+  return requestUrl(resolveKubikiApiBaseUrl(baseUrl), path);
+}
+
+export function notifyKubikiUnauthorized(status) {
+  if (status === 401) globalThis.dispatchEvent?.(new Event("kubiki:unauthorized"));
+}
+
 async function responseBody(response) {
   if (response.status === 204) return null;
   const text = await response.text();
@@ -47,6 +55,7 @@ export function createKubikiApiTransport({ baseUrl = resolveKubikiApiBaseUrl(), 
     const bodyValue = await responseBody(response);
     if (!response.ok) {
       const code = typeof bodyValue?.error === "string" ? bodyValue.error : "request_failed";
+      notifyKubikiUnauthorized(response.status);
       throw new KubikiApiError(response.status, code, bodyValue);
     }
     return bodyValue;

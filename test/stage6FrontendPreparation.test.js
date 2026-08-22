@@ -4,6 +4,7 @@ import { createKubikiApiTransport, KubikiApiError, resolveKubikiApiBaseUrl } fro
 import { createHttpRepositories } from "../src/backend/httpRepositories.js";
 import { createHttpLogoRepository } from "../src/backend/logoRepository.js";
 import { createSessionGateway } from "../src/backend/betterAuthClient.js";
+import { cleanupLegacySupabaseOwnerMarkers, CLEANUP_KEY, LEGACY_OWNER_KEYS } from "../src/backend/legacyCleanup.js";
 
 const jsonResponse = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -113,4 +114,14 @@ test("session gateway delegates to the prepared Better Auth client without activ
   await session.requestPasswordReset("a@example.com", "https://app.example/reset");
   await session.resetPassword("new-secret", "token");
   assert.deepEqual(calls.map(([name]) => name), ["signIn", "signUp", "signOut", "requestPasswordReset", "resetPassword"]);
+});
+
+test("legacy Supabase owner markers are neutralized exactly once without touching local data", () => {
+  const values = new Map([["kubiki_state_v1", "project-data"], ...LEGACY_OWNER_KEYS.map((key) => [key, "old-supabase-uuid"])]);
+  const storage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: (key) => values.delete(key) };
+  assert.equal(cleanupLegacySupabaseOwnerMarkers(storage), true);
+  assert.equal(values.get("kubiki_state_v1"), "project-data");
+  assert.equal(values.get(CLEANUP_KEY), "1");
+  assert.equal(LEGACY_OWNER_KEYS.every((key) => !values.has(key)), true);
+  assert.equal(cleanupLegacySupabaseOwnerMarkers(storage), false);
 });

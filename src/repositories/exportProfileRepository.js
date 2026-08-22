@@ -26,6 +26,3 @@ export function createExportProfileRepository(client) {
     async createLogoUrl(path, expiresIn = 3600) { return resultData(await client.storage.from("export-logos").createSignedUrl(path, expiresIn), "Не удалось открыть логотип").signedUrl; },
   };
 }
-
-const withDefaultRepository = async (operation, ...args) => { const { supabase } = await import("../supabaseClient.js"); return createExportProfileRepository(supabase)[operation](...args); };
-export const exportProfileRepository = { loadProfile: (...args) => withDefaultRepository("loadProfile", ...args), upsertProfile: (...args) => withDefaultRepository("upsertProfile", ...args), uploadLogo: (...args) => withDefaultRepository("uploadLogo", ...args), removeLogo: (...args) => withDefaultRepository("removeLogo", ...args), createLogoUrl: (...args) => withDefaultRepository("createLogoUrl", ...args) };

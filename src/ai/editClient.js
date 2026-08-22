@@ -1,6 +1,7 @@
 import { parseAiEditResponse } from "./editSchema.js";
 import { sheetsOf } from "../sheets.js";
 import { aiEditErrorMessage, requestErrorMessage } from "./requestErrors.js";
+import { kubikiApiUrl, notifyKubikiUnauthorized } from "../backend/apiTransport.js";
 
 export const AI_EDIT_REQUEST_TIMEOUT_MS = 270_000;
 
@@ -21,19 +22,13 @@ export function createAiEditRequest({ projectId, baseRevision, scope, instructio
 }
 
 export async function requestAiEdit(payload, { fetchImpl = fetch, getAccessToken, signal } = {}) {
-  const resolveToken = getAccessToken || (async () => {
-    const { supabase } = await import("../supabaseClient.js");
-    const { data, error } = await supabase.auth.getSession();
-    if (error || !data?.session?.access_token) throw new Error("Сессия недействительна. Войдите снова.");
-    return data.session.access_token;
-  });
-  const token = await resolveToken(), timeoutController = new AbortController();
+  const token = getAccessToken ? await getAccessToken() : null, timeoutController = new AbortController();
   const abort = () => timeoutController.abort(signal?.reason);
   if (signal?.aborted) abort(); else signal?.addEventListener("abort", abort, { once: true });
   const timer = setTimeout(() => timeoutController.abort(), AI_EDIT_REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetchImpl("/api/edit-estimate", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(payload), signal: timeoutController.signal });
-    if (!response.ok) { const error = await response.json().catch(() => ({})); const code = error.code || (response.status === 409 ? "stale_revision" : "request_failed"); const result = new Error(aiEditErrorMessage(code, error.error, requestErrorMessage(response.status))); result.code = code; if (typeof error.requestId === "string") result.requestId = error.requestId; throw result; }
+    const response = await fetchImpl(kubikiApiUrl("/api/edit-estimate"), { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, credentials: "include", body: JSON.stringify(payload), signal: timeoutController.signal });
+    if (!response.ok) { notifyKubikiUnauthorized(response.status); const error = await response.json().catch(() => ({})); const code = error.code || (response.status === 409 ? "stale_revision" : "request_failed"); const result = new Error(aiEditErrorMessage(code, error.error, requestErrorMessage(response.status))); result.code = code; if (typeof error.requestId === "string") result.requestId = error.requestId; throw result; }
     const value = await response.json().catch(() => null), parsed = parseAiEditResponse(value, payload);
     if (!parsed) throw new Error("Сервер вернул некорректный AI-diff.");
     return parsed;

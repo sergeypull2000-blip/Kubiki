@@ -12,6 +12,3 @@ export function createExportPresetsRepository(client) {
     async duplicate(userId, preset) { return this.create(userId, `${preset.name} — копия`, preset.settings); },
   };
 }
-
-const withDefaultRepository = async (operation, ...args) => { const { supabase } = await import("../supabaseClient.js"); return createExportPresetsRepository(supabase)[operation](...args); };
-export const exportPresetsRepository = { list: (...args) => withDefaultRepository("list", ...args), create: (...args) => withDefaultRepository("create", ...args), update: (...args) => withDefaultRepository("update", ...args), remove: (...args) => withDefaultRepository("remove", ...args), duplicate: (...args) => withDefaultRepository("duplicate", ...args) };

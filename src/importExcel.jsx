@@ -12,6 +12,7 @@ import { useOutsideClose } from "./hooks.js";
 import { generateEstimateRequest } from "./ai/generationClient.js";
 import { extractWordBrief } from "./ai/wordBrief.js";
 import { stagesFromGeneratedEstimate } from "./ai/estimateInsertion.js";
+import { kubikiApiRequest } from "./backend/apiTransport.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
@@ -99,19 +100,7 @@ const serializePdfRows = (rows) => rows.map((line, i) => `R${i + 1} | ${line}`).
    (лист Excel или страницы PDF) на этот момент уже сведён к одному и тому же
    строково-табличному виду — дальше пайплайн общий. */
 async function llmParseText(sheetText, filename, instruction = "") {
-  const { supabase } = await import("./supabaseClient.js");
-  const { data } = await supabase.auth.getSession();
-  const token = data?.session?.access_token;
-  if (!token) throw new Error("Сессия недействительна. Войдите снова.");
-  const r = await fetch("/api/parse-excel", {
-    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ sheet: sheetText, filename, instruction }),
-  });
-  if (!r.ok) {
-    const err = await r.json().catch(() => ({}));
-    throw new Error(err.error || `Ошибка DeepSeek API (${r.status}). Попробуйте ещё раз.`);
-  }
-  const j = await r.json();
+  const j = await kubikiApiRequest("/api/parse-excel", { method: "POST", json: { sheet: sheetText, filename, instruction } });
   const hasEstimateTasks = j && Array.isArray(j.stages) && j.stages.some((stage) => Array.isArray(stage?.tasks) && stage.tasks.length > 0);
   if (!hasEstimateTasks) throw new Error("Файл не является сметой.");
   return j;

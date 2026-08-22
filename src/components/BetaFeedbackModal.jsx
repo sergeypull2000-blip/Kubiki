@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { X } from "lucide-react";
-import { betaFeedbackRepository } from "../repositories/betaFeedbackRepository.js";
+import { betaFeedbackRepository } from "../backend/runtimeRepositories.js";
 
 /* Компактное окно бета-фидбэка: textarea + Отмена/Отправить + success-состояние.
    Запись идёт в beta_feedback (RLS: только INSERT собственного фидбэка). */
