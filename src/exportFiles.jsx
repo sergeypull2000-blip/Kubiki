@@ -346,10 +346,6 @@ function DateCubePicker({ value, disabled, onChange }) {
   );
 }
 
-function KubikiDropdown({ value, onChange, options, label }) {
-  const [open, setOpen] = useState(false);
-  return <div className="kb-dropdown"><button type="button" className="kb-dropdown-trigger" aria-label={label} onClick={() => setOpen((state) => !state)}>{options.find((option) => option.value === value)?.label}<ChevronDown size={13} /></button>{open && <div className="kb-dropdown-menu">{options.map((option) => <button type="button" key={option.value} className={option.value === value ? "is-active" : ""} onClick={() => { onChange(option.value); setOpen(false); }}>{option.label}</button>)}</div>}</div>;
-}
 const POSITION_OPTIONS = [{ value: "left", label: "Слева" }, { value: "center", label: "По центру" }, { value: "right", label: "Справа" }];
 
 function PositionSegmented({ value, onChange, label }) {
@@ -381,15 +377,7 @@ function PresentationControls({ draft, onChange, project, dispatch, userId, logo
           {logoUrl && <button type="button" className="kb-brand-remove" disabled={logoBusy} onClick={removeLogo} title="Удалить логотип" aria-label="Удалить логотип">×</button>}
         </div><PositionSegmented value={draft.branding.logoPosition} label="Позиция логотипа" onChange={(value) => { const branding = { ...draft.branding, logoPosition: value }; onChange({ ...draft, branding }); persistProfile(branding); }} /></div>
         {logoError && <small className="kb-export-control-error">{logoError}</small>}
-        <div className="kb-export-brand-row"><label className="kb-export-field-stacked">
-          <span>Название компании</span>
-          <input className="kb-input" value={draft.branding.companyName} onChange={(event) => patch("branding", { companyName: event.target.value })} onBlur={() => persistProfile()} />
-        </label><PositionSegmented value={draft.branding.companyPosition} label="Позиция названия компании" onChange={(value) => { const branding = { ...draft.branding, companyPosition: value }; onChange({ ...draft, branding }); persistProfile(branding); }} /></div>
-        <label className="kb-export-field" hidden>
-          <span>Позиция логотипа</span>
-          <PositionSegmented value={draft.branding.logoPosition} label="Позиция логотипа" onChange={(value) => { const branding = { ...draft.branding, logoPosition: value }; onChange({ ...draft, branding }); persistProfile(branding); }} />
-        </label>
-        <label className="kb-export-field" hidden><span>Позиция названия компании</span><PositionSegmented value={draft.branding.companyPosition} label="Позиция названия компании" onChange={(value) => { const branding = { ...draft.branding, companyPosition: value }; onChange({ ...draft, branding }); persistProfile(branding); }} /></label>
+        <div className="kb-export-brand-row"><span className="kb-export-brand-label">Название компании</span><input className="kb-input kb-export-company-input" value={draft.branding.companyName} onChange={(event) => patch("branding", { companyName: event.target.value })} onBlur={() => persistProfile()} /><PositionSegmented value={draft.branding.companyPosition} label="Позиция названия компании" onChange={(value) => { const branding = { ...draft.branding, companyPosition: value }; onChange({ ...draft, branding }); persistProfile(branding); }} /></div>
         <div className="kb-export-colors">
           <span aria-hidden="true" />
           <span className="kb-export-color-head kb-export-color-head-bg">Фон</span>
