@@ -11,6 +11,7 @@ import { clamp, hexToRgb, hsvToHex, normalizeHex, rgbToHsv } from "./color.js";
 import { buildExcelRows, buildExcelWorkbook } from "./excelExport.js";
 import { exportPresetsRepository, exportProfileRepository, productEventsRepository } from "./backend/runtimeRepositories.js";
 import { normalizePresentationSettings } from "./exportSettings.js";
+import { fetchFreshLogoDataUrl } from "./exportLogo.js";
 
 export { buildExcelRows, buildExcelWorkbook } from "./excelExport.js";
 
@@ -121,8 +122,10 @@ function pdfDefinition(model) {
   };
 }
 
-export async function exportPdf(model, filename, { pdfMakeImpl = pdfMake, download = downloadBlob } = {}) {
-  const logoUrl = await imageDataUrl(model.brand.logoUrl);
+export async function exportPdf(model, filename, { pdfMakeImpl = pdfMake, download = downloadBlob, logoRepository = exportProfileRepository, fetchImpl = fetch } = {}) {
+  const logoUrl = model.brand.logoAssetPath
+    ? await fetchFreshLogoDataUrl(model.brand.logoAssetPath, { logoRepository, fetchImpl })
+    : "";
   const pdf = pdfMakeImpl.createPdf(pdfDefinition({ ...model, brand: { ...model.brand, logoUrl } }));
   const blob = await pdf.getBlob();
   download(blob, filename);
