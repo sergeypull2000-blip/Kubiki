@@ -22,6 +22,7 @@ export function UsageLimitsModal({ onClose }) {
           unlimited,
           remainingPct: Math.max(0, Math.min(100, Math.round(remainingPct))),
           resetsAt: body?.resetsAt || null,
+          cycleActive: Boolean(body?.cycleActive),
           overLimit: unlimited ? false : Boolean(body?.overLimit),
         });
         setState("ready");
@@ -55,6 +56,7 @@ export function UsageLimitsModal({ onClose }) {
               <div className="kb-usage-figures">
                 <strong>{summary.remainingPct}% осталось</strong>
                 {resetLabel && <span>Сброс лимита: {resetLabel}</span>}
+                {!summary.cycleActive && <span>Период начнётся после первого успешного ИИ-запроса</span>}
               </div>
               {summary.overLimit && <div className="kb-usage-limit-note">Лимит исчерпан — новые ИИ-запросы временно недоступны до сброса.</div>}
             </>

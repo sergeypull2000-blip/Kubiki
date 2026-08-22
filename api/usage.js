@@ -1,12 +1,6 @@
 import { authenticateRequest } from "./_lib/auth.js";
 import { isPricingConfigured } from "./_lib/aiPricing.js";
-import { monthStartUtc, loadEffectiveLimit } from "./_lib/aiUsage.js";
-
-/* Начало следующего месяца в UTC — дата сброса месячного лимита. */
-function nextMonthStartUtc() {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString();
-}
+import { usageCycleBounds, loadEffectiveLimit } from "./_lib/aiUsage.js";
 
 /* ============================================================
    Vercel serverless: GET /api/usage
@@ -27,18 +21,28 @@ export default async function handler(req, res) {
 
   const limit = await loadEffectiveLimit(auth.client, auth.user.id);
 
+  let cycle;
   let spentUsd;
-  if (typeof auth.client.loadMonthlySpent === "function") {
-    spentUsd = await auth.client.loadMonthlySpent(auth.user.id, monthStartUtc());
+  if (typeof auth.client.loadUsageCycle === "function") {
+    const summary = await auth.client.loadUsageCycle(auth.user.id);
+    cycle = summary.cycle;
+    spentUsd = summary.spentUsd;
   } else {
-  const result = await auth.client.from("ai_usage_events")
-    .select("cost_usd")
-    .eq("user_id", auth.user.id)
-    .gte("created_at", monthStartUtc());
-  if (result.error) return res.status(500).json({ error: "Не удалось загрузить использование ИИ" });
+    const anchorResult = await auth.client.from("ai_usage_limits").select("cycle_anchor_at").eq("user_id", auth.user.id).maybeSingle();
+    if (anchorResult.error) return res.status(500).json({ error: "Не удалось загрузить использование ИИ" });
+    cycle = usageCycleBounds(anchorResult.data?.cycle_anchor_at);
+    if (!cycle) spentUsd = 0;
+    else {
+      const result = await auth.client.from("ai_usage_events")
+        .select("cost_usd")
+        .eq("user_id", auth.user.id)
+        .gte("created_at", cycle.startsAt)
+        .lt("created_at", cycle.resetsAt);
+      if (result.error) return res.status(500).json({ error: "Не удалось загрузить использование ИИ" });
 
-  const rows = result.data || [];
-  spentUsd = rows.reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
+      const rows = result.data || [];
+      spentUsd = rows.reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
+    }
   }
 
   if (limit.unlimited) {
@@ -47,7 +51,8 @@ export default async function handler(req, res) {
       limitUsd: null,
       spentUsd,
       remainingPct: 100,
-      resetsAt: nextMonthStartUtc(),
+      cycleActive: Boolean(cycle),
+      resetsAt: cycle?.resetsAt ?? null,
       overLimit: false,
       pricingConfigured: isPricingConfigured(),
     });
@@ -59,7 +64,8 @@ export default async function handler(req, res) {
     limitUsd,
     spentUsd,
     remainingPct: Math.max(0, Math.min(100, Math.round((1 - spentUsd / limitUsd) * 100))),
-    resetsAt: nextMonthStartUtc(),
+    cycleActive: Boolean(cycle),
+    resetsAt: cycle?.resetsAt ?? null,
     overLimit: spentUsd >= limitUsd,
     pricingConfigured: isPricingConfigured(),
   });

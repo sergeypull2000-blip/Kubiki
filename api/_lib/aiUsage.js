@@ -25,9 +25,27 @@ export function extractUsage(data) {
 }
 
 /* Начало текущего месяца в UTC — окно месячного лимита. */
-export function monthStartUtc() {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+function addCalendarMonths(anchor, months) {
+  const source = new Date(anchor);
+  const targetMonth = source.getUTCMonth() + months;
+  const year = source.getUTCFullYear() + Math.floor(targetMonth / 12);
+  const month = ((targetMonth % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month, Math.min(source.getUTCDate(), lastDay), source.getUTCHours(), source.getUTCMinutes(), source.getUTCSeconds(), source.getUTCMilliseconds()));
+}
+
+export function usageCycleBounds(anchor, at = new Date()) {
+  if (!anchor) return null;
+  const anchorDate = new Date(anchor);
+  const atDate = new Date(at);
+  if (!Number.isFinite(anchorDate.valueOf()) || !Number.isFinite(atDate.valueOf())) throw new TypeError("Invalid usage cycle date");
+  if (atDate < anchorDate) return { startsAt: anchorDate.toISOString(), resetsAt: addCalendarMonths(anchorDate, 1).toISOString() };
+  let months = (atDate.getUTCFullYear() - anchorDate.getUTCFullYear()) * 12 + atDate.getUTCMonth() - anchorDate.getUTCMonth();
+  let start = addCalendarMonths(anchorDate, months);
+  if (start > atDate) start = addCalendarMonths(anchorDate, --months);
+  let reset = addCalendarMonths(anchorDate, months + 1);
+  while (reset <= atDate) { months += 1; start = reset; reset = addCalendarMonths(anchorDate, months + 1); }
+  return { startsAt: start.toISOString(), resetsAt: reset.toISOString() };
 }
 
 /* Эффективный месячный лимит пользователя из ai_usage_limits.
@@ -66,17 +84,21 @@ export function createUsageRecorder({ client, userId }) {
     async assertAllowed() {
       if (typeof client.reserve === "function") {
         if (reservationId) return { acquired: true };
-        const reservation = await client.reserve(userId, monthStartUtc());
+        const reservation = await client.reserve(userId);
         if (!reservation.acquired) throw new UsageLimitError();
         reservationId = reservation.reservationId;
         return reservation;
       }
       const limit = await loadEffectiveLimit(client, userId);
       if (limit.unlimited) return { spentUsd: 0, limitUsd: null, unlimited: true };
+      const anchorResult = await client.from("ai_usage_limits").select("cycle_anchor_at").eq("user_id", userId).maybeSingle();
+      const cycle = usageCycleBounds(anchorResult.data?.cycle_anchor_at);
+      if (!cycle) return { spentUsd: 0, limitUsd: limit.limitUsd, unlimited: false, cycle: null };
       const result = await client.from("ai_usage_events")
         .select("cost_usd")
         .eq("user_id", userId)
-        .gte("created_at", monthStartUtc());
+        .gte("created_at", cycle.startsAt)
+        .lt("created_at", cycle.resetsAt);
       if (result.error) return { spentUsd: 0, limitUsd: limit.limitUsd, unlimited: false };
       const spentUsd = (result.data || []).reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
       if (spentUsd >= limit.limitUsd) throw new UsageLimitError();
@@ -112,6 +134,18 @@ export function createUsageRecorder({ client, userId }) {
           console.error("ai_usage_events insert failed", { name: error?.name || "Error" });
           return null;
         }
+      }
+      if (typeof client.rpc === "function") {
+        const result = await client.rpc("commit_ai_usage", {
+          p_model: model, p_stage: stage, p_request_id: requestId,
+          p_input_tokens: usage.input_tokens, p_output_tokens: usage.output_tokens,
+          p_cost_usd: costUsd, p_pricing_version: AI_PRICING_VERSION, p_pricing_status: pricingStatus,
+        });
+        if (result.error) {
+          console.error("ai_usage_events insert failed", { name: result.error?.name || "Error", message: result.error?.message });
+          return null;
+        }
+        return { ...usage, costUsd, pricingStatus };
       }
       const result = await client.from("ai_usage_events").insert({
         user_id: userId,

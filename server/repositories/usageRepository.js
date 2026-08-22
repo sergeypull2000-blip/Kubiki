@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { DEFAULT_MONTHLY_LIMIT_USD } from "../../api/_lib/aiPricing.js";
+import { usageCycleBounds } from "../../api/_lib/aiUsage.js";
 
 async function transaction(pool, operation) {
   const client = await pool.connect();
@@ -26,28 +27,38 @@ export function createUsageRepository(pool, { reservationTtlSeconds = 180 } = {}
       const value = Number(row.monthly_limit_usd);
       return { limitUsd: unlimited ? null : (Number.isFinite(value) && value >= 0 ? value : DEFAULT_MONTHLY_LIMIT_USD), unlimited };
     },
-    async loadMonthlySpent(userId, monthStart) {
-      const { rows } = await pool.query(`select coalesce(sum(cost_usd), 0)::text as spent_usd from public.ai_usage_events where user_id = $1 and created_at >= $2`, [userId, monthStart]);
-      return Number(rows[0]?.spent_usd) || 0;
+    async loadUsageCycle(userId, at = new Date()) {
+      const anchorResult = await pool.query(`select cycle_anchor_at from public.ai_usage_limits where user_id = $1`, [userId]);
+      const cycle = usageCycleBounds(anchorResult.rows[0]?.cycle_anchor_at, at);
+      if (!cycle) return { cycle: null, spentUsd: 0 };
+      const { rows } = await pool.query(
+        `select coalesce(sum(cost_usd), 0)::text as spent_usd from public.ai_usage_events where user_id = $1 and created_at >= $2 and created_at < $3`,
+        [userId, cycle.startsAt, cycle.resetsAt],
+      );
+      return { cycle, spentUsd: Number(rows[0]?.spent_usd) || 0 };
     },
-    async reserve(userId, monthStart) {
+    async reserve(userId) {
       return transaction(pool, async (client) => {
-        await client.query(`delete from public.ai_usage_reservations where user_id = $1 and month_start = $2::date and expires_at <= now()`, [userId, monthStart]);
-        const limitResult = await client.query(`select monthly_limit_usd, unlimited from public.ai_usage_limits where user_id = $1 for update`, [userId]);
+        await client.query(`delete from public.ai_usage_reservations where user_id = $1 and expires_at <= now()`, [userId]);
+        const limitResult = await client.query(`select monthly_limit_usd, unlimited, cycle_anchor_at from public.ai_usage_limits where user_id = $1 for update`, [userId]);
         const limitRow = limitResult.rows[0];
         const unlimited = Boolean(limitRow?.unlimited);
         const rawLimit = Number(limitRow?.monthly_limit_usd);
         const limitUsd = unlimited ? null : (Number.isFinite(rawLimit) && rawLimit >= 0 ? rawLimit : DEFAULT_MONTHLY_LIMIT_USD);
-        const spentResult = await client.query(`select coalesce(sum(cost_usd), 0)::text as spent_usd from public.ai_usage_events where user_id = $1 and created_at >= $2`, [userId, monthStart]);
+        const anchor = limitRow?.cycle_anchor_at;
+        const cycle = usageCycleBounds(anchor);
+        const spentResult = cycle
+          ? await client.query(`select coalesce(sum(cost_usd), 0)::text as spent_usd from public.ai_usage_events where user_id = $1 and created_at >= $2 and created_at < $3`, [userId, cycle.startsAt, cycle.resetsAt])
+          : { rows: [{ spent_usd: "0" }] };
         const spentUsd = Number(spentResult.rows[0]?.spent_usd) || 0;
         if (unlimited) return { acquired: true, reservationId: null, spentUsd, limitUsd: null, unlimited: true };
         if (spentUsd >= limitUsd) return { acquired: false, reason: "limit", spentUsd, limitUsd, unlimited: false };
         const reservationId = randomUUID();
         const inserted = await client.query(
-          `insert into public.ai_usage_reservations (user_id, month_start, reservation_id, expires_at)
-           values ($1, $2::date, $3, now() + ($4 * interval '1 second'))
-           on conflict (user_id, month_start) do nothing returning reservation_id`,
-          [userId, monthStart, reservationId, reservationTtlSeconds],
+          `insert into public.ai_usage_reservations (user_id, cycle_start, reservation_id, expires_at)
+           values ($1, $2, $3, now() + ($4 * interval '1 second'))
+           on conflict (user_id) do nothing returning reservation_id`,
+          [userId, cycle?.startsAt ?? null, reservationId, reservationTtlSeconds],
         );
         return inserted.rowCount
           ? { acquired: true, reservationId, spentUsd, limitUsd, unlimited: false }
@@ -60,6 +71,12 @@ export function createUsageRepository(pool, { reservationTtlSeconds = 180 } = {}
           const owned = await client.query(`delete from public.ai_usage_reservations where user_id = $1 and reservation_id = $2 returning reservation_id`, [userId, reservationId]);
           if (!owned.rowCount) return false;
         }
+        await client.query(
+          `insert into public.ai_usage_limits (user_id, cycle_anchor_at)
+           values ($1, now())
+           on conflict (user_id) do update set cycle_anchor_at = coalesce(public.ai_usage_limits.cycle_anchor_at, excluded.cycle_anchor_at)`,
+          [userId],
+        );
         await client.query(
           `insert into public.ai_usage_events
            (user_id, model, stage, request_id, input_tokens, output_tokens, cost_usd, pricing_version, pricing_status)

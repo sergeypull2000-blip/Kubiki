@@ -6,7 +6,7 @@ const migrationDirectory = new URL("../db/migrations/", import.meta.url);
 
 test("target migrations are ordered from Better Auth identity to application tables", async () => {
   const files = (await readdir(migrationDirectory)).sort();
-  assert.deepEqual(files, ["001_better_auth_1_7_1.generated.sql", "002_app_baseline.sql", "003_add_company_position.sql"]);
+  assert.deepEqual(files, ["001_better_auth_1_7_1.generated.sql", "002_app_baseline.sql", "003_add_company_position.sql", "004_ai_usage_cycle_anchor.sql"]);
 });
 
 test("generated Better Auth 1.7.1 schema contains only configured core models", async () => {

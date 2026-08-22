@@ -81,9 +81,17 @@ test("unlimited usage remains reservation-free and persistence is owner-bound", 
 });
 
 test("quota SQL uses a unique lease and transactional usage persistence", () => {
-  const schema = readFileSync(new URL("../db/migrations/002_app_baseline.sql", import.meta.url), "utf8");
+  const schema = readFileSync(new URL("../db/migrations/004_ai_usage_cycle_anchor.sql", import.meta.url), "utf8");
   const source = readFileSync(new URL("../server/repositories/usageRepository.js", import.meta.url), "utf8");
-  assert.match(schema, /primary key \(user_id, month_start\)/);
-  assert.match(source, /on conflict \(user_id, month_start\) do nothing/);
+  assert.match(schema, /add column cycle_anchor_at timestamptz/);
+  assert.match(schema, /add primary key \(user_id\)/);
+  assert.match(source, /on conflict \(user_id\) do nothing/);
   assert.match(source, /delete from public\.ai_usage_reservations[\s\S]*insert into public\.ai_usage_events/);
+  assert.match(source, /cycle_anchor_at = coalesce\(public\.ai_usage_limits\.cycle_anchor_at, excluded\.cycle_anchor_at\)/);
+});
+
+test("failed request release cannot create a cycle anchor", () => {
+  const source = readFileSync(new URL("../server/repositories/usageRepository.js", import.meta.url), "utf8");
+  const release = source.slice(source.indexOf("async release"));
+  assert.doesNotMatch(release, /cycle_anchor_at|ai_usage_events/);
 });
