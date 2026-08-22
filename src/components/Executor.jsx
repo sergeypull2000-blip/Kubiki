@@ -213,7 +213,7 @@ function AddCubeButton({ onAddCube, usedKeys = [] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useOutsideClose(ref, () => setOpen(false));
-  const available = TAG_DEFS.filter((d) => !CORE_TAG_KEYS.includes(d.key) && !usedKeys.includes(d.key));
+  const available = TAG_DEFS.filter((d) => d.key !== "spec" && !CORE_TAG_KEYS.includes(d.key) && !usedKeys.includes(d.key));
   if (available.length === 0) return null;
   return (
     <span className="kb-addcube" ref={ref}>
@@ -359,7 +359,7 @@ export function ExecutorRow({ executor, active, flash, stageId, taskId, onActiva
       {...dropHandlers}>
       <div className="kb-erow">
         <div className="kb-erow-tags">
-          {orderedTags.map((t) => (
+          {orderedTags.filter((t) => t.key !== "spec").map((t) => (
             <ExecutorTag key={t.id} tag={t}
               isOpen={openTagId === t.id}
               onOpenChange={(v) => setOpenTagId(v ? t.id : null)}

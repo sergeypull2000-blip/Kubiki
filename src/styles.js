@@ -888,7 +888,8 @@ export const CSS = `
 .kb-knowledge-page{width:min(1120px,calc(100% - 48px));margin:0 auto;padding:30px 0 54px}
 .kb-knowledge-eyebrow{font-size:var(--fs-xs);color:var(--text-muted);margin-bottom:3px}.kb-knowledge-page h1{margin:0 0 22px;font-size:24px;letter-spacing:-.02em}
 .kb-knowledge-page .kb-library-tools label{max-width:620px}.kb-knowledge-page .kb-library-tools .kb-btn,.kb-library-empty-full .kb-btn{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
-.kb-knowledge-page .kb-performer-card{cursor:pointer}.kb-performer-card:hover{border-color:var(--line-strong)}
+.kb-knowledge-page .kb-performer-card{cursor:pointer}.kb-performer-card:hover{border-color:var(--line-strong)}.kb-performer-card-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}.kb-performer-card-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 6px;border:1px solid var(--line-strong);border-radius:5px;background:var(--surface-sunken);font-size:var(--fs-xs);color:var(--text)}.kb-performer-card-tag-key{border-color:var(--accent)}.kb-performer-card-tag small{font-size:10px;color:var(--text-muted)}.kb-performer-grade-select{flex:none;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--text);font:inherit;font-size:var(--fs-xs);padding:7px 8px}.kb-performer-grade-select:focus{outline:1px solid var(--accent);border-color:var(--accent)}.kb-add-performer-btn{margin-top:10px}
+.kb-performer-chip-key{border-color:var(--accent)}
 .kb-performer-contact{display:flex;align-items:center;gap:6px;width:220px;min-width:0;color:var(--text-muted);font-size:var(--fs-xs)}.kb-performer-contact span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kb-quick-status{width:128px;color:var(--text-faint);font-size:var(--fs-xs)}.kb-quick-status.is-active{color:var(--accent)}
 .kb-performer-actions button.is-danger:hover{color:#c0392b}

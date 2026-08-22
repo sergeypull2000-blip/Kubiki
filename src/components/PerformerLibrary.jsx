@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { X, ChevronDown } from "lucide-react";
-import { PAYMENT_OPTIONS, SOFTWARE_OPTIONS } from "../constants.js";
+import { GRADE_OPTIONS, PAYMENT_OPTIONS, SOFTWARE_OPTIONS } from "../constants.js";
 import { STUDIO_ROLES, isStudioRole } from "../cgTaskRoleTaxonomy.js";
 import { useOutsideClose } from "../hooks.js";
 
@@ -64,7 +64,7 @@ function ChipListEditor({ values, dictionary, onChange, placeholder = "Доба�
   const removeAt = (index) => onChange(list.filter((_, i) => i !== index));
   const toggle = () => { if (!open) inputRef.current?.focus(); setOpen(!open); };
   return <div className="kb-performer-chips" ref={wrapRef}>
-    {list.map((value, index) => <span key={`${value}-${index}`} className="kb-performer-chip"><span>{value}</span>
+    {list.map((value, index) => <span key={`${value}-${index}`} className={`kb-performer-chip${index === 0 ? " kb-performer-chip-key" : ""}`}><span>{value}</span>
       <button type="button" className="kb-performer-chip-del" onClick={() => removeAt(index)} title="Убрать"><X size={11} /></button></span>)}
     <input ref={inputRef} className="kb-performer-chip-input" value={input} placeholder={placeholder}
       onChange={(e) => { setInput(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={commit}
@@ -125,7 +125,7 @@ export function PerformerModal({ initial, isNew = false, initialAddToQuickAccess
         <label>Имя<input value={draft.firstName || ""} onChange={(e) => set("firstName", e.target.value)} /></label><label>Фамилия<input value={draft.lastName || ""} onChange={(e) => set("lastName", e.target.value)} /></label>
         <label className="wide">Основная роль<RoleCombobox value={draft.primaryRole || ""} onChange={(v) => set("primaryRole", v)} onWarn={() => setRoleWarning(true)} placeholder="Введите роль или выберите из списка…" /></label>
         <label>Дополнительные роли<ChipListEditor values={draft.additionalRoles} dictionary={SORTED_ROLE_OPTIONS.filter((role) => role !== draft.primaryRole)} onChange={(v) => { const added = v.filter((role) => !(draft.additionalRoles || []).includes(role)); set("additionalRoles", v); if (added.some((role) => !isStudioRole(role))) setRoleWarning(true); }} /></label>
-        <label>Грейд<input value={draft.grade || ""} onChange={(e) => set("grade", e.target.value)} /></label>
+        <label>Грейд<SelectField value={draft.grade} options={[{ key: null, label: "Не выбран" }, ...GRADE_OPTIONS.map((grade) => ({ key: grade, label: grade }))]} onChange={(v) => set("grade", v)} /></label>
         <label>Софт<ChipListEditor values={draft.software} dictionary={SOFTWARE_OPTIONS} onChange={(v) => set("software", v)} /></label>
       </div></section>
       <section><h3>Финансы</h3><div className="kb-form-grid">

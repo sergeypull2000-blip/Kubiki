@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Bookmark, BookmarkCheck, Mail, Pencil, Phone, Plus, Search, Trash2 } from "lucide-react";
-import { PAYMENT_LABEL } from "../constants.js";
+import { GRADE_OPTIONS, PAYMENT_LABEL } from "../constants.js";
 import { formatMoney } from "../utils.js";
 import { performerDisplayName, searchPerformers } from "../performerLibrary.js";
 import { AppTopNavigation } from "./AppTopNavigation.jsx";
@@ -8,14 +8,22 @@ import { PerformerModal } from "./PerformerLibrary.jsx";
 
 const contact = (performer) => performer.phone || performer.email || performer.telegram || "";
 
-export function PerformerLibraryItem({ performer, inQuickAccess, onEdit, onToggleQuickAccess, onDelete }) {
+export function PerformerLibraryItem({ performer, inQuickAccess, onEdit, onToggleQuickAccess, onDelete, onSavePerformer }) {
   const name = performerDisplayName(performer);
   const title = name || performer.primaryRole || "Исполнитель";
   const payment = PAYMENT_LABEL[performer.defaultPaymentType] || "";
   const rate = performer.defaultRate == null ? "" : formatMoney(Number(performer.defaultRate));
+  const firstAdditionalRole = performer.additionalRoles?.[0];
+  const firstSoftware = performer.software?.[0];
   return <article className="kb-performer-card" onClick={() => onEdit(performer)}>
     <div className="kb-performer-card-main"><strong>{title}</strong>{name && performer.primaryRole && <span>{performer.primaryRole}</span>}
-      <small>{[payment, rate].filter(Boolean).join(" · ")}</small></div>
+      <div className="kb-performer-card-tags">
+        {firstAdditionalRole && <span className="kb-performer-card-tag kb-performer-card-tag-key"><small>Доп. роль</small>{firstAdditionalRole}</span>}
+        {firstSoftware && <span className="kb-performer-card-tag kb-performer-card-tag-key"><small>Софт</small>{firstSoftware}</span>}
+      </div><small>{[payment, rate].filter(Boolean).join(" · ")}</small></div>
+    <select className="kb-performer-grade-select" value={performer.grade || ""} aria-label="Грейд" onClick={(event) => event.stopPropagation()} onChange={(event) => onSavePerformer({ ...performer, grade: event.target.value }, inQuickAccess, performer.id)}>
+      <option value="">Грейд</option>{GRADE_OPTIONS.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+    </select>
     {contact(performer) && <div className="kb-performer-contact">{performer.email ? <Mail size={14} /> : <Phone size={14} />}<span>{contact(performer)}</span></div>}
     <span className={`kb-quick-status${inQuickAccess ? " is-active" : ""}`}>{inQuickAccess ? "В быстром доступе" : "Только в базе"}</span>
     <div className="kb-performer-actions">
@@ -47,7 +55,7 @@ export function KnowledgeBasePage({ performers, performerState = "ready", perfor
         <div className="kb-library-tools"><label><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по исполнителям" /></label>
           <button type="button" className="kb-btn kb-btn-primary" onClick={create}><Plus size={16} />Добавить исполнителя</button></div>
         {visible.length ? <div className="kb-performer-list">{visible.map((performer) => <PerformerLibraryItem key={performer.id} performer={performer}
-          inQuickAccess={quickIds.has(performer.id)} onEdit={edit} onToggleQuickAccess={onToggleQuickAccess} onDelete={remove} />)}</div>
+          inQuickAccess={quickIds.has(performer.id)} onEdit={edit} onToggleQuickAccess={onToggleQuickAccess} onDelete={remove} onSavePerformer={onSavePerformer} />)}</div>
           : <div className="kb-library-empty">Исполнители не найдены</div>}
       </> : <div className="kb-library-empty kb-library-empty-full"><strong>В базе пока нет исполнителей</strong><span>Сохраняйте карточки из смет или создайте нового исполнителя.</span>
         <button type="button" className="kb-btn kb-btn-primary" onClick={create}><Plus size={16} />Добавить исполнителя</button></div>)}

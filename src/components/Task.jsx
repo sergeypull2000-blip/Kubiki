@@ -135,7 +135,7 @@ export function TaskBlock({ task, taskNumber, stageId, dispatch, taskDict, taskF
             onAiContext={onAiContext}
             onSaveToPerformer={() => onSaveExecutorToPerformer(e)} />
         ))}
-        <button type="button" className="kb-add-btn" onClick={(e) => { e.stopPropagation(); addExecutor(); }} onMouseDown={(e) => e.stopPropagation()}>
+        <button type="button" className="kb-add-btn kb-add-performer-btn" onClick={(e) => { e.stopPropagation(); addExecutor(); }} onMouseDown={(e) => e.stopPropagation()}>
           <Plus size={13} strokeWidth={1.75} /> Новый исполнитель
         </button>
       </div>

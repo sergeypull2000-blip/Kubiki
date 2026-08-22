@@ -4,6 +4,18 @@ import { readFile } from "node:fs/promises";
 
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
+test("performer cards expose only the first additional role and software as highlighted tags", async () => {
+  const [page, styles, executor] = await Promise.all([source("src/components/KnowledgeBasePage.jsx"), source("src/styles.js"), source("src/components/Executor.jsx")]);
+  assert.match(page, /Доп\. роль/); assert.match(page, /performer\.additionalRoles\?\.\[0\]/); assert.match(page, /performer\.software\?\.\[0\]/);
+  assert.match(page, /kb-performer-card-tag-key/); assert.match(styles, /\.kb-performer-card-tag-key\{border-color:var\(--accent\)/);
+  assert.match(executor, /orderedTags\.filter\(\(t\) => t\.key !== "spec"\)/);
+});
+
+test("performer grade is a dropdown wired to the existing save callback", async () => {
+  const page = await source("src/components/KnowledgeBasePage.jsx");
+  assert.match(page, /className="kb-performer-grade-select"/); assert.match(page, /onSavePerformer\(\{ \.\.\.performer, grade: event\.target\.value \}/);
+});
+
 test("workspace uses edge-to-edge flex center and bounded panel resizers", async () => {
   const [workspace, styles] = await Promise.all([source("src/components/Workspace.jsx"), source("src/styles.js")]);
   assert.match(styles, /\.kb-layout\{[^}]*width:100%; min-width:0/);

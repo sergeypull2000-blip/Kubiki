@@ -2,6 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { addPerformerToTask, buildExecutorFromPerformer, buildPerformerFromExecutor, createPerformer, linkExecutorToPerformer, loadPerformerLibrary, normalizePerformer, normalizePerformerLibrary, updatePerformer } from "../src/performerLibrary.js";
 
+test("grade сохраняется в существующей модели исполнителя", () => {
+  const performer = createPerformer([], { id: "p", grade: "Мидл", additionalRoles: ["Риггер", "Аниматор"], software: ["Maya", "Blender"] })[0];
+  const updated = updatePerformer([performer], "p", { grade: "Сеньор" })[0];
+  assert.equal(updated.grade, "Сеньор");
+  assert.deepEqual(updated.additionalRoles, ["Риггер", "Аниматор"]);
+  assert.deepEqual(updated.software, ["Maya", "Blender"]);
+});
+
 test("карточка может содержать только имя", () => { const p = createPerformer([], { firstName: "Миша" })[0]; assert.equal(p.firstName, "Миша"); assert.equal(p.primaryRole, ""); });
 test("карточка может содержать только роль", () => assert.equal(createPerformer([], { primaryRole: "Артист" })[0].primaryRole, "Артист"));
 test("карточка может содержать только тип оплаты", () => assert.equal(createPerformer([], { defaultPaymentType: "hourly" })[0].defaultPaymentType, "hourly"));
