@@ -1,17 +1,14 @@
 /* ============================================================
    Vercel serverless: POST /api/parse-excel
-   Принимает { sheet, filename } → вызывает DeepSeek API →
+   Принимает { sheet, filename } → вызывает настроенный AI provider →
    возвращает JSON-структуру сметы.
-   Ключ: process.env.DEEPSEEK_API_KEY (задаётся в Vercel Dashboard →
-   Settings → Environment Variables)
+   Ключ и endpoint задаются server-side AI_* env с legacy DeepSeek fallback.
    ============================================================ */
 
 import { authenticateRequest } from "./_lib/auth.js";
 import { createUsageRecorder, UsageLimitError } from "./_lib/aiUsage.js";
+import { createAiProvider } from "./_lib/aiProvider.js";
 import { randomUUID } from "node:crypto";
-
-const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
-const MODEL = "deepseek-v4-flash";
 
 const SYSTEM_PROMPT = `Ты разбираешь смету видеопродакшна из таблицы (источник — Excel или текстовый слой PDF). Верни ТОЛЬКО JSON по схеме, без пояснений и markdown.
 
@@ -42,8 +39,8 @@ export default async function handler(req, res) {
   const auth = await authenticateRequest(req);
   if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
-  const key = process.env.DEEPSEEK_API_KEY;
-  if (!key) return res.status(500).json({ error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" });
+  const aiProvider = createAiProvider();
+  if (!aiProvider.apiKey) return res.status(500).json({ error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" });
 
   const usage = createUsageRecorder({ client: auth.client, userId: auth.user.id });
   try { await usage.assertAllowed(); } catch (error) { if (error instanceof UsageLimitError) return res.status(429).json({ error: error.message }); }
@@ -55,21 +52,13 @@ export default async function handler(req, res) {
   const userContent = `Файл: ${filename || "file"}\n${userInstruction ? `ОБЯЗАТЕЛЬНАЯ ИНСТРУКЦИЯ ПОЛЬЗОВАТЕЛЯ: ${userInstruction}\nПримени эту инструкцию к импортированной смете и отрази требуемые исправления непосредственно в итоговом JSON. Если инструкция меняет названия, состав этапов, задачи или цены, итоговый JSON должен содержать уже исправленный результат.\n` : ""}Если содержимое файла не является сметой с работами и ценами, не придумывай позиции: верни JSON {"projectName":null,"stages":[],"warnings":["Файл не является сметой"]}.\nСодержимое (геометрия таблицы):\n\n${sheet}`;
 
   try {
-    const r = await fetch(DEEPSEEK_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
+    const r = await aiProvider.requestCompletion({
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userContent },
         ],
         temperature: 0,
-        max_tokens: 16000,
-      }),
+        maxTokens: 16000,
     });
 
     if (!r.ok) {
@@ -79,7 +68,7 @@ export default async function handler(req, res) {
     }
 
     const data = await r.json();
-    await usage.record({ model: MODEL, stage: "import", data }).catch(() => {});
+    await usage.record({ model: aiProvider.model, stage: "import", data }).catch(() => {});
     const choice = data.choices?.[0];
     const raw = choice?.message?.content;
     if (!raw) return res.status(502).json({ error: "DeepSeek вернул пустой ответ" });

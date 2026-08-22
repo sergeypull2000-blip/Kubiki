@@ -172,8 +172,8 @@ test("only a successful billable usage commit initializes the persistent cycle",
   });
 });
 
-test("deepseek client records usage before content validation", () => {
-  const source = readFileSync(new URL("../api/_lib/deepseek.js", import.meta.url), "utf8");
+test("OpenAI-compatible client records usage before content validation", () => {
+  const source = readFileSync(new URL("../api/_lib/openAiCompatibleProvider.js", import.meta.url), "utf8");
   assert.match(source, /usageGate\.record\(\{ model, stage, requestId, data \}\)/);
   assert.match(source, /usageGate\.assertAllowed\(\)/);
   const record = source.indexOf("usageGate.record");

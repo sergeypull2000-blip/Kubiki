@@ -1,6 +1,7 @@
 import { authenticateRequest } from "./_lib/auth.js";
 import { loadServerAiSettings } from "./_lib/aiSettings.js";
-import { createDeepSeekClient, DeepSeekError } from "./_lib/deepseek.js";
+import { DeepSeekError } from "./_lib/deepseek.js";
+import { createAiProvider } from "./_lib/aiProvider.js";
 import { createUsageRecorder, UsageLimitError } from "./_lib/aiUsage.js";
 import { buildAiEditMessages } from "./_lib/editPrompt.js";
 import { listOwnProjectClientIds, loadOwnPerformersForEdit, loadOwnProjectForEdit, loadOwnSelectedKnowledge } from "./_lib/editProject.js";
@@ -19,9 +20,6 @@ import { projectKnowledge } from "./_lib/knowledgeProjection.js";
 import { routeAiIntent } from "./_lib/aiIntentRouter.js";
 import { compileGeneratedStructure, parseGeneratedStructure, resolveGeneratedStructure } from "./_lib/generatedStructure.js";
 import { runEstimateGeneration } from "./_lib/generationOrchestrator.js";
-
-const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
-const MODEL = "deepseek-v4-flash";
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -74,9 +72,9 @@ async function executeEdit(req, budget) {
   } else if (request.knowledge.useStudioKnowledge) {
     knowledge = projectKnowledge(await loadOwnKnowledge(auth.client, auth.user.id, { includeHistory: false }));
   }
-  const key = process.env.DEEPSEEK_API_KEY;
-  if (!key) return { status: 500, body: { error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" } };
-  const requestModel = createDeepSeekClient({ apiKey: key, url: DEEPSEEK_URL, model: MODEL, budget, usageGate: usage });
+  const aiProvider = createAiProvider();
+  if (!aiProvider.apiKey) return { status: 500, body: { error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" } };
+  const requestModel = aiProvider.createModelClient({ budget, usageGate: usage });
   const route = await routeAiIntent({ instruction: request.instruction, requestModel });
   if (!route) return { status: 502, body: { error: "Модель вернула некорректный маршрут AI-запроса", code: "ai_route_invalid_schema" } };
   if (route.kind === "clarification") return { status: 200, body: { schemaVersion: 1, kind: "clarification", requestId: request.requestId, baseRevision: request.baseRevision, scope: request.scope, question: route.question } };

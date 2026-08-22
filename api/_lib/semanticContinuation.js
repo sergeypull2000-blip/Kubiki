@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 export const AI_EDIT_CONTINUATION_VERSION = 1;
 export const AI_EDIT_CONTINUATION_TTL_MS = 15 * 60 * 1000;
 const encode = (value) => Buffer.from(value).toString("base64url");
-const secret = () => process.env.AI_EDIT_CONTINUATION_SECRET || process.env.DEEPSEEK_API_KEY || "";
+const secret = () => process.env.AI_EDIT_CONTINUATION_SECRET || process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY || "";
 
 export function signAiEditContinuation(payload, now = Date.now()) {
   if (!secret()) throw new Error("AI_EDIT_CONTINUATION_SECRET не задан");

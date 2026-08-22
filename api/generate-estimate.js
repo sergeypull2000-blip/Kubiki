@@ -1,6 +1,7 @@
 import { authenticateRequest } from "./_lib/auth.js";
 import { validateGenerationInput } from "./_lib/brief.js";
-import { createDeepSeekClient, DeepSeekError } from "./_lib/deepseek.js";
+import { DeepSeekError } from "./_lib/deepseek.js";
+import { createAiProvider } from "./_lib/aiProvider.js";
 import { createUsageRecorder, UsageLimitError } from "./_lib/aiUsage.js";
 import { runEstimateGeneration } from "./_lib/generationOrchestrator.js";
 import { loadOwnKnowledge } from "./_lib/knowledgeRepository.js";
@@ -15,15 +16,11 @@ import { randomUUID } from "node:crypto";
 
 /* ============================================================
    Vercel serverless: POST /api/generate-estimate
-   Принимает { description } → вызывает DeepSeek API →
+   Принимает { description } → вызывает настроенный AI provider →
    возвращает черновую JSON-структуру сметы, собранную по
    текстовому описанию проекта (не по таблице, см. parse-excel.js).
-   Ключ: process.env.DEEPSEEK_API_KEY (задаётся в Vercel Dashboard →
-   Settings → Environment Variables)
+   Ключ и endpoint задаются server-side AI_* env с legacy DeepSeek fallback.
    ============================================================ */
-
-const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
-const MODEL = "deepseek-v4-flash";
 
 const SYSTEM_PROMPT = `
 Ты — опытный продюсер креативных, производственных и digital-проектов.
@@ -588,9 +585,9 @@ export async function executeGeneration(req, budget, generationRequestId = rando
   const input = validateGenerationInput(req.body);
   if (!input.ok) return { status: input.status, body: { error: input.error } };
 
-  const key = process.env.DEEPSEEK_API_KEY;
-  if (!key) return { status: 500, body: { error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" } };
-  const requestModel = createDeepSeekClient({ apiKey: key, url: DEEPSEEK_URL, model: MODEL, budget, usageGate: usage });
+  const aiProvider = createAiProvider();
+  if (!aiProvider.apiKey) return { status: 500, body: { error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" } };
+  const requestModel = aiProvider.createModelClient({ budget, usageGate: usage });
 
   const result = await runEstimateGeneration({
       brief: input.brief,

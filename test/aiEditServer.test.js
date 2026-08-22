@@ -181,8 +181,8 @@ test("endpoint is read-only, owner-scoped and does not log Project content", () 
   assert.match(endpoint, /parseAiEditSemanticResponse/); assert.doesNotMatch(endpoint, /parseAiEditResponse/);
 });
 
-test("DeepSeek ai_edit stage has thinking disabled", () => {
-  const source = readFileSync(new URL("../api/_lib/deepseek.js", import.meta.url), "utf8");
+test("OpenAI-compatible provider ai_edit stage has thinking disabled", () => {
+  const source = readFileSync(new URL("../api/_lib/openAiCompatibleProvider.js", import.meta.url), "utf8");
   assert.match(source, /stage === "ai_edit"/);
 });
 
