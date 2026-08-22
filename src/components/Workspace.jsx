@@ -26,7 +26,7 @@ import { BetaBadge } from "./BetaBadge.jsx";
 import { shouldHandleExecutorCopy } from "../keyboardShortcuts.js";
 
 const WORKSPACE_FIXED_WIDTH = 1250;
-const WORKSPACE_SIDEBAR_GAP = 24;
+const WORKSPACE_SIDEBAR_GAP = 10;
 const LEFT_PANEL_RANGE = [210, Number.POSITIVE_INFINITY];
 const RIGHT_PANEL_RANGE = [250, Number.POSITIVE_INFINITY];
 const clampPanelWidth = (value, [min, max], fallback) => Math.min(max, Math.max(min, Number(value) || fallback));
