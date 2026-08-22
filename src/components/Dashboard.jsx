@@ -195,7 +195,7 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, ai
   }, [onTemplatesChange, projectTemplates]);
 
   const deleteTemplate = (id) => { const template = templates.find((item) => item.id === id); setConfirm({ title: "Удалить шаблон?", message: `«${template?.templateName || template?.name || "Шаблон"}» будет удалён. Это действие нельзя отменить.`, action: () => onTemplatesChange(templates.filter((item) => item.id !== id)) }); };
-  const renameTemplate = (id, name) => onTemplatesChange(projectTemplates.map((template) => template.id === id ? { ...template, templateName: name, name } : template));
+  const renameTemplate = (id, name) => onTemplatesChange(projectTemplates.map((template) => template.id === id ? { ...template, templateName: name } : template));
   const moveTemplate = (templateId, folderId) => onTemplatesChange(projectTemplates.map((template) => template.id === templateId ? { ...template, folderId } : template));
   const deleteCategory = (id) => {
     onTemplatesChange(projectTemplates.map((template) => template.folderId === id ? { ...template, folderId: "new" } : template));
@@ -223,12 +223,12 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, ai
       <LeftPanel activeNav={activeNav} onNavChange={setActiveNav} categories={categories} onCategoriesChange={onCategoriesChange}
         openCategoryIds={openCategoryIds} onOpenCategoryIdsChange={onOpenCategoryIdsChange}
         templates={templates} onMoveTemplate={moveTemplate} onDeleteCategory={deleteCategory}
-        onRenameTemplate={renameTemplate} onDeleteTemplate={deleteTemplate} onOpenTemplate={onEditTemplate}
+        onRenameTemplate={renameTemplate} onDeleteTemplate={deleteTemplate} onOpenTemplate={(id) => onCreate(templates.find((template) => template.id === id) || null)}
         width={sidebarWidth} accountControl={accountControl} onOpenFeedback={onOpenFeedback} />
       <div className="kb-dash-resizer" role="separator" aria-label="Изменить ширину панели" aria-orientation="vertical" onPointerDown={beginSidebarResize} />
       <main className="kb-dashboard"><div className="kb-board">
         {activeCategory ? (visibleTemplates.length ? visibleTemplates.map((template) =>
-          <EntityCard key={template.id} item={template} template onOpen={() => onEditTemplate(template.id)} onDelete={deleteTemplate} onEdit={onEditTemplate} onRename={renameTemplate} />
+          <EntityCard key={template.id} item={template} template onOpen={() => onCreate(template)} onDelete={deleteTemplate} onEdit={onEditTemplate} onRename={renameTemplate} />
         ) : <div className="kb-dash-empty">В этой категории пока нет шаблонов</div>) : <>
           {activeNav === "all" && <NewProjectCard onCreate={() => onCreate(null)} />}
           {visibleProjects.map((project) => <EntityCard key={project.id} item={project} onOpen={(item) => onOpen(item.id)} onDelete={(id) => setConfirm({ title: "Удалить проект?", message: `«${project.name || "Проект"}» будет удалён. Это действие нельзя отменить.`, action: () => onDelete(id) })}

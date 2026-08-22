@@ -12,7 +12,7 @@ export function createExportProfileRepository(client) {
     },
     async upsertProfile(userId, profile) {
       const settings = normalizePresentationSettings({ branding: profile });
-      const row = { user_id: userId, company_name: settings.branding.companyName, logo_asset_path: settings.branding.logoAssetPath || null, logo_position: settings.branding.logoPosition, phone: settings.branding.phone, email: settings.branding.email, website: settings.branding.website, default_colors: settings.branding.colors, default_font: settings.branding.fontFamily, default_legal_text: profile.defaultLegalText || {} };
+      const row = { user_id: userId, company_name: settings.branding.companyName, logo_asset_path: settings.branding.logoAssetPath || null, logo_position: settings.branding.logoPosition, company_position: settings.branding.companyPosition, phone: settings.branding.phone, email: settings.branding.email, website: settings.branding.website, default_colors: settings.branding.colors, default_font: settings.branding.fontFamily, default_legal_text: profile.defaultLegalText || {} };
       return owned(resultData(await client.from("studio_export_profiles").upsert(row, { onConflict: "user_id" }).select().single(), "Не удалось сохранить профиль экспорта"), userId);
     },
     async uploadLogo(userId, file) {

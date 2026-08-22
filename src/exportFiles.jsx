@@ -346,6 +346,12 @@ function DateCubePicker({ value, disabled, onChange }) {
   );
 }
 
+function KubikiDropdown({ value, onChange, options, label }) {
+  const [open, setOpen] = useState(false);
+  return <div className="kb-dropdown"><button type="button" className="kb-dropdown-trigger" aria-label={label} onClick={() => setOpen((state) => !state)}>{options.find((option) => option.value === value)?.label}<ChevronDown size={13} /></button>{open && <div className="kb-dropdown-menu">{options.map((option) => <button type="button" key={option.value} className={option.value === value ? "is-active" : ""} onClick={() => { onChange(option.value); setOpen(false); }}>{option.label}</button>)}</div>}</div>;
+}
+const POSITION_OPTIONS = [{ value: "left", label: "Слева" }, { value: "center", label: "По центру" }, { value: "right", label: "Справа" }];
+
 function PresentationControls({ draft, onChange, project, dispatch, userId, logoUrl, onLogoUrl }) {
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoError, setLogoError] = useState("");
@@ -377,12 +383,9 @@ function PresentationControls({ draft, onChange, project, dispatch, userId, logo
         </label>
         <label className="kb-export-field">
           <span>Позиция логотипа</span>
-          <select className="kb-select" value={draft.branding.logoPosition} onChange={(event) => { const branding = { ...draft.branding, logoPosition: event.target.value }; onChange({ ...draft, branding }); persistProfile(branding); }}>
-            <option value="left">Слева</option>
-            <option value="center">По центру</option>
-            <option value="right">Справа</option>
-          </select>
+          <KubikiDropdown value={draft.branding.logoPosition} options={POSITION_OPTIONS} label="Позиция логотипа" onChange={(value) => { const branding = { ...draft.branding, logoPosition: value }; onChange({ ...draft, branding }); persistProfile(branding); }} />
         </label>
+        <label className="kb-export-field"><span>Позиция названия компании</span><KubikiDropdown value={draft.branding.companyPosition} options={POSITION_OPTIONS} label="Позиция названия компании" onChange={(value) => { const branding = { ...draft.branding, companyPosition: value }; onChange({ ...draft, branding }); persistProfile(branding); }} /></label>
         <div className="kb-export-colors">
           <span aria-hidden="true" />
           <span className="kb-export-color-head kb-export-color-head-bg">Фон</span>
@@ -449,7 +452,7 @@ function ExportPreview({ model }) {
     <div className="kb-export-preview">
       {model.warnings.map((warning) => <div className="kb-export-warning" key={warning}>{warning}</div>)}
       <div style={{ fontFamily: model.brand.fontFamily, color: model.brand.colors.text }}>
-      <div className="kb-export-preview-brand" style={{ justifyContent: model.brand.logoPosition || "left" }}>{model.brand.logoUrl && <img src={model.brand.logoUrl} alt="Логотип компании" />}{model.brand.companyName && <strong>{model.brand.companyName}</strong>}</div>
+      <div className="kb-export-preview-brand"><span>{model.brand.logoPosition === "left" && model.brand.logoUrl && <img src={model.brand.logoUrl} alt="Логотип компании" />}{model.brand.companyPosition === "left" && model.brand.companyName && <strong>{model.brand.companyName}</strong>}</span><span>{model.brand.logoPosition === "center" && model.brand.logoUrl && <img src={model.brand.logoUrl} alt="Логотип компании" />}{model.brand.companyPosition === "center" && model.brand.companyName && <strong>{model.brand.companyName}</strong>}</span><span>{model.brand.logoPosition === "right" && model.brand.logoUrl && <img src={model.brand.logoUrl} alt="Логотип компании" />}{model.brand.companyPosition === "right" && model.brand.companyName && <strong>{model.brand.companyName}</strong>}</span></div>
       <h2 style={{ fontSize: model.typography.title.size }}>{model.proposal.title}</h2>
       <div className="kb-export-preview-row kb-export-preview-head"><span>№</span><span>Наименование</span>{model.display.showComments && <span className="kb-export-preview-comment">Комментарии</span>}<span>Сумма</span></div>
       {model.stages.map((stage) => <div className="kb-export-preview-stage" key={stage.id}>
@@ -481,7 +484,7 @@ function ExportModal({ project, format, dispatch, userId, onClose, onExport }) {
   const [presetError, setPresetError] = useState("");
   const [exportError, setExportError] = useState("");
   useEffect(() => { if (!userId) return; let active = true; exportPresetsRepository.list(userId).then((items) => { if (active) setPresets(items); }).catch((error) => { if (active) setPresetError(error.message); }); return () => { active = false; }; }, [userId]);
-  useEffect(() => { if (!userId) return; let active = true; exportProfileRepository.loadProfile(userId).then(async ({ profile }) => { if (!active || !profile) return; const branding = { companyName: profile.company_name, logoAssetPath: profile.logo_asset_path || "", logoPosition: profile.logo_position || "left", phone: profile.phone, email: profile.email, website: profile.website, colors: profile.default_colors, fontFamily: profile.default_font }; setDraft((current) => ({ ...current, branding: { ...current.branding, ...branding } })); if (profile.logo_asset_path) setLogoUrl(await exportProfileRepository.createLogoUrl(profile.logo_asset_path, 3600)); }).catch((error) => { if (active) setPresetError(error.message); }); return () => { active = false; }; }, [userId]);
+  useEffect(() => { if (!userId) return; let active = true; exportProfileRepository.loadProfile(userId).then(async ({ profile }) => { if (!active || !profile) return; const branding = { companyName: profile.company_name, logoAssetPath: profile.logo_asset_path || "", logoPosition: profile.logo_position || "left", companyPosition: profile.company_position || "left", phone: profile.phone, email: profile.email, website: profile.website, colors: profile.default_colors, fontFamily: profile.default_font }; setDraft((current) => ({ ...current, branding: { ...current.branding, ...branding } })); if (profile.logo_asset_path) setLogoUrl(await exportProfileRepository.createLogoUrl(profile.logo_asset_path, 3600)); }).catch((error) => { if (active) setPresetError(error.message); }); return () => { active = false; }; }, [userId]);
   const save = (next) => { setDraft(next); dispatch((current) => ({ ...current, exportSettings: normalizeExportSettings(next) })); };
   const applyPreset = (settings) => save({ ...draft, ...settings, branding: { ...draft.branding, ...settings.branding }, typography: { ...draft.typography, ...settings.typography }, content: { ...draft.content, ...settings.content, visibleExecutorIds: draft.content.visibleExecutorIds, rowColorOverrides: draft.content.rowColorOverrides }, service: { ...draft.service, ...settings.service } });
   const savePreset = async () => { if (!userId || !presetName.trim()) return; try { const item = presetId ? await exportPresetsRepository.update(userId, presetId, presetName, draft) : await exportPresetsRepository.create(userId, presetName, draft); setPresets((items) => [item, ...items.filter((value) => value.id !== item.id)]); setPresetId(item.id); setPresetError(""); } catch (error) { setPresetError(error.message); } };
