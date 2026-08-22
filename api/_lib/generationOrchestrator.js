@@ -73,7 +73,7 @@ export async function runEstimateGeneration({ brief, instruction = "", systemPro
   }
   if (!profile) { profile = fallbackProfile(brief); profileFallbackUsed = true; }
   const context = getGenerationContext ? await getGenerationContext(profile) : { shortlist: getKnowledgeContext ? await getKnowledgeContext(profile) : EMPTY_SHORTLIST, personalization: "" };
-  const shortlist = context?.shortlist || EMPTY_SHORTLIST;
+  const shortlist = context?.useStudioTemplates === false ? EMPTY_SHORTLIST : context?.shortlist || EMPTY_SHORTLIST;
   const personalization = typeof context?.personalization === "string" ? context.personalization : "";
 
   const messages = [

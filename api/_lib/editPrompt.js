@@ -1,4 +1,4 @@
-import { TAG_DEFS, PAYMENT_OPTIONS } from "../../src/constants.js";
+import { PAYMENT_OPTIONS } from "../../src/constants.js";
 import { STUDIO_ROLES } from "../../src/cgTaskRoleTaxonomy.js";
 
 export const AI_EDIT_SYSTEM_PROMPT = `
@@ -46,29 +46,73 @@ error:
 Верни только один завершённый JSON без markdown и текста вне JSON.
 `;
 
-function projectData(project) {
+const tagValue = (executor, key) => (executor.tags || []).find((tag) => tag?.key === key)?.value;
+
+function executorData(executor) {
+  const payment = (executor.tags || []).find((tag) => tag?.key === "payment")?.payment || {};
+  const snapshot = executor.performerSnapshot || {};
   return {
-    id: project.id, name: project.name, globalMarkup: project.globalMarkup, markupMode: project.markupMode, tax: project.tax, vat: project.vat,
-    stages: (project.stages || []).map((stage) => ({ id: stage.id, presetKey: stage.presetKey, name: stage.name, tasks: (stage.tasks || []).map((task) => ({ id: task.id, name: task.name, directCost: task.directCost, markupOverride: task.markupOverride, executors: (task.executors || []).map((executor) => ({ id: executor.id, amount: executor.amount, performerId: executor.performerId, performerSnapshot: executor.performerSnapshot, tags: (executor.tags || []).filter((tag) => TAG_DEFS.some((def) => def.key === tag.key)).map((tag) => ({ id: tag.id, key: tag.key, value: tag.value, ...(tag.key === "payment" ? { payment: tag.payment } : {}) })) })) })) })),
+    name: tagValue(executor, "name") || snapshot.name || [snapshot.firstName, snapshot.lastName].filter(Boolean).join(" ") || undefined,
+    role: tagValue(executor, "role") || snapshot.primaryRole || snapshot.role || undefined,
+    specialization: tagValue(executor, "spec") || snapshot.specialization || undefined,
+    grade: tagValue(executor, "grade") || snapshot.grade || undefined,
+    paymentType: payment.type || tagValue(executor, "payment") || undefined,
+    rate: payment.rate ?? executor.amount ?? undefined,
+    quantity: payment.units ?? payment.hours ?? payment.shifts ?? undefined,
+    tax: tagValue(executor, "tax") ?? undefined,
   };
 }
 
+const taskData = (task) => ({ name: task.name, directCost: task.directCost ?? undefined, markupOverride: task.markupOverride ?? undefined, executors: (task.executors || []).map(executorData) });
+const stageData = (stage) => ({ name: stage.name, tasks: (stage.tasks || []).map(taskData) });
+
+function projectData(project, scope) {
+  let stages = project.stages || [];
+  if (scope.kind !== "project") stages = stages.filter((stage) => stage.id === scope.stageId);
+  const projectedStages = stages.map((stage) => ({ ...stageData(stage), tasks: scope.kind === "stage" ? stage.tasks?.map(taskData) || [] : scope.kind === "project" ? stage.tasks?.map(taskData) || [] : (stage.tasks || []).filter((task) => task.id === scope.taskId).map((task) => ({ ...taskData(task), executors: scope.kind === "executor" ? (task.executors || []).filter((executor) => executor.id === scope.executorId).map(executorData) : taskData(task).executors })) }));
+  return { name: project.name, ...(scope.kind === "project" ? { globalMarkup: project.globalMarkup, markupMode: project.markupMode, tax: project.tax, vat: project.vat } : {}), stages: projectedStages };
+}
+
 function performerData(performer) {
-  return { id: performer.id, name: [performer.firstName, performer.lastName].filter(Boolean).join(" "), primaryRole: performer.primaryRole, defaultPaymentType: performer.defaultPaymentType, defaultRate: performer.defaultRate, defaultTaxRate: performer.defaultTaxRate, active: performer.active !== false };
+  return { name: [performer.firstName, performer.lastName].filter(Boolean).join(" "), primaryRole: performer.primaryRole, specializations: performer.specializations, grade: performer.grade, defaultPaymentType: performer.defaultPaymentType, defaultRate: performer.defaultRate, defaultTaxRate: performer.defaultTaxRate };
+}
+
+function selectedKnowledgeData(entry) {
+  const value = entry?.value || entry || {};
+  const projectTask = (task) => ({ name: task.name, roles: task.roles, specializations: task.specializations, grades: task.grades, rateHints: task.rateHints, executors: (task.executors || []).map(executorData) });
+  const projectStage = (stage) => ({ name: stage.name, tasks: (stage.tasks || []).map(projectTask) });
+  if (entry?.kind === "task_template") return { kind: entry.kind, value: projectTask(value) };
+  if (entry?.kind === "stage_template") return { kind: entry.kind, value: projectStage(value) };
+  if (entry?.kind === "project_template") return { kind: entry.kind, value: { name: value.templateName || value.name, stages: (value.stages || []).map(projectStage) } };
+  return null;
+}
+
+function knowledgeData(knowledge) {
+  if (Array.isArray(knowledge)) return knowledge.map(selectedKnowledgeData).filter(Boolean);
+  const source = knowledge && typeof knowledge === "object" ? knowledge : {};
+  return [
+    ...(source.projectTemplates || []).map((value) => selectedKnowledgeData({ kind: "project_template", value })),
+    ...(source.stageTemplates || []).map((value) => selectedKnowledgeData({ kind: "stage_template", value })),
+    ...(source.taskTemplates || []).map((value) => selectedKnowledgeData({ kind: "task_template", value })),
+  ].filter(Boolean);
+}
+
+function resolvedTargetData(target) {
+  if (!target || typeof target !== "object") return null;
+  return { kind: target.kind, name: target.name, stageName: target.stageName, taskName: target.taskName };
 }
 
 export function buildAiEditMessages({ request, project, personalization, performers, knowledge, resolvedProjectTarget = null, resolvedTask = null }) {
   const policy = { roles: STUDIO_ROLES, paymentTypes: PAYMENT_OPTIONS.map((item) => item.key), maxMoney: 1_000_000_000 };
   const content = [
-    `<scope>${JSON.stringify(request.scope)}</scope>`,
+    `<scope>${JSON.stringify({ kind: request.scope.kind })}</scope>`,
     `<current_user_instruction>${request.instruction}</current_user_instruction>`,
-    `<resolved_project_target>${JSON.stringify(resolvedProjectTarget)}</resolved_project_target>`,
-    `<resolved_task_for_creation>${JSON.stringify(resolvedTask)}</resolved_task_for_creation>`,
-    `<confirmed_state>${JSON.stringify(request.confirmed)}</confirmed_state>`,
-    `<project_data>${JSON.stringify(projectData(project))}</project_data>`,
+    `<resolved_project_target>${JSON.stringify(resolvedTargetData(resolvedProjectTarget))}</resolved_project_target>`,
+    `<resolved_task_for_creation>${JSON.stringify(resolvedTargetData(resolvedTask))}</resolved_task_for_creation>`,
+    `<project_data>${JSON.stringify(projectData(project, request.scope))}</project_data>`,
     `<ai_personalization>${personalization || "Персонализация не настроена."}</ai_personalization>`,
     `<performer_sources>${JSON.stringify((performers || []).map(performerData))}</performer_sources>`,
-    `<studio_knowledge>${JSON.stringify(knowledge || [])}</studio_knowledge>`,
+    `<studio_knowledge>${JSON.stringify(knowledgeData(knowledge))}</studio_knowledge>`,
     `<domain_policy>${JSON.stringify(policy)}</domain_policy>`,
   ].join("\n\n");
   return [{ role: "system", content: AI_EDIT_SYSTEM_PROMPT }, { role: "user", content }];

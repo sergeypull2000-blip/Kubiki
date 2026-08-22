@@ -8,6 +8,7 @@
 
 import { authenticateRequest } from "./_lib/auth.js";
 import { createUsageRecorder, UsageLimitError } from "./_lib/aiUsage.js";
+import { randomUUID } from "node:crypto";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const MODEL = "deepseek-v4-flash";
@@ -28,6 +29,8 @@ const SYSTEM_PROMPT = `Ты разбираешь смету видеопрода
 - Если текст пришёл из PDF, колонки восстановлены по координатам и могут быть не идеально выровнены (фрагменты одной ячейки иногда распадаются на несколько «|»-сегментов) — ориентируйся на смысл содержимого строки, а не на номер сегмента.`;
 
 export default async function handler(req, res) {
+  const requestId = randomUUID();
+  const startedAt = Date.now();
   // CORS — разрешаем запросы с любого origin (для preview на Vercel)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -70,8 +73,8 @@ export default async function handler(req, res) {
     });
 
     if (!r.ok) {
-      const errText = await r.text().catch(() => "");
-      console.error("DeepSeek API error:", r.status, errText);
+      await r.body?.cancel?.().catch(() => {});
+      console.error({ event: "parse_excel_provider_error", requestId, stage: "import", status: r.status, durationMs: Date.now() - startedAt, category: "upstream_http_error" });
       return res.status(502).json({ error: `DeepSeek API ответил ${r.status}. Попробуйте позже.` });
     }
 
@@ -97,9 +100,7 @@ export default async function handler(req, res) {
     // Быстрая проверка, что ответ похож на завершённый JSON-объект,
     // прежде чем пытаться его парсить
     if (!clean.startsWith("{") || !clean.endsWith("}")) {
-      console.error(
-        `parse-excel: ответ не похож на завершённый JSON (длина ${clean.length} символов), начало: "${clean.slice(0, 50)}", конец: "${clean.slice(-50)}"`
-      );
+      console.error({ event: "parse_excel_invalid_response", requestId, stage: "import", durationMs: Date.now() - startedAt, category: "incomplete_json", responseLength: clean.length });
       return res.status(502).json({
         error:
           "Смета слишком большая — не удалось разобрать целиком. Попробуйте импортировать по частям или обратитесь к разработчику.",
@@ -109,10 +110,8 @@ export default async function handler(req, res) {
     let parsed;
     try {
       parsed = JSON.parse(clean);
-    } catch (parseErr) {
-      console.error(
-        `parse-excel: JSON.parse упал (${parseErr.message}), длина ответа ${clean.length} символов`
-      );
+    } catch {
+      console.error({ event: "parse_excel_invalid_response", requestId, stage: "import", durationMs: Date.now() - startedAt, category: "invalid_json", responseLength: clean.length });
       return res.status(502).json({
         error:
           "Смета слишком большая — не удалось разобрать целиком. Попробуйте импортировать по частям или обратитесь к разработчику.",
@@ -121,7 +120,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json(parsed);
   } catch (e) {
-    console.error("parse-excel error:", e);
+    console.error({ event: "parse_excel_error", requestId, stage: "import", durationMs: Date.now() - startedAt, category: e?.name === "AbortError" ? "timeout" : "internal_error" });
     return res.status(500).json({ error: e.message || "Внутренняя ошибка сервера" });
   } finally {
     await usage.release();

@@ -99,6 +99,19 @@ test("orchestrator reports no auto-matched names when studio templates are off",
   assert.deepEqual(result.autoMatchedNames, []);
 });
 
+test("studio settings off removes studio knowledge from the model-facing generation payload", async () => {
+  const calls = [], secret = "PRIVATE_STUDIO_KNOWLEDGE";
+  await runEstimateGeneration({ brief: "Brief", systemPrompt: "ORIGINAL", requestModel: async (messages) => { calls.push(messages); return calls.length === 1 ? validProfile() : validEstimate(); }, getGenerationContext: async () => ({
+    personalization: "", useStudioTemplates: false,
+    performers: [{ id: "db-performer-id", firstName: secret }],
+    shortlist: { projectTemplates: [{ id: "db-template-id", name: secret }], stageTemplates: [], taskTemplates: [], performers: [{ id: "db-performer-id", displayName: secret }], historicalProjects: [] },
+  }) });
+  const modelPayload = calls[1][1].content;
+  assert.doesNotMatch(modelPayload, new RegExp(secret));
+  assert.doesNotMatch(modelPayload, /db-(?:template|performer)-id/);
+  assert.match(modelPayload, /<studio_knowledge>\s*\{"projectTemplates":\[\],"stageTemplates":\[\],"taskTemplates":\[\],"performers":\[\],"historicalProjects":\[\]\}\s*<\/studio_knowledge>/);
+});
+
 test("personalization is absent from analysis and mandatory in final prompt", async () => {
   const calls = [];
   await runEstimateGeneration({ brief: "Brief", systemPrompt: "ORIGINAL", requestModel: async (messages) => { calls.push(messages); return calls.length === 1 ? validProfile() : validEstimate(); }, getGenerationContext: async () => ({ personalization: "Не дробить задачи", shortlist: { projectTemplates: [], stageTemplates: [], taskTemplates: [], performers: [], historicalProjects: [] } }) });

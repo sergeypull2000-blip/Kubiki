@@ -57,12 +57,12 @@ test("project lookup telemetry logs request id and found state", async () => {
   const logger = { info(name, fields) { events.push({ name, fields }); }, error() {} };
   const found = await resolveEditProjectLookup({ userId: "owner", projectId: "project-a", requestId: "edit-1", loadProject: async () => ({ id: "project-a" }), logger });
   assert.deepEqual(found.project, { id: "project-a" });
-  assert.deepEqual(events[0], { name: "edit_project_lookup", fields: { requestId: "edit-1", projectId: "project-a", userId: "owner", lookupFound: true } });
+  assert.deepEqual(events[0], { name: "edit_project_lookup", fields: { requestId: "edit-1", lookupFound: true } });
   events.length = 0;
   const missing = await resolveEditProjectLookup({ userId: "owner", projectId: "project-missing", requestId: "edit-2", loadProject: async () => null, listClientIds: async () => ["project-a", "project-b"], logger });
   assert.equal(missing.project, null);
   assert.equal(events[0].name, "edit_project_lookup");
-  assert.deepEqual(events[0].fields, { requestId: "edit-2", projectId: "project-missing", userId: "owner", lookupFound: false, projectCount: 2, projectIdSample: ["project-a", "project-b"] });
+  assert.deepEqual(events[0].fields, { requestId: "edit-2", lookupFound: false, projectCount: 2 });
   assert.deepEqual(projectNotFoundResponse("edit-2"), { status: 404, body: { error: "Смета не найдена", code: "project_not_found", requestId: "edit-2" } });
 });
 
@@ -157,6 +157,20 @@ test("editor prompt fixes priorities, strict JSON, no arbitrary patch and no imp
   const messages = buildAiEditMessages({ request: { schemaVersion: 1, requestId: "r", baseRevision: "x", scope: { kind: "project", projectId: "p" }, instruction: "Переименуй", confirmed: {}, idPool: { stages: [], tasks: [], executors: [], tags: [] } }, project: { id: "p", stages: [], branding: { contacts: "secret" } }, personalization: "Всегда сториборд", performers: [], knowledge: [] });
   assert.doesNotMatch(messages[1].content, /secret/); assert.match(messages[1].content, /<studio_knowledge>\[\]/);
   assert.doesNotMatch(messages[0].content, /requestId|baseRevision/); assert.doesNotMatch(messages[1].content, /<request_meta>/);
+});
+
+test("AI edit payload is scope-minimized and strips internal ids, snapshots, tags and template metadata", () => {
+  const request = { scope: { kind: "task", projectId: "project-db-id", stageId: "stage-target-id", taskId: "task-target-id" }, instruction: "Измени оплату", confirmed: { performerId: "performer-db-id" } };
+  const executor = { id: "executor-db-id", amount: "1000", performerId: "performer-db-id", performerSnapshot: { id: "snapshot-id", name: "Анна", primaryRole: "Аниматор", privateNote: "snapshot-secret" }, tags: [{ id: "tag-name-id", key: "name", value: "Анна" }, { id: "tag-payment-id", key: "payment", value: "hourly", payment: { type: "hourly", rate: "500", hours: "2", internal: "payment-secret" } }] };
+  const project = { id: "project-db-id", name: "Смета", stages: [
+    { id: "stage-target-id", name: "Продакшн", tasks: [{ id: "task-target-id", name: "Анимация", executors: [executor] }, { id: "unrelated-task-id", name: "Секретная задача", executors: [] }] },
+    { id: "unrelated-stage-id", name: "Секретный этап", tasks: [] },
+  ] };
+  const knowledge = [{ kind: "task_template", id: "selected-template-id", value: { id: "raw-template-id", name: "Шаблон", metadata: { secret: true }, tags: [{ id: "template-tag-id" }], executors: [executor] } }];
+  const payload = buildAiEditMessages({ request, project, personalization: "", performers: [{ id: "performer-db-id", firstName: "Анна", primaryRole: "Аниматор", internal: "performer-secret" }], knowledge })[1].content;
+  assert.match(payload, /Анимация|Анна|Аниматор|hourly|500/);
+  assert.doesNotMatch(payload, /project-db-id|stage-target-id|task-target-id|executor-db-id|performer-db-id|snapshot-id|tag-name-id|tag-payment-id|selected-template-id|raw-template-id|template-tag-id/);
+  assert.doesNotMatch(payload, /Секретная задача|Секретный этап|snapshot-secret|payment-secret|performer-secret|metadata|performerSnapshot|tags/);
 });
 
 test("endpoint is read-only, owner-scoped and does not log Project content", () => {

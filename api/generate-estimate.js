@@ -600,11 +600,12 @@ export async function executeGeneration(req, budget, generationRequestId = rando
       remainingRequestMs: () => budget.remainingMs(),
       getGenerationContext: async (profile) => {
         const settings = await loadServerAiSettings(auth.client, auth.user.id);
-        let performers = [];
-        if (settings.useStudioTemplates) {
-          try { performers = await loadOwnPerformersForEdit(auth.client, auth.user.id); }
-          catch (error) { console.error("AI performers loading failed", { name: error?.name || "Error" }); }
+        if (!settings.useStudioTemplates) {
+          return { shortlist: { projectTemplates: [], stageTemplates: [], taskTemplates: [], performers: [], historicalProjects: [] }, personalization: settings.personalization, performers: [], useStudioTemplates: false };
         }
+        let performers = [];
+        try { performers = await loadOwnPerformersForEdit(auth.client, auth.user.id); }
+        catch (error) { console.error("AI performers loading failed", { name: error?.name || "Error" }); }
         try {
           const rawKnowledge = await loadOwnKnowledge(auth.client, auth.user.id, { includeHistory: settings.useProjectHistory });
           return { shortlist: buildShortlist(profile, projectKnowledge(rawKnowledge)), personalization: settings.personalization, performers, useStudioTemplates: settings.useStudioTemplates };
@@ -631,7 +632,7 @@ export async function executeGeneration(req, budget, generationRequestId = rando
       if (!success) return { status: 422, body: { error: resolved.unresolvedSlots[0].question, code: "generated_performer_unresolved" } };
     } catch (error) { console.info({ event: "generation_performer_resolution", requestId: generationRequestId, success: false, diagnostic: { reason: "resolution_failed" } }); throw error; }
   } else console.info({ event: "generation_performer_resolution", requestId: generationRequestId, success: true, diagnostic: { reason: "not_required", unresolvedCount: 0 } });
-  console.info({ event: "generation_compile", requestId: generationRequestId, success: true, diagnostic: { reason: "initial_ui_adapter", performerCount: result.performerCount, useStudioTemplates: result.useStudioTemplates, autoMatchedNames: result.autoMatchedNames } });
+  console.info({ event: "generation_compile", requestId: generationRequestId, success: true, diagnostic: { reason: "initial_ui_adapter", performerCount: result.performerCount, useStudioTemplates: result.useStudioTemplates } });
   console.info({ event: "generation_response_validation", requestId: generationRequestId, success: true, diagnostic: { reason: "generated_structure_valid" } });
   return { status: 200, body: result.estimate, metadata: serializeGenerationMetadata(buildGenerationMetadata(result)) };
 }

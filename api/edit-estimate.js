@@ -108,12 +108,12 @@ async function executeEdit(req, budget) {
 export async function resolveEditProjectLookup({ client, userId, requestId, projectId, loadProject = loadOwnProjectForEdit, listClientIds = listOwnProjectClientIds, logger = console }) {
   const project = await loadProject(client, userId, projectId);
   if (project) {
-    logger.info("edit_project_lookup", { requestId, projectId, userId, lookupFound: true });
+    logger.info("edit_project_lookup", { requestId, lookupFound: true });
     return { project };
   }
   let clientIds = [];
   try { clientIds = await listClientIds(client, userId); } catch (error) { logger.error("edit_project_lookup_diagnostic_failed", { requestId, name: error?.name || "Error" }); }
-  logger.info("edit_project_lookup", { requestId, projectId, userId, lookupFound: false, projectCount: clientIds.length, projectIdSample: clientIds.slice(0, 5) });
+  logger.info("edit_project_lookup", { requestId, lookupFound: false, projectCount: clientIds.length });
   return { project: null };
 }
 
@@ -131,7 +131,7 @@ async function generateStructurePlan({ request, project, auth, settings, request
   const resolved = resolveGeneratedStructure({ draft, performers });
   console.info({ event: "generation_performer_resolution", requestId: request.requestId, success: !resolved.unresolvedSlots.length, diagnostic: { reason: resolved.unresolvedSlots.length ? "unresolved_slots" : "resolved", unresolvedCount: resolved.unresolvedSlots.length } });
   if (resolved.unresolvedSlots.length) return generatedClarificationResponse(request, resolved, result.profile);
-  try { const body = compileGeneratedStructure({ resolved, request, project, performers, pricingPolicy: result.profile }); console.info({ event: "generation_compile", requestId: request.requestId, success: true, diagnostic: { reason: "compiled", performerCount: result.performerCount, useStudioTemplates: result.useStudioTemplates, autoMatchedNames: result.autoMatchedNames } }); console.info({ event: "generation_response_validation", requestId: request.requestId, success: true, diagnostic: { reason: "diff_validated" } }); return { status: 200, body }; }
+  try { const body = compileGeneratedStructure({ resolved, request, project, performers, pricingPolicy: result.profile }); console.info({ event: "generation_compile", requestId: request.requestId, success: true, diagnostic: { reason: "compiled", performerCount: result.performerCount, useStudioTemplates: result.useStudioTemplates } }); console.info({ event: "generation_response_validation", requestId: request.requestId, success: true, diagnostic: { reason: "diff_validated" } }); return { status: 200, body }; }
   catch (error) { console.info({ event: "generation_compile", requestId: request.requestId, success: false, diagnostic: { reason: "compile_failed", code: typeof error?.code === "string" ? error.code : "unknown" } }); if (error instanceof AiEditSemanticCompileError || error instanceof AiEditSemanticPlanError || error instanceof Error && error.code) return { status: 422, body: { error: error.message, code: error.code || "ai_compile_invalid_generated_structure" } }; throw error; }
 }
 
