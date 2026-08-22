@@ -86,7 +86,14 @@ export function createHttpRepositories(request) {
   const legalAcceptances = {
     list: () => request("/api/legal-acceptances"),
     accept: (_userId, documentKey, version) => request("/api/legal-acceptances", { method: "POST", json: { documentKey, version } }),
+    revoke: (_userId, documentKey, version) => request("/api/legal-acceptances", { method: "DELETE", json: { documentKey, version } }),
   };
 
-  return { projects, performers, quickAccess, templateLibrary, aiSettings, exportProfile, exportPresets, productEvents, userFlags, betaFeedback, usage, legalAcceptances };
+  const aiFeedback = {
+    apply: (_userId, value) => request("/api/ai-feedback/apply", { method: "POST", json: value }),
+    update: (_userId, projectId, project) => request("/api/ai-feedback/active", { method: "PUT", json: { projectId, project } }),
+    finalize: (_userId, projectId, project) => request("/api/ai-feedback/finalize", { method: "POST", json: { projectId, project } }),
+  };
+
+  return { projects, performers, quickAccess, templateLibrary, aiSettings, exportProfile, exportPresets, productEvents, userFlags, betaFeedback, usage, legalAcceptances, aiFeedback };
 }

@@ -16,4 +16,5 @@ export const userFlagsRepository = repositories.userFlags;
 export const betaFeedbackRepository = repositories.betaFeedback;
 export const usageRepository = repositories.usage;
 export const legalAcceptancesRepository = repositories.legalAcceptances;
+export const aiFeedbackRepository = repositories.aiFeedback;
 export const exportProfileRepository = { ...repositories.exportProfile, ...logoRepository };

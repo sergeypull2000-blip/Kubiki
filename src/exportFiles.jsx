@@ -9,7 +9,7 @@ import { activeSheet } from "./sheets.js";
 import { useOutsideClose } from "./hooks.js";
 import { clamp, hexToRgb, hsvToHex, normalizeHex, rgbToHsv } from "./color.js";
 import { buildExcelRows, buildExcelWorkbook } from "./excelExport.js";
-import { exportPresetsRepository, exportProfileRepository, productEventsRepository } from "./backend/runtimeRepositories.js";
+import { exportPresetsRepository, exportProfileRepository, productEventsRepository, aiFeedbackRepository } from "./backend/runtimeRepositories.js";
 import { normalizePresentationSettings } from "./exportSettings.js";
 import { fetchFreshLogoDataUrl } from "./exportLogo.js";
 
@@ -487,6 +487,7 @@ function ExportModal({ project, format, dispatch, userId, onClose, onExport }) {
     setExportError("");
     try {
       await onExport(model);
+      if (userId) aiFeedbackRepository.finalize(userId, project.id, project).catch(() => console.warn("AI feedback finalization failed"));
       if (userId) productEventsRepository.track(userId, "export_completed", {}, { format }).catch(() => {});
     } catch (error) {
       setExportError(error instanceof Error ? error.message : "Не удалось сформировать PDF-файл.");

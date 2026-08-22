@@ -9,7 +9,8 @@ import { ImportModal, GenerateEstimateModal } from "./importExcel.jsx";
 import { APP_SECTIONS } from "./appNavigation.js";
 import { createPerformer, removePerformer, savePerformerLibrary, updatePerformer } from "./performerLibrary.js";
 import { applyQuickAccessPreference, migrateLegacyQuickAccess, pinQuickAccessItem, removeQuickAccessByPerformerId, removeQuickAccessItem, saveQuickAccessState, unpinQuickAccessItem } from "./quickAccess.js";
-import { projectRepository, performerRepository, quickAccessRepository, templateLibraryRepository, aiSettingsRepository, userFlagsRepository, productEventsRepository } from "./backend/runtimeRepositories.js";
+import { projectRepository, performerRepository, quickAccessRepository, templateLibraryRepository, aiSettingsRepository, userFlagsRepository, productEventsRepository, legalAcceptancesRepository, aiFeedbackRepository } from "./backend/runtimeRepositories.js";
+import { LEGAL_DOCUMENT_VERSIONS } from "./legalConfig.js";
 import { createLocalServerBackup, diffProjectCollections, migrateLocalProjects, shouldOfferProjectMigration } from "./projectServer.js";
 import { createPerformerBackup, localPerformersForUser, markPerformerServerOwner, migrateLocalPerformers, missingLocalPerformers } from "./performerServer.js";
 import { createQuickAccessBackup, localQuickAccessForUser, markQuickAccessServerOwner, migrateLocalQuickAccess, missingLocalQuickAccessItems } from "./quickAccessServer.js";
@@ -115,6 +116,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
   const [aiSettingsState, setAiSettingsState] = useState("loading");
   const [aiSettingsMessage, setAiSettingsMessage] = useState("");
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  const [improvementConsent, setImprovementConsent] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -203,18 +205,28 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     return () => { cancelled = true; aiSettingsSyncEnabledRef.current = false; aiSettingsRef.current = normalizeAiSettings(); };
   }, [userId, replaceAiSettings]);
 
-  const saveAiSettings = useCallback(async (draft) => {
+  const saveAiSettings = useCallback(async (draft, improve = improvementConsent) => {
     const value = normalizeAiSettings(draft);
     await aiSettingsHydrationRef.current;
     if (!aiSettingsSyncEnabledRef.current) { replaceAiSettings(value); setAiSettingsState("save-error"); setAiSettingsMessage("Не удалось подключиться к серверным настройкам. Текст сохранён только на этом устройстве; попробуйте ещё раз."); return false; }
     setAiSettingsState("saving"); setAiSettingsMessage("");
     try {
       const saved = await aiSettingsRepository.upsertAiSettings(userId, value);
+      if (improve !== improvementConsent) {
+        if (improve) await legalAcceptancesRepository.accept(userId, "ai_improvement_consent", LEGAL_DOCUMENT_VERSIONS.ai_improvement_consent);
+        else await legalAcceptancesRepository.revoke(userId, "ai_improvement_consent", LEGAL_DOCUMENT_VERSIONS.ai_improvement_consent);
+        setImprovementConsent(improve);
+      }
       replaceAiSettings(saved); setAiSettingsState("ready"); setAiSettingsMessage("Настройки сохранены"); return true;
     } catch (error) {
       replaceAiSettings(value); setAiSettingsState("save-error"); setAiSettingsMessage(`${error.message}. Текст сохранён только на этом устройстве; попробуйте ещё раз.`); return false;
     }
-  }, [replaceAiSettings, userId]);
+  }, [replaceAiSettings, userId, improvementConsent]);
+
+  useEffect(() => {
+    if (!aiSettingsOpen) return;
+    legalAcceptancesRepository.list().then(({ acceptances = [] }) => setImprovementConsent(acceptances.some((item) => item.document_key === "ai_improvement_consent" && item.version === LEGAL_DOCUMENT_VERSIONS.ai_improvement_consent && !item.revoked_at))).catch(() => setImprovementConsent(false));
+  }, [aiSettingsOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -277,6 +289,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
         inFlight: inFlightSavesRef.current,
         persist: (snapshot) => projectRepository.upsertProject(userId, snapshot),
       });
+      aiFeedbackRepository.update(userId, project.id, project).catch(() => console.warn("AI feedback update failed"));
       setSaveState("saved");
       setServerMessage("");
       return true;
@@ -475,6 +488,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     const normalized = makeProjectFromEstimate(stages, meta);
     replaceProjects([...projectsRef.current, normalized]);
     scheduleProjectSave(normalized, 0);
+    flushProject(normalized.id).then(() => aiFeedbackRepository.apply(userId, { projectId: normalized.id, operation: meta?.source === "import" ? "import" : "generate", aiRequestId: meta?.requestId || null, beforeProject: normalized, aiProject: normalized })).catch(() => console.warn("AI feedback apply failed"));
     setProjectSource(null);
     setCurrentId(normalized.id);
     trackProductEvent("project_created", {}, { source: "estimate" });
@@ -530,9 +544,10 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     const verified = await buildAiEditPreview({ project: current, response: preview.response, performers: performersRef.current, idPool: preview.idPool, expectedRevision: preview.baseRevision, instruction: preview.instruction, selectedSources: preview.selectedSources });
     const applied = commitProject(projectId, () => verified.afterProject, 0);
     if (!applied) throw new Error("Не удалось применить AI-diff");
+    flushProject(projectId).then(() => aiFeedbackRepository.apply(userId, { projectId, operation: "edit", aiRequestId: verified.requestId || null, beforeProject: verified.beforeProject, aiProject: verified.afterProject })).catch(() => console.warn("AI feedback apply failed"));
     aiUndoRef.current.record(projectId, { beforeProject: verified.beforeProject, appliedRevision: verified.afterRevision, requestId: verified.requestId });
     setAiUndoVersion((value) => value + 1);
-  }, [commitProject]);
+  }, [commitProject, flushProject, userId]);
 
   const undoCurrentAiEdit = useCallback(async () => {
     const entry = aiUndoRef.current.get(currentId), current = projectsRef.current.find((item) => item.id === currentId);
@@ -700,7 +715,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
           </div>
         </div>
       </div>}
-      {aiSettingsOpen && <AIPersonalizationModal settings={aiSettings} state={aiSettingsState} message={aiSettingsMessage} onSave={saveAiSettings} onClose={() => setAiSettingsOpen(false)} />}
+      {aiSettingsOpen && <AIPersonalizationModal settings={aiSettings} improvementConsent={improvementConsent} state={aiSettingsState} message={aiSettingsMessage} onSave={saveAiSettings} onClose={() => setAiSettingsOpen(false)} />}
       {welcomeOpen && <WelcomeModal onStart={handleWelcomeStart} />}
       {usageOpen && <UsageLimitsModal onClose={() => setUsageOpen(false)} />}
       {feedbackOpen && <BetaFeedbackModal userId={userId} context={feedbackContext} onClose={() => setFeedbackOpen(false)} />}
@@ -738,7 +753,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
       </div>}
       {["error", "save-error"].includes(quickAccessState) && <div className="kb-toast" role="alert">{quickAccessMessage}<button className="kb-toast-retry" type="button" onClick={() => setQuickAccessRetry((value) => value + 1)}>Повторить</button><button className="kb-toast-retry" type="button" onClick={() => { setQuickAccessState("ready"); setQuickAccessMessage(""); }}>Закрыть</button></div>}
       {aiGenerationReady && projectSource?.file && <ImportModal file={projectSource.file} instruction={projectSource.description || ""}
-        onClose={() => setProjectSource(null)} onConfirm={createProjectFromEstimate} />}
+        onClose={() => setProjectSource(null)} onConfirm={(stages, meta) => createProjectFromEstimate(stages, { ...meta, source: "import" })} />}
       {aiGenerationReady && projectSource && !projectSource.file && <GenerateEstimateModal description={projectSource.description} performers={performers}
         onClose={() => setProjectSource(null)} onConfirm={(stages, meta) => { trackProductEvent("ai_generate", { requestId: meta?.requestId || null }, { source: meta?.generationScope || "whole_project" }); createProjectFromEstimate(stages, meta); }} />}
       {editingTemplateId ? (

@@ -36,7 +36,7 @@ export function createServerDataRepository(pool) {
       return rows[0]?.library_data || null;
     },
     async hasLegalAcceptance(userId, documentKey, version) {
-      const { rows } = await query(`select 1 from public.user_legal_acceptances where user_id=$1 and document_key=$2 and version=$3`, [userId, documentKey, version]);
+      const { rows } = await query(`select 1 from public.user_legal_acceptances where user_id=$1 and document_key=$2 and version=$3 and revoked_at is null`, [userId, documentKey, version]);
       return Boolean(rows[0]);
     },
   };

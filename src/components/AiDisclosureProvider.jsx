@@ -11,13 +11,14 @@ export function AiDisclosureProvider({ userId, children }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [improve, setImprove] = useState(false);
   const pending = useRef([]);
 
   useEffect(() => {
     let cancelled = false;
     setAccepted(null);
     legalAcceptancesRepository.list().then(({ acceptances = [] }) => {
-      if (!cancelled) setAccepted(acceptances.some((item) => item.document_key === KEY && item.version === LEGAL_DOCUMENT_VERSIONS[KEY]));
+      if (!cancelled) setAccepted(acceptances.some((item) => item.document_key === KEY && item.version === LEGAL_DOCUMENT_VERSIONS[KEY] && !item.revoked_at));
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [userId]);
@@ -27,14 +28,14 @@ export function AiDisclosureProvider({ userId, children }) {
     if (accepted === null) {
       try {
         const { acceptances = [] } = await legalAcceptancesRepository.list();
-        if (acceptances.some((item) => item.document_key === KEY && item.version === LEGAL_DOCUMENT_VERSIONS[KEY])) {
+        if (acceptances.some((item) => item.document_key === KEY && item.version === LEGAL_DOCUMENT_VERSIONS[KEY] && !item.revoked_at)) {
           setAccepted(true);
           return true;
         }
       } catch {}
       setAccepted(false);
     }
-    setOpen(true); setError("");
+    setOpen(true); setError(""); setImprove(false);
     return new Promise((resolve, reject) => pending.current.push({ resolve, reject }));
   }, [accepted]);
 
@@ -49,6 +50,7 @@ export function AiDisclosureProvider({ userId, children }) {
     setSaving(true); setError("");
     try {
       await legalAcceptancesRepository.accept(userId, KEY, LEGAL_DOCUMENT_VERSIONS[KEY]);
+      if (improve) await legalAcceptancesRepository.accept(userId, "ai_improvement_consent", LEGAL_DOCUMENT_VERSIONS.ai_improvement_consent);
       setAccepted(true); setOpen(false);
       pending.current.splice(0).forEach(({ resolve }) => resolve(true));
     } catch {
@@ -56,5 +58,5 @@ export function AiDisclosureProvider({ userId, children }) {
     } finally { setSaving(false); }
   };
 
-  return <>{children}{open && <AiDisclosureModal saving={saving} error={error} onCancel={cancel} onContinue={proceed} />}</>;
+  return <>{children}{open && <AiDisclosureModal saving={saving} error={error} improve={improve} onImproveChange={setImprove} onCancel={cancel} onContinue={proceed} />}</>;
 }

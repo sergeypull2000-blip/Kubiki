@@ -126,7 +126,7 @@ export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMill
       void (async () => {
         const authContext = await authenticate(request);
         if (!authContext) return sendJson(response, 401, { error: "authentication_required" });
-        request.body = ["POST", "PUT", "PATCH"].includes(request.method) ? await readJson(request, bodyLimitBytes) : undefined;
+        request.body = ["POST", "PUT", "PATCH", "DELETE"].includes(request.method) ? await readJson(request, bodyLimitBytes) : undefined;
         const result = await handleOwnerApiRoute(ownerRoute, request, ownerApi, authContext.user.id);
         sendJson(response, result.status, result.body);
       })().catch((error) => {

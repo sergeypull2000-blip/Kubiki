@@ -5,6 +5,8 @@ import { deserializeTemplateLibraryFromServer, serializeTemplateLibraryForServer
 import { normalizeAiSettings } from "../../src/aiSettings.js";
 import { presentationSettingsForPreset } from "../../src/exportSettings.js";
 import { notFound } from "../apiErrors.js";
+import { feedbackProjection, projectionsEqual, structuralDiff } from "../aiFeedback.js";
+import { LEGAL_DOCUMENT_VERSIONS } from "../../src/legalConfig.js";
 
 const one = (result) => { if (!result.rows[0]) throw notFound(); return result.rows[0]; };
 const transaction = async (pool, operation) => {
@@ -31,6 +33,17 @@ export function createOwnerApiRepository(pool) {
     return deserializeQuickAccessItemFromServer(one(await db.query(`insert into public.quick_access_items (user_id,client_id,performer_client_id,pinned,sort_order,item_data) select $1,$2,$3,$4,$5,$6 where exists (select 1 from public.performers where user_id=$1 and client_id=$3) on conflict (user_id,performer_client_id) do update set client_id=excluded.client_id,pinned=excluded.pinned,sort_order=excluded.sort_order,item_data=excluded.item_data returning *`, [userId,r.client_id,r.performer_client_id,r.pinned,r.sort_order,r.item_data])));
   };
   const quickCreate = async (userId,item) => {const r=buildQuickAccessRow(userId,item);return deserializeQuickAccessItemFromServer(one(await query(`insert into public.quick_access_items(user_id,client_id,performer_client_id,pinned,sort_order,item_data) select $1,$2,$3,$4,$5,$6 where exists(select 1 from public.performers where user_id=$1 and client_id=$3) returning *`,[userId,r.client_id,r.performer_client_id,r.pinned,r.sort_order,r.item_data])));};
+  const hasImprovementConsent = async (db, userId) => Boolean((await db.query(`select 1 from public.user_legal_acceptances where user_id=$1 and document_key='ai_improvement_consent' and version=$2 and revoked_at is null`, [userId, LEGAL_DOCUMENT_VERSIONS.ai_improvement_consent])).rows[0]);
+  const projectRow = async (db, userId, clientId) => (await db.query(`select id from public.projects where user_id=$1 and client_id=$2`, [userId, clientId])).rows[0];
+  const updateActiveSample = async (db, userId, clientId, project, finalize = false) => {
+    if (!await hasImprovementConsent(db, userId)) return null;
+    const owned = await projectRow(db, userId, clientId); if (!owned) return null;
+    const sample = (await db.query(`select * from public.ai_feedback_samples where project_id=$1 and finalized_at is null order by created_at desc limit 1 for update`, [owned.id])).rows[0];
+    if (!sample) return null;
+    const human = feedbackProjection(project), unchanged = projectionsEqual(sample.ai_snapshot, human), diff = structuralDiff(sample.ai_snapshot, human);
+    if (!finalize && unchanged) return sample;
+    return one(await db.query(`update public.ai_feedback_samples set human_snapshot=$3,diff=$4,accepted_without_correction=$5,finalized_at=case when $6 then now() else finalized_at end,updated_at=now() where id=$1 and project_id=$2 returning *`, [sample.id,owned.id,human,diff,finalize ? unchanged : null,finalize]));
+  };
   return {
     async listProjects(userId) { return (await query(`select * from public.projects where user_id=$1 order by updated_at desc,client_id`, [userId])).rows.map(deserializeProjectFromServer); },
     createProject: projectCreate, upsertProject: (u,p) => projectUpsert(pool,u,p),
@@ -66,7 +79,11 @@ export function createOwnerApiRepository(pool) {
     async getFlags(userId){return (await query(`select * from public.user_flags where user_id=$1`,[userId])).rows[0]||null;},
     async markBetaWelcomeSeen(userId){return one(await query(`insert into public.user_flags(user_id,beta_welcome_seen) values($1,true) on conflict(user_id) do update set beta_welcome_seen=true returning *`,[userId]));},
     async insertFeedback(userId,value){await query(`insert into public.beta_feedback(user_id,message,context,project_id,sheet_id) values($1,$2,$3,$4,$5)`,[userId,value.message,value.context,value.projectId,value.sheetId]);return {ok:true};},
-    async listLegalAcceptances(userId){return (await query(`select document_key,version,accepted_at from public.user_legal_acceptances where user_id=$1 order by accepted_at desc`,[userId])).rows;},
-    async acceptLegalDocument(userId,documentKey,version){return one(await query(`insert into public.user_legal_acceptances(user_id,document_key,version) values($1,$2,$3) on conflict(user_id,document_key,version) do update set user_id=excluded.user_id returning document_key,version,accepted_at`,[userId,documentKey,version]));},
+    async listLegalAcceptances(userId){return (await query(`select document_key,version,accepted_at,revoked_at from public.user_legal_acceptances where user_id=$1 order by accepted_at desc`,[userId])).rows;},
+    async acceptLegalDocument(userId,documentKey,version){return one(await query(`insert into public.user_legal_acceptances(user_id,document_key,version,revoked_at) values($1,$2,$3,null) on conflict(user_id,document_key,version) do update set accepted_at=now(),revoked_at=null returning document_key,version,accepted_at,revoked_at`,[userId,documentKey,version]));},
+    async revokeLegalDocument(userId,documentKey,version){return transaction(pool,async(db)=>{const row=one(await db.query(`update public.user_legal_acceptances set revoked_at=now() where user_id=$1 and document_key=$2 and version=$3 and revoked_at is null returning document_key,version,accepted_at,revoked_at`,[userId,documentKey,version]));await db.query(`delete from public.ai_feedback_samples as sample using public.projects as project where sample.project_id=project.id and project.user_id=$1`,[userId]);return row;});},
+    async applyAiFeedback(userId,{projectId,operation,aiRequestId,beforeProject,aiProject}){return transaction(pool,async(db)=>{if(!await hasImprovementConsent(db,userId))return {collected:false};const owned=await projectRow(db,userId,projectId);if(!owned)return {collected:false};await updateActiveSample(db,userId,projectId,beforeProject,true);const snapshot=feedbackProjection(aiProject);const row=one(await db.query(`insert into public.ai_feedback_samples(project_id,operation,ai_request_id,ai_snapshot) values($1,$2,$3,$4) returning id`,[owned.id,operation,aiRequestId||null,snapshot]));return {collected:true,id:row.id};});},
+    async updateAiFeedback(userId,{projectId,project}){const value=await transaction(pool,(db)=>updateActiveSample(db,userId,projectId,project,false));return {updated:Boolean(value)};},
+    async finalizeAiFeedback(userId,{projectId,project}){const value=await transaction(pool,(db)=>updateActiveSample(db,userId,projectId,project,true));return {finalized:Boolean(value)};},
   };
 }

@@ -3,7 +3,8 @@ import { batch, boolean, id, jsonObject, object, text, uuid } from "./validation
 import { normalizePresentationSettings } from "../src/exportSettings.js";
 
 const EVENTS = new Set(["signup", "session_active", "ai_generate", "ai_edit", "export_completed"]);
-const LEGAL_DOCUMENTS = new Set(["beta_terms", "personal_data_consent", "ai_disclosure"]);
+const LEGAL_DOCUMENTS = new Set(["beta_terms", "personal_data_consent", "ai_disclosure", "ai_improvement_consent"]);
+const FEEDBACK_OPERATIONS = new Set(["generate", "edit", "import"]);
 const ownershipFields = ["user_id", "userId", "owner", "owner_id"];
 const cleanObject = (value) => { const result=object(value); if (ownershipFields.some((key)=>Object.hasOwn(result,key))) throw badRequest("ownership_field_not_allowed"); return result; };
 const payload = (request) => cleanObject(request.body);
@@ -38,6 +39,10 @@ export function matchOwnerApiRoute(method, pathname) {
     "POST /api/beta-feedback": r=>r.insertFeedback,
     "GET /api/legal-acceptances": r=>r.listLegalAcceptances,
     "POST /api/legal-acceptances": r=>r.acceptLegalDocument,
+    "DELETE /api/legal-acceptances": r=>r.revokeLegalDocument,
+    "POST /api/ai-feedback/apply": r=>r.applyAiFeedback,
+    "PUT /api/ai-feedback/active": r=>r.updateAiFeedback,
+    "POST /api/ai-feedback/finalize": r=>r.finalizeAiFeedback,
   };
   if (exact[`${method} ${pathname}`]) return { name: `${method} ${pathname}` };
   const patterns = [
@@ -83,5 +88,9 @@ export async function handleOwnerApiRoute(route, request, repository, userId) {
   if(name==="POST /api/beta-feedback"){const v=payload(request);return response(201,await repository.insertFeedback(userId,{message:text(v.message,{max:4000}),context:text(v.context??"",{min:0,max:1000,nullable:true}),projectId:text(v.projectId??v.project_id??"",{min:0,max:200,nullable:true}),sheetId:text(v.sheetId??v.sheet_id??"",{min:0,max:200,nullable:true})}));}
   if(name==="GET /api/legal-acceptances")return response(200,{acceptances:await repository.listLegalAcceptances(userId)});
   if(name==="POST /api/legal-acceptances"){const v=payload(request),documentKey=text(v.documentKey??v.document_key,{max:64}),version=text(v.version,{max:32});if(!LEGAL_DOCUMENTS.has(documentKey))throw badRequest("invalid_document_key");return response(201,await repository.acceptLegalDocument(userId,documentKey,version));}
+  if(name==="DELETE /api/legal-acceptances"){const v=payload(request),documentKey=text(v.documentKey??v.document_key,{max:64}),version=text(v.version,{max:32});if(documentKey!=="ai_improvement_consent")throw badRequest("document_not_revocable");return response(200,await repository.revokeLegalDocument(userId,documentKey,version));}
+  if(name==="POST /api/ai-feedback/apply"){const v=payload(request),operation=text(v.operation,{max:32});if(!FEEDBACK_OPERATIONS.has(operation))throw badRequest("invalid_feedback_operation");return response(201,await repository.applyAiFeedback(userId,{projectId:id(v.projectId),operation,aiRequestId:text(v.aiRequestId??"",{min:0,max:200,nullable:true}),beforeProject:boundedObject(v.beforeProject,500_000),aiProject:boundedObject(v.aiProject,500_000)}));}
+  if(name==="PUT /api/ai-feedback/active"){const v=payload(request);return response(200,await repository.updateAiFeedback(userId,{projectId:id(v.projectId),project:boundedObject(v.project,500_000)}));}
+  if(name==="POST /api/ai-feedback/finalize"){const v=payload(request);return response(200,await repository.finalizeAiFeedback(userId,{projectId:id(v.projectId),project:boundedObject(v.project,500_000)}));}
   throw new ApiError(404,"not_found");
 }
