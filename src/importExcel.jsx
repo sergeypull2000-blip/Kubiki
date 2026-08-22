@@ -10,6 +10,7 @@ import { formatMoney, numVal } from "./utils.js";
 import { Logo } from "./Logo.jsx";
 import { useOutsideClose } from "./hooks.js";
 import { generateEstimateRequest } from "./ai/generationClient.js";
+import { requireAiDisclosure } from "./ai/disclosureGate.js";
 import { extractWordBrief } from "./ai/wordBrief.js";
 import { stagesFromGeneratedEstimate } from "./ai/estimateInsertion.js";
 import { kubikiApiRequest } from "./backend/apiTransport.js";
@@ -100,6 +101,7 @@ const serializePdfRows = (rows) => rows.map((line, i) => `R${i + 1} | ${line}`).
    (лист Excel или страницы PDF) на этот момент уже сведён к одному и тому же
    строково-табличному виду — дальше пайплайн общий. */
 async function llmParseText(sheetText, filename, instruction = "") {
+  await requireAiDisclosure();
   const j = await kubikiApiRequest("/api/parse-excel", { method: "POST", json: { sheet: sheetText, filename, instruction } });
   const hasEstimateTasks = j && Array.isArray(j.stages) && j.stages.some((stage) => Array.isArray(stage?.tasks) && stage.tasks.length > 0);
   if (!hasEstimateTasks) throw new Error("Файл не является сметой.");
@@ -111,6 +113,7 @@ async function llmParseText(sheetText, filename, instruction = "") {
    превью → прямая вставка внутренней себестоимости), меняется только
    вход (описание вместо таблицы) и системный промпт на сервере. */
 async function llmGenerateEstimate(description, instruction = "") {
+  await requireAiDisclosure();
   const j = await generateEstimateRequest({ description, instruction });
   if (!j || !Array.isArray(j.stages)) throw new Error("Модель вернула некорректный ответ.");
   return j;
@@ -231,6 +234,7 @@ function EstimatePreviewStep({ editor, generationMetadata, noteText, draftNotice
           </div>
         )}
         {localError && <div className="kb-modal-status is-error"><AlertTriangle size={16} strokeWidth={1.5} /> {localError}</div>}
+        <div className="kb-ai-result-label">Сгенерировано с помощью ИИ · Проверьте результат</div>
       </div>
       <div className="kb-modal-foot">
         <div className="kb-prev-summary">Этапов: {parsed.stages.length} · задач: {taskCount} · сумма: {formatMoney(total)} ₽</div>

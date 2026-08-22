@@ -62,7 +62,7 @@ export function createBetterAuth({ pool = authPool, config = authConfig, emailSe
     baseURL: config.baseUrl,
     emailVerification: {
       sendVerificationEmail: emailSender.sendVerificationEmail,
-      sendOnSignUp: true,
+      sendOnSignUp: false,
     },
     emailAndPassword: {
       enabled: true,

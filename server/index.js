@@ -9,6 +9,7 @@ import { createServerDataRepository } from "./repositories/serverDataRepository.
 import { createUsageRepository } from "./repositories/usageRepository.js";
 import { createOwnerApiRepository } from "./repositories/ownerApiRepository.js";
 import { createObjectStorage } from "./objectStorage.js";
+import { recordSignUpLegalAcceptances, rollbackFailedSignUp } from "./repositories/legalAcceptanceRepository.js";
 
 export async function startBackend({ env = process.env, logger = console } = {}) {
   const config = parseBackendConfig(env);
@@ -19,7 +20,15 @@ export async function startBackend({ env = process.env, logger = console } = {})
   const authenticate = createRequestAuthenticator({ auth, pool, logger });
   const serverData = Object.assign(createServerDataRepository(pool), createUsageRepository(pool));
   const ownerApi = createOwnerApiRepository(pool);
-  const server = createBackendServer({ pool, authHandler: createBetterAuthHttpHandler(auth.handler), authenticate, serverData, ownerApi, objectStorage, logger, ...config });
+  const authHandler = createBetterAuthHttpHandler(auth.handler, {
+    recordSignUpAcceptances: (authUserId) => recordSignUpLegalAcceptances(pool, authUserId),
+    rollbackSignUp: (authUserId) => rollbackFailedSignUp(pool, authUserId),
+    sendSignUpVerificationEmail: ({ email, callbackURL, headers }) => auth.api.sendVerificationEmail({
+      body: { email, callbackURL },
+      headers,
+    }),
+  });
+  const server = createBackendServer({ pool, authHandler, authenticate, serverData, ownerApi, objectStorage, logger, ...config });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, config.host, resolve);

@@ -118,6 +118,7 @@ test("session gateway delegates to the prepared Better Auth client without activ
   await session.resetPassword("new-secret", "token");
   await session.sendVerificationEmail("a@example.com");
   assert.deepEqual(calls.map(([name]) => name), ["signIn", "signUp", "signOut", "requestPasswordReset", "resetPassword", "sendVerificationEmail"]);
+  assert.deepEqual(calls.find(([name]) => name === "signUp")[1], { email: "b@example.com", password: "secret", name: "B", acceptedBetaTerms: true, acceptedPersonalDataConsent: true });
 });
 
 test("auth errors are always localized and never expose Better Auth details", () => {
@@ -132,6 +133,8 @@ test("auth errors are always localized and never expose Better Auth details", ()
 test("successful signup switches directly to verify-email view", () => {
   const source = fs.readFileSync(new URL("../src/AuthScreen.jsx", import.meta.url), "utf8");
   assert.match(source, /setVerificationEmail\(email\)\s*\n\s*setView\('verify-email'\)/);
+  assert.match(source, /data\?\.verificationEmailSent === false/);
+  assert.match(source, /Не удалось отправить письмо\. Отправьте его повторно кнопкой ниже\./);
   assert.doesNotMatch(source, /setNotice\('Аккаунт создан[\s\S]*?setView\('signin'\)/);
 });
 

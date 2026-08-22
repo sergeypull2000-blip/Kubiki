@@ -88,6 +88,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
           <div>{result.operations.map((operation) => <div key={operation.id} className="kb-modal-note">• {operation.reason}</div>)}</div>
           <div className="kb-ai-launcher-metrics">{METRICS.map(([key, label, unit]) => <div key={key} className="kb-modal-note">{label}: {metricValue(result.before[key], unit)}{unit} → {metricValue(result.after[key], unit)}{unit}</div>)}</div>
           {result.warnings.map((warning) => <div key={warning} className="kb-server-error">{warning}</div>)}
+          <div className="kb-ai-result-label">Сгенерировано с помощью ИИ · Проверьте результат</div>
         </div>}
         <div className="kb-ai-launcher-feedback-actions">
           {state === "loading" && <button type="button" className="kb-btn kb-btn-ghost" onClick={() => { requestVersion.current += 1; onCancelRequest(); setState("idle"); }}>Отменить запрос</button>}
@@ -124,6 +125,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
             <div>{result.operations.map((operation) => <div key={operation.id} className="kb-modal-note">• {operation.reason}</div>)}</div>
             <div className="kb-ai-launcher-metrics">{METRICS.map(([key, label, unit]) => <div key={key} className="kb-modal-note">{label}: {metricValue(result.before[key], unit)}{unit} → {metricValue(result.after[key], unit)}{unit}</div>)}</div>
             {result.warnings.map((warning) => <div key={warning} className="kb-server-error">{warning}</div>)}
+            <div className="kb-ai-result-label">Сгенерировано с помощью ИИ · Проверьте результат</div>
           </div>}
           <div className="kb-ai-launcher-feedback-actions">
             {state === "loading" && <button type="button" className="kb-btn kb-btn-ghost" onClick={() => { requestVersion.current += 1; onCancelRequest(); setState("idle"); }}>Отменить запрос</button>}
@@ -163,6 +165,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
           <div>{result.operations.map((operation) => <div key={operation.id} className="kb-modal-note">• {operation.reason}</div>)}</div>
           <div>{METRICS.map(([key, label, unit]) => <div key={key} className="kb-modal-note">{label}: {metricValue(result.before[key], unit)}{unit} → {metricValue(result.after[key], unit)}{unit}</div>)}</div>
           {result.warnings.map((warning) => <div key={warning} className="kb-server-error">{warning}</div>)}
+          <div className="kb-ai-result-label">Сгенерировано с помощью ИИ · Проверьте результат</div>
         </>}
         <div className="kb-modal-actions">
           {state === "loading" ? <button type="button" className="kb-btn kb-btn-ghost" onClick={() => { requestVersion.current += 1; onCancelRequest(); setState("idle"); }}>Отменить запрос</button> : <button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button>}

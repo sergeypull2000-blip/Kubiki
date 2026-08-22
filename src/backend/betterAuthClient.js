@@ -14,7 +14,7 @@ export function createSessionGateway(client = kubikiAuthClient) {
     getSession: () => client.getSession(),
     useSession: () => client.useSession(),
     signIn: (email, password) => client.signIn.email({ email, password }),
-    signUp: (email, password, name = email) => client.signUp.email({ email, password, name }),
+    signUp: (email, password, name = email) => client.signUp.email({ email, password, name, acceptedBetaTerms: true, acceptedPersonalDataConsent: true }),
     sendVerificationEmail: (email) => client.sendVerificationEmail({ email, callbackURL: `${globalThis.location?.origin || ""}/` }),
     signOut: () => client.signOut(),
     requestPasswordReset: (email, redirectTo) => client.requestPasswordReset({ email, redirectTo }),

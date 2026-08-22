@@ -60,6 +60,23 @@ test("standalone API rejects an unauthenticated request with 401", async (t) => 
   assert.deepEqual(await response.json(), { error: "authentication_required" });
 });
 
+test("all AI APIs require the current disclosure before invoking an AI handler", async (t) => {
+  const checks = [];
+  const { server, baseUrl } = await listen({ query: async () => ({ rows: [] }) }, {
+    authenticate: async () => ({ user: { id: "current-user" } }),
+    serverData: {
+      hasLegalAcceptance: async (...args) => { checks.push(args); return false; },
+    },
+  });
+  t.after(() => server.close());
+  for (const path of ["/api/generate-estimate", "/api/edit-estimate", "/api/parse-excel"]) {
+    const response = await fetch(`${baseUrl}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    assert.equal(response.status, 428);
+    assert.deepEqual(await response.json(), { error: "ai_disclosure_required", documentKey: "ai_disclosure", version: "1.0" });
+  }
+  assert.deepEqual(checks, Array.from({ length: 3 }, () => ["current-user", "ai_disclosure", "1.0"]));
+});
+
 async function frontendFixture(t) {
   const root = await mkdtemp(join(tmpdir(), "kubiki-frontend-"));
   await mkdir(join(root, "assets"));
@@ -73,7 +90,7 @@ test("production server serves the frontend root and SPA routes", async (t) => {
   const frontendDistPath = await frontendFixture(t);
   const { server, baseUrl } = await listen({ query: async () => ({ rows: [] }) }, { frontendDistPath });
   t.after(() => server.close());
-  for (const path of ["/", "/projects/example"]) {
+  for (const path of ["/", "/projects/example", "/privacy", "/personal-data-consent", "/terms"]) {
     const response = await fetch(`${baseUrl}${path}`);
     assert.equal(response.status, 200);
     assert.match(response.headers.get("content-type"), /^text\/html/);

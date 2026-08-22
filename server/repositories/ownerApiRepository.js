@@ -66,5 +66,7 @@ export function createOwnerApiRepository(pool) {
     async getFlags(userId){return (await query(`select * from public.user_flags where user_id=$1`,[userId])).rows[0]||null;},
     async markBetaWelcomeSeen(userId){return one(await query(`insert into public.user_flags(user_id,beta_welcome_seen) values($1,true) on conflict(user_id) do update set beta_welcome_seen=true returning *`,[userId]));},
     async insertFeedback(userId,value){await query(`insert into public.beta_feedback(user_id,message,context,project_id,sheet_id) values($1,$2,$3,$4,$5)`,[userId,value.message,value.context,value.projectId,value.sheetId]);return {ok:true};},
+    async listLegalAcceptances(userId){return (await query(`select document_key,version,accepted_at from public.user_legal_acceptances where user_id=$1 order by accepted_at desc`,[userId])).rows;},
+    async acceptLegalDocument(userId,documentKey,version){return one(await query(`insert into public.user_legal_acceptances(user_id,document_key,version) values($1,$2,$3) on conflict(user_id,document_key,version) do update set user_id=excluded.user_id returning document_key,version,accepted_at`,[userId,documentKey,version]));},
   };
 }

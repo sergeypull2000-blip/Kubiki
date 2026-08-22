@@ -60,12 +60,62 @@ async function writeWebResponse(response, webResponse) {
   });
 }
 
-export function createBetterAuthHttpHandler(handler) {
+const SIGN_UP_PATH = "/api/auth/sign-up/email";
+
+export function createBetterAuthHttpHandler(handler, {
+  recordSignUpAcceptances,
+  rollbackSignUp,
+  sendSignUpVerificationEmail,
+} = {}) {
   if (typeof handler !== "function") throw new TypeError("Better Auth handler must be a function");
   return async (request, response) => {
-    const webResponse = await handler(toWebRequest(request));
+    const webRequest = toWebRequest(request);
+    const isSignUp = new URL(webRequest.url).pathname === SIGN_UP_PATH && webRequest.method === "POST";
+    let signUpBody;
+    if (isSignUp) {
+      signUpBody = await webRequest.clone().json().catch(() => null);
+      if (signUpBody?.acceptedBetaTerms !== true || signUpBody?.acceptedPersonalDataConsent !== true) {
+        return writeWebResponse(response, Response.json({ code: "LEGAL_ACCEPTANCE_REQUIRED" }, { status: 400 }));
+      }
+    }
+    let webResponse = await handler(webRequest);
     if (!(webResponse instanceof Response)) {
       throw new TypeError("Better Auth handler must return a Response");
+    }
+    if (isSignUp && webResponse.ok && recordSignUpAcceptances) {
+      const result = await webResponse.clone().json().catch(() => null);
+      if (result?.user?.id) {
+        let created;
+        try {
+          created = await recordSignUpAcceptances(result.user.id);
+        } catch (error) {
+          if (rollbackSignUp) {
+            try {
+              await rollbackSignUp(result.user.id);
+            } catch (rollbackError) {
+              throw new AggregateError([error, rollbackError], "Signup rollback failed");
+            }
+          }
+          throw new Error("Signup could not be completed", { cause: error });
+        }
+        if (created && sendSignUpVerificationEmail) {
+          try {
+            await sendSignUpVerificationEmail({
+              email: result.user.email,
+              callbackURL: signUpBody?.callbackURL,
+              headers: webRequest.headers,
+            });
+          } catch {
+            const headers = new Headers(webResponse.headers);
+            headers.delete("content-length");
+            webResponse = Response.json({
+              ...result,
+              verificationEmailSent: false,
+              verificationEmailResendAvailable: true,
+            }, { status: webResponse.status, headers });
+          }
+        }
+      }
     }
     await writeWebResponse(response, webResponse);
   };

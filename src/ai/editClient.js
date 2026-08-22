@@ -1,4 +1,5 @@
 import { parseAiEditResponse } from "./editSchema.js";
+import { requireAiDisclosure } from "./disclosureGate.js";
 import { sheetsOf } from "../sheets.js";
 import { aiEditErrorMessage, requestErrorMessage } from "./requestErrors.js";
 import { kubikiApiUrl, notifyKubikiUnauthorized } from "../backend/apiTransport.js";
@@ -22,6 +23,7 @@ export function createAiEditRequest({ projectId, baseRevision, scope, instructio
 }
 
 export async function requestAiEdit(payload, { fetchImpl = fetch, getAccessToken, signal } = {}) {
+  await requireAiDisclosure();
   const token = getAccessToken ? await getAccessToken() : null, timeoutController = new AbortController();
   const abort = () => timeoutController.abort(signal?.reason);
   if (signal?.aborted) abort(); else signal?.addEventListener("abort", abort, { once: true });

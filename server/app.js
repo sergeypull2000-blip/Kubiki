@@ -8,6 +8,7 @@ import usage from "../api/usage.js";
 import { matchOwnerApiRoute, handleOwnerApiRoute } from "./ownerApiRoutes.js";
 import { MAX_LOGO_REQUEST_BYTES, handleLogoRoute, matchLogoRoute } from "./logoRoutes.js";
 import { serveFrontend } from "./frontend.js";
+import { LEGAL_DOCUMENT_VERSIONS } from "../src/legalConfig.js";
 
 const DEFAULT_FRONTEND_DIST_PATH = fileURLToPath(new URL("../dist", import.meta.url));
 
@@ -28,6 +29,7 @@ const API_HANDLERS = new Map([
   ["/api/extract-doc", extractDoc],
   ["/api/usage", usage],
 ]);
+const AI_PATHS = new Set(["/api/generate-estimate", "/api/edit-estimate", "/api/parse-excel"]);
 
 async function readJson(request, limit) {
   const chunks = [];
@@ -146,6 +148,9 @@ export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMill
         }
         const authContext = await authenticate(request);
         if (!authContext) return sendJson(response, 401, { error: "authentication_required" });
+        if (AI_PATHS.has(path) && !await serverData.hasLegalAcceptance(authContext.user.id, "ai_disclosure", LEGAL_DOCUMENT_VERSIONS.ai_disclosure)) {
+          return sendJson(response, 428, { error: "ai_disclosure_required", documentKey: "ai_disclosure", version: LEGAL_DOCUMENT_VERSIONS.ai_disclosure });
+        }
         request.authContext = authContext;
         request.serverData = serverData;
         request.body = await readJson(request, bodyLimitBytes);

@@ -83,6 +83,10 @@ export function createHttpRepositories(request) {
   };
 
   const usage = { load: () => request("/api/usage") };
+  const legalAcceptances = {
+    list: () => request("/api/legal-acceptances"),
+    accept: (_userId, documentKey, version) => request("/api/legal-acceptances", { method: "POST", json: { documentKey, version } }),
+  };
 
-  return { projects, performers, quickAccess, templateLibrary, aiSettings, exportProfile, exportPresets, productEvents, userFlags, betaFeedback, usage };
+  return { projects, performers, quickAccess, templateLibrary, aiSettings, exportProfile, exportPresets, productEvents, userFlags, betaFeedback, usage, legalAcceptances };
 }

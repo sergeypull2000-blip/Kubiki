@@ -23,11 +23,14 @@ export function AuthScreen({ mode = 'signin', resetToken, onPasswordUpdated, onA
   const [submitting, setSubmitting] = useState(false)
   const [verificationEmail, setVerificationEmail] = useState('')
   const [resetSuccess, setResetSuccess] = useState(false)
+  const [termsAccepted, setTermsAccepted] = useState(false)
+  const [personalDataAccepted, setPersonalDataAccepted] = useState(false)
 
   const switchView = (next) => {
     setError('')
     setNotice('')
     setView(next)
+    if (next === 'signup') { setTermsAccepted(false); setPersonalDataAccepted(false) }
   }
 
   const handleSignIn = async (event) => {
@@ -54,6 +57,10 @@ export function AuthScreen({ mode = 'signin', resetToken, onPasswordUpdated, onA
     event.preventDefault()
     setError('')
     setNotice('')
+    if (!termsAccepted || !personalDataAccepted) {
+      setError('Для регистрации необходимо принять условия и дать согласие на обработку персональных данных.')
+      return
+    }
     if (password.length < MIN_PASSWORD_LENGTH) {
       setError(`Пароль должен содержать минимум ${MIN_PASSWORD_LENGTH} символов.`)
       return
@@ -64,9 +71,12 @@ export function AuthScreen({ mode = 'signin', resetToken, onPasswordUpdated, onA
     }
     setSubmitting(true)
     try {
-      const { error } = await auth.signUp(email, password, email)
+      const { data, error } = await auth.signUp(email, password, email)
       if (error) { setError(describeAuthError(error)); return }
       setVerificationEmail(email)
+      if (data?.verificationEmailSent === false) {
+        setNotice('Не удалось отправить письмо. Отправьте его повторно кнопкой ниже.')
+      }
       setView('verify-email')
     } finally {
       setSubmitting(false)
@@ -209,17 +219,26 @@ export function AuthScreen({ mode = 'signin', resetToken, onPasswordUpdated, onA
               </label>
             )}
             {view === 'signup' && (
-              <label className="kb-auth-field">
-                <span>Повторите пароль</span>
-                <input className="kb-input" type="password" value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  autoComplete="new-password" required />
-              </label>
+              <>
+                <label className="kb-auth-field">
+                  <span>Повторите пароль</span>
+                  <input className="kb-input" type="password" value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    autoComplete="new-password" required />
+                </label>
+                <label className="kb-auth-consent"><input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} />
+                  <span>Я принимаю <a href="/terms" target="_blank" rel="noreferrer">Условия использования Kubiki Beta</a></span>
+                </label>
+                <label className="kb-auth-consent"><input type="checkbox" checked={personalDataAccepted} onChange={(event) => setPersonalDataAccepted(event.target.checked)} />
+                  <span>Я даю согласие на обработку моих <a href="/personal-data-consent" target="_blank" rel="noreferrer">персональных данных</a></span>
+                </label>
+                <a className="kb-auth-privacy" href="/privacy" target="_blank" rel="noreferrer">Политика обработки персональных данных</a>
+              </>
             )}
           </>
         )}
 
-        <button className="kb-auth-submit" type="submit" disabled={submitting}>
+        <button className="kb-auth-submit" type="submit" disabled={submitting || (view === 'signup' && (!termsAccepted || !personalDataAccepted))}>
           {submitting ? submitLoadingLabel : submitLabel}
         </button>
 
