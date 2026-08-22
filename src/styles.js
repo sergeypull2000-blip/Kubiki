@@ -998,4 +998,5 @@ export const CSS = `
 
 .kb-export-brand-row .kb-export-logo-row{grid-column:1}.kb-export-brand-row .kb-export-company-input{grid-column:1 / span 2}
 .kb-position-segmented button{display:grid;place-items:center;flex:1 1 0;min-width:0;box-sizing:border-box;padding:0 7px;text-align:center;font-weight:var(--fw-regular)}.kb-position-segmented button.is-active{font-weight:var(--fw-medium);border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.kb-position-segmented button.is-active{box-shadow:none}
 `;
