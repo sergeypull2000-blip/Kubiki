@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
 import { usageRepository } from "../backend/runtimeRepositories.js";
 
 /* «Использование ИИ» — только оставшийся процент лимита и дата сброса.
@@ -41,29 +40,34 @@ export function UsageLimitsModal({ onClose }) {
 
   return <div className="kb-modal-overlay" onMouseDown={onClose}>
     <div className="kb-modal kb-usage-modal" role="dialog" aria-modal="true" aria-labelledby="usage-title" onMouseDown={(event) => event.stopPropagation()}>
-      <div className="kb-modal-head"><span className="kb-modal-title" id="usage-title">Использование ИИ</span><button type="button" className="kb-icon-btn" onClick={onClose}><X size={16} /></button></div>
+      <div className="kb-modal-head kb-usage-modal-head">
+        <span className="kb-modal-title" id="usage-title">Использование ИИ</span>
+        <button type="button" className="kb-usage-close" onClick={onClose} aria-label="Закрыть">×</button>
+      </div>
       <div className="kb-modal-body">
         {state === "loading" && <div className="kb-modal-note">Загружаем…</div>}
         {state === "error" && <div className="kb-server-error" role="alert">{message}</div>}
         {state === "ready" && summary && <>
           {summary.unlimited ? (
-            <div className="kb-usage-figures"><strong>Без ограничений</strong></div>
+            <>
+              <div className="kb-usage-bar" role="img" aria-label="Использование ИИ без ограничений"><div className="kb-usage-bar-fill" style={{ width: "100%" }} /></div>
+              <div className="kb-usage-figures"><strong>Без ограничений</strong></div>
+            </>
           ) : (
             <>
               <div className="kb-usage-bar" role="img" aria-label={`Осталось ${summary.remainingPct}% лимита ИИ`}>
                 <div className="kb-usage-bar-fill" style={{ width: `${summary.remainingPct}%` }} />
               </div>
-              <div className="kb-usage-figures">
-                <strong>{summary.remainingPct}% осталось</strong>
-                {resetLabel && <span>Сброс лимита: {resetLabel}</span>}
-                {!summary.cycleActive && <span>Период начнётся после первого успешного ИИ-запроса</span>}
+              <div className={`kb-usage-figures${summary.cycleActive ? "" : " is-cycle-pending"}`}>
+                <strong>{summary.remainingPct}% <em>осталось</em></strong>
+                {summary.cycleActive && resetLabel && <span className="kb-usage-reset">Сброс лимита: {resetLabel}</span>}
+                {!summary.cycleActive && <span className="kb-usage-pending">Период начнётся после<br />первого успешного ИИ-запроса</span>}
               </div>
-              {summary.overLimit && <div className="kb-usage-limit-note">Лимит исчерпан — новые ИИ-запросы временно недоступны до сброса.</div>}
             </>
           )}
         </>}
-        <div className="kb-modal-actions"><button type="button" className="kb-btn kb-btn-primary" onClick={onClose}>Закрыть</button></div>
       </div>
+      <div className="kb-modal-foot kb-usage-modal-foot"><button type="button" className="kb-btn kb-btn-primary" onClick={onClose}>Закрыть</button></div>
     </div>
   </div>;
 }
