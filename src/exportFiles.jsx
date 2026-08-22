@@ -46,7 +46,12 @@ export function downloadBlob(blob, filename) {
 
 async function imageDataUrl(url) {
   if (!url || url.startsWith("data:")) return url || "";
-  const response = await fetch(url);
+  let response;
+  try {
+    response = await fetch(url);
+  } catch (error) {
+    throw new Error("Не удалось загрузить логотип для PDF: signed URL недоступен или S3 не разрешает CORS для этого origin", { cause: error });
+  }
   if (!response.ok) throw new Error("Не удалось загрузить логотип для экспорта");
   const blob = await response.blob();
   if (blob.type === "image/webp") {
@@ -365,7 +370,7 @@ function PresentationControls({ draft, onChange, project, dispatch, userId, logo
         {logoError && <small className="kb-export-control-error">{logoError}</small>}
         <label className="kb-export-field-stacked">
           <span>Компания</span>
-          <input className="kb-input" value={draft.branding.companyName} onChange={(event) => patch("branding", { companyName: event.target.value })} onBlur={persistProfile} />
+          <input className="kb-input" value={draft.branding.companyName} onChange={(event) => patch("branding", { companyName: event.target.value })} onBlur={() => persistProfile()} />
         </label>
         <label className="kb-export-field">
           <span>Позиция логотипа</span>

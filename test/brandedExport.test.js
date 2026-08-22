@@ -239,6 +239,22 @@ test("branded color picker exposes HSV area, hue slider and HEX, without native 
   assert.doesNotMatch(source, /type=["']color["']/);
 });
 
+test("branding controls pass primitive values and never persist a React event", async () => {
+  const source = await readFile(new URL("../src/exportFiles.jsx", import.meta.url), "utf8");
+  assert.match(source, /onBlur=\{\(\) => persistProfile\(\)\}/);
+  assert.doesNotMatch(source, /onBlur=\{persistProfile\}/);
+  for (const key of ["stage", "task", "total", "stageText", "taskText", "totalText"]) {
+    const settings = normalizePresentationSettings({ branding: { colors: { [key]: "#123abc" } } });
+    assert.equal(settings.branding.colors[key], "#123abc");
+    assert.equal(typeof settings.branding.colors[key], "string");
+  }
+  const eventLike = { target: { value: "#123abc" } };
+  const safe = normalizePresentationSettings({ branding: { companyName: eventLike, colors: { stage: eventLike } } });
+  assert.doesNotThrow(() => JSON.stringify(safe));
+  assert.equal(safe.branding.companyName, "");
+  assert.equal(safe.branding.colors.stage, "#EEF2F7");
+});
+
 test("migration has owner CRUD RLS, explicit grants and private bounded logo storage", async () => {
   const sql = await readFile(new URL("../supabase/migrations/20260816000000_create_branded_export.sql", import.meta.url), "utf8");
   for (const table of ["studio_export_profiles", "export_presets"]) for (const operation of ["select", "insert", "update", "delete"]) assert.match(sql, new RegExp(`${table}_${operation}_own`));
