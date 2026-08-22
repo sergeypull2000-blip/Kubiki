@@ -67,6 +67,19 @@ export function parseBetterAuthConfig(env = process.env) {
   return { secret: env.BETTER_AUTH_SECRET, baseUrl: baseUrl.toString() };
 }
 
+export function parseSmtpConfig(env = process.env) {
+  const port = parsePositiveInteger(required(env.SMTP_PORT, "SMTP_PORT"), undefined, "SMTP_PORT");
+  if (port > 65_535) throw new Error("SMTP_PORT must not exceed 65535");
+  return {
+    host: required(env.SMTP_HOST, "SMTP_HOST"),
+    port,
+    secure: parseBoolean(required(env.SMTP_SECURE, "SMTP_SECURE"), undefined, "SMTP_SECURE"),
+    user: required(env.SMTP_USER, "SMTP_USER"),
+    password: required(env.SMTP_PASSWORD, "SMTP_PASSWORD"),
+    from: required(env.SMTP_FROM, "SMTP_FROM"),
+  };
+}
+
 export function parseObjectStorageConfig(env = process.env) {
   let endpoint;
   try {

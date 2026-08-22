@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseBackendConfig, parseBetterAuthConfig, parseObjectStorageConfig } from "../server/config.js";
+import { parseBackendConfig, parseBetterAuthConfig, parseObjectStorageConfig, parseSmtpConfig } from "../server/config.js";
 
 test("backend config uses safe beta pool-facing defaults", () => {
   const config = parseBackendConfig({ DATABASE_URL: "postgresql://app:secret@db.internal:5432/kubiki" });
@@ -24,6 +24,28 @@ test("Better Auth future config validates secret and absolute URL", () => {
     { secret: "x".repeat(32), baseUrl: "https://auth.example.test/" },
   );
   assert.throws(() => parseBetterAuthConfig({}), /BETTER_AUTH_SECRET/);
+});
+
+test("SMTP config requires a complete, valid server-side configuration", () => {
+  const env = {
+    SMTP_HOST: "smtp.yandex.ru",
+    SMTP_PORT: "465",
+    SMTP_SECURE: "true",
+    SMTP_USER: "mailer@example.test",
+    SMTP_PASSWORD: "smtp-app-password",
+    SMTP_FROM: "Kubiki <mailer@example.test>",
+  };
+  assert.deepEqual(parseSmtpConfig(env), {
+    host: "smtp.yandex.ru",
+    port: 465,
+    secure: true,
+    user: "mailer@example.test",
+    password: "smtp-app-password",
+    from: "Kubiki <mailer@example.test>",
+  });
+  assert.throws(() => parseSmtpConfig({}), /SMTP_PORT is required/);
+  assert.throws(() => parseSmtpConfig({ ...env, SMTP_PORT: "70000" }), /SMTP_PORT/);
+  assert.throws(() => parseSmtpConfig({ ...env, SMTP_SECURE: "yes" }), /SMTP_SECURE/);
 });
 
 test("S3-compatible storage config keeps credentials backend-only and uses short-lived URLs", () => {

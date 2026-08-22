@@ -47,7 +47,15 @@ export const authPool =
         connectionTimeoutMillis: 5_000,
       });
 
-export function createBetterAuth({ pool = authPool, config = authConfig, emailSender = createAuthEmailSender() } = {}) {
+const defaultEmailSender = isSchemaGeneration
+  ? createAuthEmailSender({
+      config: { from: "schema-generation@localhost" },
+      transport: { async sendMail() {} },
+      logger: { error() {} },
+    })
+  : createAuthEmailSender();
+
+export function createBetterAuth({ pool = authPool, config = authConfig, emailSender = defaultEmailSender } = {}) {
   return betterAuth({
     database: pool,
     secret: config.secret,
