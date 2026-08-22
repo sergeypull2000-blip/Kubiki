@@ -2,8 +2,8 @@ import { createBackendServer } from "./app.js";
 import { pathToFileURL } from "node:url";
 import { parseBackendConfig, parseObjectStorageConfig } from "./config.js";
 import { closeDatabasePool, createDatabasePool } from "./db.js";
-import { toNodeHandler } from "better-auth/node";
 import { auth, authPool } from "./auth.js";
+import { createBetterAuthHttpHandler } from "./betterAuthHttp.js";
 import { createRequestAuthenticator } from "./requestAuth.js";
 import { createServerDataRepository } from "./repositories/serverDataRepository.js";
 import { createUsageRepository } from "./repositories/usageRepository.js";
@@ -19,7 +19,7 @@ export async function startBackend({ env = process.env, logger = console } = {})
   const authenticate = createRequestAuthenticator({ auth, pool, logger });
   const serverData = Object.assign(createServerDataRepository(pool), createUsageRepository(pool));
   const ownerApi = createOwnerApiRepository(pool);
-  const server = createBackendServer({ pool, authHandler: toNodeHandler(auth), authenticate, serverData, ownerApi, objectStorage, logger, ...config });
+  const server = createBackendServer({ pool, authHandler: createBetterAuthHttpHandler(auth.handler), authenticate, serverData, ownerApi, objectStorage, logger, ...config });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, config.host, resolve);

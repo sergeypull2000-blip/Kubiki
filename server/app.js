@@ -93,7 +93,11 @@ export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMill
 
     const path = pathname;
     if (path.startsWith("/api/auth/") && authHandler) {
-      void authHandler(request, response);
+      void authHandler(request, response).catch((error) => {
+        logger.error("Better Auth HTTP request failed", { name: error?.name || "Error" });
+        if (!response.headersSent) sendJson(response, 500, { error: "internal_error" });
+        else if (!response.writableEnded) response.destroy(error);
+      });
       return;
     }
 
