@@ -5,6 +5,7 @@ import { createHttpRepositories } from "../src/backend/httpRepositories.js";
 import { createHttpLogoRepository } from "../src/backend/logoRepository.js";
 import { createSessionGateway } from "../src/backend/betterAuthClient.js";
 import { cleanupLegacySupabaseOwnerMarkers, CLEANUP_KEY, LEGACY_OWNER_KEYS } from "../src/backend/legacyCleanup.js";
+import { describeAuthError } from "../src/authErrors.js";
 
 const jsonResponse = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -104,6 +105,7 @@ test("session gateway delegates to the prepared Better Auth client without activ
     signOut: async () => (calls.push(["signOut"]), { data: {} }),
     requestPasswordReset: async (value) => (calls.push(["requestPasswordReset", value]), { data: {} }),
     resetPassword: async (value) => (calls.push(["resetPassword", value]), { data: {} }),
+    sendVerificationEmail: async (value) => (calls.push(["sendVerificationEmail", value]), { data: {} }),
   };
   const session = createSessionGateway(client);
   assert.equal((await session.getSession()).data.user.id, "u1");
@@ -113,7 +115,17 @@ test("session gateway delegates to the prepared Better Auth client without activ
   await session.signOut();
   await session.requestPasswordReset("a@example.com", "https://app.example/reset");
   await session.resetPassword("new-secret", "token");
-  assert.deepEqual(calls.map(([name]) => name), ["signIn", "signUp", "signOut", "requestPasswordReset", "resetPassword"]);
+  await session.sendVerificationEmail("a@example.com");
+  assert.deepEqual(calls.map(([name]) => name), ["signIn", "signUp", "signOut", "requestPasswordReset", "resetPassword", "sendVerificationEmail"]);
+});
+
+test("auth errors are always localized and never expose Better Auth details", () => {
+  assert.equal(describeAuthError({ message: "Invalid email or password" }), "Неверный email или пароль");
+  assert.equal(describeAuthError({ code: "EMAIL_NOT_VERIFIED" }), "EMAIL_NOT_VERIFIED");
+  assert.equal(describeAuthError({ message: "User already exists" }), "Пользователь с таким email уже зарегистрирован");
+  assert.equal(describeAuthError({ message: "password too short" }), "Пароль не соответствует требованиям");
+  assert.equal(describeAuthError({ message: "too many requests" }), "Слишком много попыток. Попробуйте немного позже.");
+  assert.equal(describeAuthError({ message: "SQLSTATE 42P01 secret internal code" }), "Что-то пошло не так. Попробуйте ещё раз.");
 });
 
 test("legacy Supabase owner markers are neutralized exactly once without touching local data", () => {

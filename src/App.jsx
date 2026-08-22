@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import KubikiApp from "./kubiki.jsx";
 import { AuthScreen } from "./AuthScreen.jsx";
 import { useGeistFont } from "./hooks.js";
@@ -9,6 +9,7 @@ import { CSS } from "./styles.js";
 function App() {
   useGeistFont();
   const { data: session, isPending, refetch } = kubikiAuthClient.useSession();
+  const [resetCompleted, setResetCompleted] = useState(false);
   const resetToken = new URLSearchParams(globalThis.location?.search || "").get("token");
   const recoveryMode = globalThis.location?.pathname === "/reset-password" && Boolean(resetToken);
 
@@ -27,12 +28,13 @@ function App() {
 
   const finishPasswordReset = () => {
     globalThis.history?.replaceState({}, "", "/");
+    setResetCompleted(true);
     refetch();
   };
 
   let content;
   if (isPending) content = <div className="kb-auth-screen"><div className="kb-auth-loading">Проверяем сессию…</div></div>;
-  else if (recoveryMode) content = <AuthScreen mode="reset" resetToken={resetToken} onPasswordUpdated={finishPasswordReset} />;
+  else if (recoveryMode && !resetCompleted) content = <AuthScreen mode="reset" resetToken={resetToken} onPasswordUpdated={finishPasswordReset} />;
   else if (!session?.user) content = <AuthScreen mode="signin" onAuthenticated={refetch} />;
   else content = <KubikiApp key={session.user.id} userId={session.user.id} user={session.user} onSignOut={handleSignOut} />;
 

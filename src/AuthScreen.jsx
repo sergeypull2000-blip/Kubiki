@@ -1,29 +1,11 @@
 import { useState } from 'react'
 import { createSessionGateway } from './backend/betterAuthClient.js'
+import { describeAuthError } from './authErrors.js'
 
 const auth = createSessionGateway()
 
 /* Минимальная длина пароля Better Auth. */
 const MIN_PASSWORD_LENGTH = 8
-
-/* Превращаем англоязычные ошибки Better Auth в понятные пользователю. */
-function describeAuthError(error) {
-  const code = error?.code
-  const msg = error?.message || ''
-  if (code === 'user_already_exists' || /already registered|already been registered/i.test(msg))
-    return 'Пользователь с таким email уже существует.'
-  if (code === 'invalid_credentials' || /invalid login credentials/i.test(msg))
-    return 'Неверный email или пароль.'
-  if (code === 'weak_password' || /password should be at least/i.test(msg))
-    return `Пароль должен содержать минимум ${MIN_PASSWORD_LENGTH} символов.`
-  if (code === 'email_not_confirmed' || /email not confirmed/i.test(msg))
-    return 'Email не подтверждён. Проверьте почту.'
-  if (code === 'same_password' || /new password.*same.*old|same password/i.test(msg))
-    return 'Новый пароль не должен совпадать со старым.'
-  if (/rate limit/i.test(msg) || code === 'over_email_send_rate_limit' || code === 'over_request_rate_limit')
-    return 'Слишком много попыток. Попробуйте позже.'
-  return msg || 'Не удалось выполнить действие. Попробуйте ещё раз.'
-}
 
 /*
    Экран аутентификации: вход / регистрация / сброс пароля / установка нового
@@ -39,6 +21,8 @@ export function AuthScreen({ mode = 'signin', resetToken, onPasswordUpdated, onA
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [verificationEmail, setVerificationEmail] = useState('')
+  const [resetSuccess, setResetSuccess] = useState(false)
 
   const switchView = (next) => {
     setError('')
@@ -52,7 +36,11 @@ export function AuthScreen({ mode = 'signin', resetToken, onPasswordUpdated, onA
     setSubmitting(true)
     try {
       const { error } = await auth.signIn(email, password)
-      if (error) setError(describeAuthError(error))
+      if (error) {
+        const message = describeAuthError(error)
+        if (message === 'EMAIL_NOT_VERIFIED') setVerificationEmail(email)
+        else setError(message)
+      }
       else await onAuthenticated?.()
     } finally {
       setSubmitting(false)
@@ -75,11 +63,20 @@ export function AuthScreen({ mode = 'signin', resetToken, onPasswordUpdated, onA
     try {
       const { error } = await auth.signUp(email, password, email)
       if (error) { setError(describeAuthError(error)); return }
-      setNotice('Аккаунт создан. Проверьте почту и подтвердите email, затем войдите.')
-      setView('signin')
+      setVerificationEmail(email)
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const resendVerification = async () => {
+    setError('')
+    setSubmitting(true)
+    try {
+      const { error } = await auth.sendVerificationEmail(verificationEmail)
+      if (error) setError(describeAuthError(error))
+      else setNotice('Письмо отправлено повторно.')
+    } finally { setSubmitting(false) }
   }
 
   const handleForgot = async (event) => {
@@ -111,11 +108,31 @@ export function AuthScreen({ mode = 'signin', resetToken, onPasswordUpdated, onA
     try {
       const { error } = await auth.resetPassword(password, resetToken)
       if (error) setError(describeAuthError(error))
-      else if (onPasswordUpdated) onPasswordUpdated()
+      else setResetSuccess(true)
     } finally {
       setSubmitting(false)
     }
   }
+
+  if (verificationEmail) return (
+    <div className="kb-auth-screen"><div className="kb-auth-card">
+      <div className="kb-auth-heading">Подтвердите email</div>
+      <div className="kb-auth-subtext">Мы отправили письмо со ссылкой для подтверждения на {verificationEmail}.</div>
+      <div className="kb-auth-subtext">Перейдите по ссылке в письме, чтобы завершить регистрацию. Если письма нет, проверьте папку «Спам».</div>
+      {notice && <div className="kb-auth-notice" role="status">{notice}</div>}
+      {error && <div className="kb-auth-error" role="alert">{error}</div>}
+      <button className="kb-auth-submit" type="button" onClick={resendVerification} disabled={submitting}>Отправить письмо повторно</button>
+      <button type="button" className="kb-auth-link" onClick={() => { setVerificationEmail(''); switchView('signup') }}>Указали неверный email? Вернуться назад</button>
+    </div></div>
+  )
+
+  if (resetSuccess) return (
+    <div className="kb-auth-screen"><div className="kb-auth-card">
+      <div className="kb-auth-heading">Пароль изменён</div>
+      <div className="kb-auth-subtext">Новый пароль сохранён. Теперь вы можете войти в Kubiki с новым паролем.</div>
+      <button className="kb-auth-submit" type="button" onClick={() => onPasswordUpdated?.()}>Перейти ко входу</button>
+    </div></div>
+  )
 
   const heading =
     view === 'signin' ? 'Вход в Kubiki'
