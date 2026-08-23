@@ -2,7 +2,7 @@ import { ApiError, badRequest } from "./apiErrors.js";
 import { batch, boolean, id, jsonObject, object, text, uuid } from "./validation.js";
 import { normalizePresentationSettings } from "../src/exportSettings.js";
 
-const EVENTS = new Set(["signup", "session_active", "ai_generate", "ai_edit", "export_completed"]);
+const EVENTS = new Set(["signup", "session_active", "project_created", "ai_generate", "ai_edit", "ai_import_completed", "performer_created", "export_completed"]);
 const LEGAL_DOCUMENTS = new Set(["beta_terms", "personal_data_consent", "ai_disclosure", "ai_improvement_consent"]);
 const FEEDBACK_OPERATIONS = new Set(["generate", "edit", "import"]);
 const ownershipFields = ["user_id", "userId", "owner", "owner_id"];

@@ -385,7 +385,7 @@ export function ImportModal({ file, instruction = "", onClose, onConfirm }) {
             generationMetadata={generationMetadata}
             noteText="Проверьте распознанное и при необходимости поправьте. Каждая задача добавится с кубиком «фикс за всё»."
             draftNotice={isWord ? "Черновая оценка. Суммы отражают ориентировочную внутреннюю себестоимость до маркапа и налогов." : undefined}
-            onClose={onClose} onConfirm={onConfirm} />
+            onClose={onClose} onConfirm={(stages, meta) => onConfirm(stages, { ...meta, importFormat: isWord ? null : (isPdf ? "pdf" : "excel") })} />
         )}
       </div>
     </div>

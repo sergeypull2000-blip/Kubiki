@@ -524,7 +524,6 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     if (!project) throw new Error("Смета не найдена");
     const baseRevision = await sheetRevision(project, scope?.sheetId), idPool = createAiEditIdPool(project);
     const payload = createAiEditRequest({ projectId, baseRevision, scope, instruction, knowledge, confirmed, idPool, continuation });
-    productEventsRepository.track(userId, "ai_edit", { requestId: payload.requestId }, { type: scope?.kind }).catch(() => {});
     const controller = new AbortController(); activeAiEditRequestsRef.current.set(projectId, controller);
     try {
       const response = await requestAiEdit(payload, { signal: controller.signal });
@@ -545,6 +544,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     const verified = await buildAiEditPreview({ project: current, response: preview.response, performers: performersRef.current, idPool: preview.idPool, expectedRevision: preview.baseRevision, instruction: preview.instruction, selectedSources: preview.selectedSources });
     const applied = commitProject(projectId, () => verified.afterProject, 0);
     if (!applied) throw new Error("Не удалось применить AI-diff");
+    productEventsRepository.track(userId, "ai_edit", { requestId: verified.requestId || null }, { type: verified.scope?.kind || preview.scope?.kind }).catch(() => {});
     flushProject(projectId).then(() => aiFeedbackRepository.apply(userId, { projectId, operation: "edit", aiRequestId: verified.requestId || null, beforeProject: verified.beforeProject, aiProject: verified.afterProject })).catch(() => console.warn("AI feedback apply failed"));
     aiUndoRef.current.record(projectId, { beforeProject: verified.beforeProject, appliedRevision: verified.afterRevision, requestId: verified.requestId });
     setAiUndoVersion((value) => value + 1);
@@ -754,7 +754,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
       </div>}
       {["error", "save-error"].includes(quickAccessState) && <div className="kb-toast" role="alert">{quickAccessMessage}<button className="kb-toast-retry" type="button" onClick={() => setQuickAccessRetry((value) => value + 1)}>Повторить</button><button className="kb-toast-retry" type="button" onClick={() => { setQuickAccessState("ready"); setQuickAccessMessage(""); }}>Закрыть</button></div>}
       {aiGenerationReady && projectSource?.file && <ImportModal file={projectSource.file} instruction={projectSource.description || ""}
-        onClose={() => setProjectSource(null)} onConfirm={(stages, meta) => createProjectFromEstimate(stages, { ...meta, source: "import" })} />}
+        onClose={() => setProjectSource(null)} onConfirm={(stages, meta) => { createProjectFromEstimate(stages, { ...meta, source: "import" }); if (meta?.importFormat) trackProductEvent("ai_import_completed", {}, { format: meta.importFormat }); }} />}
       {aiGenerationReady && projectSource && !projectSource.file && <GenerateEstimateModal description={projectSource.description} performers={performers}
         onClose={() => setProjectSource(null)} onConfirm={(stages, meta) => { trackProductEvent("ai_generate", { requestId: meta?.requestId || null }, { source: meta?.generationScope || "whole_project" }); createProjectFromEstimate(stages, meta); }} />}
       {editingTemplateId ? (
