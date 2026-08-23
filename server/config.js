@@ -37,8 +37,14 @@ function parseBoolean(value, fallback, name) {
 }
 
 export function parseBackendConfig(env = process.env) {
+  const databaseUrl = parseDatabaseUrl(env.DATABASE_URL);
+  if (!env.NODE_ENV) throw new Error("NODE_ENV is required to start the backend");
+  const production = env.NODE_ENV === "production";
+  if (env.NODE_ENV && !["development", "test", "production"].includes(env.NODE_ENV)) {
+    throw new Error("NODE_ENV must be development, test, or production");
+  }
   return {
-    databaseUrl: parseDatabaseUrl(env.DATABASE_URL),
+    databaseUrl,
     host: env.HOST || DEFAULT_HOST,
     port: parsePositiveInteger(env.PORT, DEFAULT_PORT, "PORT"),
     bodyLimitBytes: parsePositiveInteger(
@@ -51,6 +57,8 @@ export function parseBackendConfig(env = process.env) {
       2_000,
       "READINESS_TIMEOUT_MILLIS",
     ),
+    trustProxy: parseBoolean(env.TRUST_PROXY, false, "TRUST_PROXY"),
+    production,
   };
 }
 
@@ -64,7 +72,17 @@ export function parseBetterAuthConfig(env = process.env) {
   } catch {
     throw new Error("BETTER_AUTH_URL must be a valid absolute URL");
   }
-  return { secret: env.BETTER_AUTH_SECRET, baseUrl: baseUrl.toString() };
+  const trustedOrigins = String(env.KUBIKI_TRUSTED_ORIGINS || "").split(",").map((value) => value.trim()).filter(Boolean);
+  for (const origin of trustedOrigins) {
+    const parsed = new URL(origin);
+    if (parsed.origin !== origin.replace(/\/$/, "")) throw new Error("KUBIKI_TRUSTED_ORIGINS must contain origins only");
+  }
+  if (env.NODE_ENV === "production") {
+    if (baseUrl.protocol !== "https:") throw new Error("BETTER_AUTH_URL must use HTTPS in production");
+    if (!trustedOrigins.length) throw new Error("KUBIKI_TRUSTED_ORIGINS is required in production");
+    if (!trustedOrigins.includes(baseUrl.origin)) throw new Error("KUBIKI_TRUSTED_ORIGINS must include BETTER_AUTH_URL origin");
+  }
+  return { secret: env.BETTER_AUTH_SECRET, baseUrl: baseUrl.toString(), trustedOrigins };
 }
 
 export function parseSmtpConfig(env = process.env) {

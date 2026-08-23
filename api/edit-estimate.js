@@ -73,7 +73,10 @@ async function executeEdit(req, budget) {
     knowledge = projectKnowledge(await loadOwnKnowledge(auth.client, auth.user.id, { includeHistory: false }));
   }
   const aiProvider = createAiProvider();
-  if (!aiProvider.apiKey) return { status: 500, body: { error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" } };
+  if (!aiProvider.apiKey) {
+    console.error({ event: "ai_provider_unavailable", requestId: request.requestId, stage: "ai_edit", category: "configuration" });
+    return { status: 503, body: { error: "Сервис ИИ временно недоступен." } };
+  }
   const requestModel = aiProvider.createModelClient({ budget, usageGate: usage });
   const route = await routeAiIntent({ instruction: request.instruction, requestModel });
   if (!route) return { status: 502, body: { error: "Модель вернула некорректный маршрут AI-запроса", code: "ai_route_invalid_schema" } };

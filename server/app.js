@@ -17,8 +17,15 @@ const JSON_HEADERS = {
   "cache-control": "no-store",
 };
 
+const SECURITY_HEADERS = {
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
+  "referrer-policy": "strict-origin-when-cross-origin",
+  "permissions-policy": "camera=(), microphone=(), geolocation=()",
+};
+
 function sendJson(response, statusCode, body) {
-  response.writeHead(statusCode, JSON_HEADERS);
+  response.writeHead(statusCode, { ...SECURITY_HEADERS, ...JSON_HEADERS });
   response.end(JSON.stringify(body));
 }
 
@@ -71,8 +78,9 @@ async function isDatabaseReady(pool, timeoutMillis) {
   }
 }
 
-export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMillis, authHandler, authenticate, serverData, ownerApi, objectStorage, frontendDistPath = DEFAULT_FRONTEND_DIST_PATH, logger = console }) {
+export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMillis, authHandler, authenticate, serverData, ownerApi, objectStorage, requestSecurity, frontendDistPath = DEFAULT_FRONTEND_DIST_PATH, logger = console }) {
   return createServer((request, response) => {
+    for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.setHeader(name, value);
     const contentLength = Number(request.headers["content-length"] || 0);
     const rawPathname = request.url.split("?", 1)[0];
     const pathname = new URL(request.url, "http://localhost").pathname;
@@ -100,6 +108,11 @@ export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMill
 
     const path = pathname;
     if (path.startsWith("/api/auth/") && authHandler) {
+      if (requestSecurity && !requestSecurity.allowAuth(request, path)) {
+        sendJson(response, 429, { error: "too_many_requests" });
+        request.resume();
+        return;
+      }
       void authHandler(request, response).catch((error) => {
         logger.error("Better Auth HTTP request failed", { name: error?.name || "Error" });
         if (!response.headersSent) sendJson(response, 500, { error: "internal_error" });
@@ -148,13 +161,20 @@ export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMill
         }
         const authContext = await authenticate(request);
         if (!authContext) return sendJson(response, 401, { error: "authentication_required" });
+        if (requestSecurity && !requestSecurity.allowApi(authContext.user.id, path)) return sendJson(response, 429, { error: "too_many_requests" });
         if (AI_PATHS.has(path) && !await serverData.hasLegalAcceptance(authContext.user.id, "ai_disclosure", LEGAL_DOCUMENT_VERSIONS.ai_disclosure)) {
           return sendJson(response, 428, { error: "ai_disclosure_required", documentKey: "ai_disclosure", version: LEGAL_DOCUMENT_VERSIONS.ai_disclosure });
         }
-        request.authContext = authContext;
-        request.serverData = serverData;
-        request.body = await readJson(request, bodyLimitBytes);
-        await handler(request, vercelResponse(response));
+        const release = requestSecurity ? requestSecurity.acquire(authContext.user.id, path) : (() => {});
+        if (!release) return sendJson(response, 429, { error: "request_in_progress" });
+        try {
+          request.authContext = authContext;
+          request.serverData = serverData;
+          request.body = await readJson(request, bodyLimitBytes);
+          await handler(request, vercelResponse(response));
+        } finally {
+          release();
+        }
       })().catch((error) => {
         logger.error("API request failed", { name: error?.name || "Error" });
         if (!response.headersSent) sendJson(response, error?.status || 500, { error: error?.message === "invalid_json" ? "invalid_json" : "internal_error" });

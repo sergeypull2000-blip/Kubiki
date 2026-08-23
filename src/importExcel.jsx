@@ -15,6 +15,7 @@ import { extractWordBrief } from "./ai/wordBrief.js";
 import { stagesFromGeneratedEstimate } from "./ai/estimateInsertion.js";
 import { dismissOnBackdrop, useModalDismiss } from "./components/modalDismiss.js";
 import { kubikiApiRequest } from "./backend/apiTransport.js";
+import { assertImportFileSize, assertWorkbookStructure, MAX_PDF_PAGES, MAX_PDF_TEXT_ITEMS } from "./importLimits.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
@@ -70,13 +71,18 @@ function serializeSheet(ws) {
    похожий на таблицу — как и лист Excel, но восстановленный из геометрии,
    а не из настоящих ячеек. Пустой текстовый слой (скан/картинка) → []. */
 async function extractPdfRows(file) {
+  assertImportFileSize(file);
   const buf = await file.arrayBuffer();
-  const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+  const doc = await pdfjsLib.getDocument({ data: buf, enableScripting: false, isEvalSupported: false }).promise;
+  if (doc.numPages > MAX_PDF_PAGES) throw new Error("В PDF слишком много страниц для импорта.");
   const allRows = [];
+  let textItems = 0;
   const Y_TOLERANCE = 2.5; // пункты PDF — фрагменты одной визуальной строки редко расходятся сильнее
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
     const content = await page.getTextContent();
+    textItems += content.items.length;
+    if (textItems > MAX_PDF_TEXT_ITEMS) throw new Error("В PDF слишком много текста для импорта.");
     const items = content.items
       .map((it) => ({ str: String(it.str || "").trim(), x: it.transform[4], y: it.transform[5] }))
       .filter((it) => it.str);
@@ -291,10 +297,12 @@ export function ImportModal({ file, instruction = "", onClose, onConfirm }) {
         return;
       }
       try {
+        assertImportFileSize(file);
         const buf = await file.arrayBuffer();
         const book = /\.csv$/i.test(file.name)
-          ? XLSX.read(new TextDecoder("utf-8").decode(buf), { type: "string" })
-          : XLSX.read(buf, { type: "array" });
+          ? XLSX.read(new TextDecoder("utf-8").decode(buf), { type: "string", cellFormula: false, cellHTML: false })
+          : XLSX.read(buf, { type: "array", cellFormula: false, cellHTML: false });
+        assertWorkbookStructure(book, XLSX.utils.decode_range);
         if (cancelled) return;
         setWb(book);
         setSheetNames(book.SheetNames);

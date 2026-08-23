@@ -586,7 +586,10 @@ export async function executeGeneration(req, budget, generationRequestId = rando
   if (!input.ok) return { status: input.status, body: { error: input.error } };
 
   const aiProvider = createAiProvider();
-  if (!aiProvider.apiKey) return { status: 500, body: { error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" } };
+  if (!aiProvider.apiKey) {
+    console.error({ event: "ai_provider_unavailable", requestId: generationRequestId, stage: "generation", category: "configuration" });
+    return { status: 503, body: { error: "Сервис ИИ временно недоступен." } };
+  }
   const requestModel = aiProvider.createModelClient({ budget, usageGate: usage });
 
   const result = await runEstimateGeneration({

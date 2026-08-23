@@ -60,6 +60,8 @@ export function createBetterAuth({ pool = authPool, config = authConfig, emailSe
     database: pool,
     secret: config.secret,
     baseURL: config.baseUrl,
+    trustedOrigins: config.trustedOrigins,
+    rateLimit: { enabled: true, window: 60, max: 100, storage: "memory" },
     emailVerification: {
       sendVerificationEmail: emailSender.sendVerificationEmail,
       sendOnSignUp: false,
@@ -71,6 +73,7 @@ export function createBetterAuth({ pool = authPool, config = authConfig, emailSe
       revokeSessionsOnPasswordReset: true,
     },
     advanced: {
+      useSecureCookies: new URL(config.baseUrl).protocol === "https:",
       database: {
         generateId: "uuid",
       },

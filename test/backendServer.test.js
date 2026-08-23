@@ -26,6 +26,41 @@ test("health endpoint has no database dependency", async (t) => {
   const response = await fetch(`${baseUrl}/healthz`);
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: "ok" });
+  assert.equal(response.headers.get("x-frame-options"), "DENY");
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("referrer-policy"), "strict-origin-when-cross-origin");
+});
+
+test("request security rejects limited auth and API requests before expensive work", async (t) => {
+  const requestSecurity = {
+    allowAuth: () => false,
+    allowApi: () => false,
+    acquire: () => assert.fail("concurrency must not be acquired after a rate rejection"),
+  };
+  const { server, baseUrl } = await listen({ query: async () => ({ rows: [] }) }, {
+    requestSecurity,
+    authHandler: () => assert.fail("auth handler must not run"),
+    authenticate: async () => ({ user: { id: "current-user" } }),
+    serverData: {},
+  });
+  t.after(() => server.close());
+  const authResponse = await fetch(`${baseUrl}/api/auth/sign-in/email`, { method: "POST", body: "{}" });
+  assert.equal(authResponse.status, 429);
+  const apiResponse = await fetch(`${baseUrl}/api/extract-doc`, { method: "POST", body: "{}" });
+  assert.equal(apiResponse.status, 429);
+});
+
+test("document parsing rejects a concurrent request before reading its body", async (t) => {
+  const requestSecurity = { allowAuth: () => true, allowApi: () => true, acquire: () => null };
+  const { server, baseUrl } = await listen({ query: async () => ({ rows: [] }) }, {
+    requestSecurity,
+    authenticate: async () => ({ user: { id: "current-user" } }),
+    serverData: {},
+  });
+  t.after(() => server.close());
+  const response = await fetch(`${baseUrl}/api/extract-doc`, { method: "POST", body: "{}" });
+  assert.equal(response.status, 429);
+  assert.deepEqual(await response.json(), { error: "request_in_progress" });
 });
 
 test("readiness reports PostgreSQL success and bounded failure without details", async (t) => {

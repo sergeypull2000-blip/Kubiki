@@ -10,10 +10,12 @@ import { createUsageRepository } from "./repositories/usageRepository.js";
 import { createOwnerApiRepository } from "./repositories/ownerApiRepository.js";
 import { createObjectStorage } from "./objectStorage.js";
 import { recordSignUpLegalAcceptances, rollbackFailedSignUp } from "./repositories/legalAcceptanceRepository.js";
+import { createRequestSecurity } from "./requestSecurity.js";
 
 export async function startBackend({ env = process.env, logger = console } = {}) {
   const config = parseBackendConfig(env);
   const objectStorage = createObjectStorage(parseObjectStorageConfig(env));
+  const requestSecurity = createRequestSecurity({ trustProxy: config.trustProxy });
   const pool = createDatabasePool(config.databaseUrl);
   pool.on("error", () => logger.error("Unexpected PostgreSQL pool error"));
 
@@ -28,7 +30,7 @@ export async function startBackend({ env = process.env, logger = console } = {})
       headers,
     }),
   });
-  const server = createBackendServer({ pool, authHandler, authenticate, serverData, ownerApi, objectStorage, logger, ...config });
+  const server = createBackendServer({ pool, authHandler, authenticate, serverData, ownerApi, objectStorage, requestSecurity, logger, ...config });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, config.host, resolve);

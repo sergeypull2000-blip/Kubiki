@@ -28,8 +28,6 @@ const SYSTEM_PROMPT = `Ты разбираешь смету видеопрода
 export default async function handler(req, res) {
   const requestId = randomUUID();
   const startedAt = Date.now();
-  // CORS — разрешаем запросы с любого origin (для preview на Vercel)
-  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
@@ -40,7 +38,10 @@ export default async function handler(req, res) {
   if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
   const aiProvider = createAiProvider();
-  if (!aiProvider.apiKey) return res.status(500).json({ error: "DEEPSEEK_API_KEY не задан в переменных окружения Vercel" });
+  if (!aiProvider.apiKey) {
+    console.error({ event: "ai_provider_unavailable", requestId, stage: "import", category: "configuration" });
+    return res.status(503).json({ error: "Сервис ИИ временно недоступен." });
+  }
 
   const usage = createUsageRecorder({ client: auth.client, userId: auth.user.id });
   try { await usage.assertAllowed(); } catch (error) { if (error instanceof UsageLimitError) return res.status(429).json({ error: error.message }); }
@@ -110,7 +111,7 @@ export default async function handler(req, res) {
     return res.status(200).json(parsed);
   } catch (e) {
     console.error({ event: "parse_excel_error", requestId, stage: "import", durationMs: Date.now() - startedAt, category: e?.name === "AbortError" ? "timeout" : "internal_error" });
-    return res.status(500).json({ error: e.message || "Внутренняя ошибка сервера" });
+    return res.status(500).json({ error: "Не удалось обработать импорт. Попробуйте позже." });
   } finally {
     await usage.release();
   }
