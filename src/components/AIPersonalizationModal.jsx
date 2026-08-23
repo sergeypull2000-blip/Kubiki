@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { MAX_PERSONALIZATION_CHARS, normalizeAiSettings } from "../aiSettings.js";
+import { dismissOnBackdrop, useModalDismiss } from "./modalDismiss.js";
 
 export function AIPersonalizationModal({ settings, improvementConsent = false, state = "ready", message = "", onSave, onClose }) {
   const [draft, setDraft] = useState(() => normalizeAiSettings(settings));
@@ -10,10 +11,11 @@ export function AIPersonalizationModal({ settings, improvementConsent = false, s
     if (!dirtyRef.current) { setDraft(normalizeAiSettings(settings)); setImprove(improvementConsent); }
   }, [settings, improvementConsent]);
   const saving = state === "saving";
+  useModalDismiss(onClose, !saving);
   const save = async () => {
     if (await onSave(draft, improve)) dirtyRef.current = false;
   };
-  return <div className="kb-modal-overlay" onMouseDown={saving ? undefined : onClose}>
+  return <div className="kb-modal-overlay" onMouseDown={saving ? undefined : dismissOnBackdrop(onClose)}>
     <div className="kb-modal kb-ai-settings-modal" role="dialog" aria-modal="true" aria-labelledby="ai-settings-title" onMouseDown={(event) => event.stopPropagation()}>
       <div className="kb-modal-head"><span className="kb-modal-title" id="ai-settings-title">Персонализация ИИ</span><button type="button" className="kb-icon-btn" onClick={onClose} disabled={saving}><X size={16} /></button></div>
       <div className="kb-modal-body">

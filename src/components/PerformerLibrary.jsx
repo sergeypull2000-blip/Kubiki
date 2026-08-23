@@ -3,6 +3,7 @@ import { X, ChevronDown } from "lucide-react";
 import { GRADE_OPTIONS, PAYMENT_OPTIONS, SOFTWARE_OPTIONS } from "../constants.js";
 import { STUDIO_ROLES, isStudioRole } from "../cgTaskRoleTaxonomy.js";
 import { useOutsideClose } from "../hooks.js";
+import { dismissOnBackdrop, useModalDismiss } from "./modalDismiss.js";
 
 const RATE_UNIT = { fix_task: "₽/ед.", hourly: "₽/час", shift: "₽/смену" };
 const PAYMENT_SELECT = [{ key: null, label: "Не выбран" }, ...PAYMENT_OPTIONS];
@@ -114,11 +115,13 @@ export function PerformerModal({ initial, isNew = false, initialAddToQuickAccess
   const [addToQuickAccess, setAddToQuickAccess] = useState(initialAddToQuickAccess);
   const [roleWarning, setRoleWarning] = useState(false);
   useEffect(() => { setDraft(initial); setAddToQuickAccess(initialAddToQuickAccess); }, [initial, initialAddToQuickAccess]);
-  if (!draft) return null;
   const set = (key, value) => setDraft((old) => ({ ...old, [key]: value }));
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial) || addToQuickAccess !== initialAddToQuickAccess;
   const close = () => { if (!dirty || window.confirm("Закрыть карточку без сохранения изменений?")) onClose(); };
-  return <><div className="kb-performer-modal-backdrop" onMouseDown={close}><div className="kb-performer-modal" onMouseDown={(e) => e.stopPropagation()}>
+  useModalDismiss(close, Boolean(draft) && !roleWarning);
+  useModalDismiss(() => setRoleWarning(false), Boolean(draft) && roleWarning);
+  if (!draft) return null;
+  return <><div className="kb-performer-modal-backdrop" onMouseDown={dismissOnBackdrop(close)}><div className="kb-performer-modal" onMouseDown={(e) => e.stopPropagation()}>
     <header><div><strong>{isNew ? "Новый исполнитель" : "Карточка исполнителя"}</strong><small>Отдельная карточка базы — условия сметы останутся независимыми</small></div><button className="kb-icon-btn" onClick={close} title="Закрыть"><X size={16} /></button></header>
     <div className="kb-performer-form">
       <section><h3>Основное</h3><div className="kb-form-grid">

@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { betaFeedbackRepository } from "../backend/runtimeRepositories.js";
+import { dismissOnBackdrop, useModalDismiss } from "./modalDismiss.js";
+import { userErrorMessage } from "../userError.js";
 
 /* Компактное окно бета-фидбэка: textarea + Отмена/Отправить + success-состояние.
    Запись идёт в beta_feedback (RLS: только INSERT собственного фидбэка). */
 export function BetaFeedbackModal({ userId, context, onClose }) {
+  useModalDismiss(onClose);
   const [message, setMessage] = useState("");
   const [state, setState] = useState("idle");
   const [error, setError] = useState("");
@@ -25,13 +28,13 @@ export function BetaFeedbackModal({ userId, context, onClose }) {
       setState("sent");
     } catch (insertError) {
       setState("idle");
-      setError(insertError.message || "Не удалось отправить отзыв. Попробуйте ещё раз.");
+      setError(userErrorMessage(insertError, "Не удалось отправить отзыв. Попробуйте ещё раз."));
     }
   };
 
   if (state === "sent") {
     return (
-      <div className="kb-modal-overlay" onMouseDown={onClose}>
+      <div className="kb-modal-overlay" onMouseDown={dismissOnBackdrop(onClose)}>
         <div className="kb-modal kb-feedback-modal" role="dialog" aria-modal="true" aria-labelledby="feedback-title" onMouseDown={(event) => event.stopPropagation()}>
           <div className="kb-modal-head">
             <span className="kb-modal-title" id="feedback-title">Обратная связь</span>
@@ -49,7 +52,7 @@ export function BetaFeedbackModal({ userId, context, onClose }) {
   }
 
   return (
-    <div className="kb-modal-overlay" onMouseDown={onClose}>
+    <div className="kb-modal-overlay" onMouseDown={dismissOnBackdrop(onClose)}>
       <div className="kb-modal kb-feedback-modal" role="dialog" aria-modal="true" aria-labelledby="feedback-title" onMouseDown={(event) => event.stopPropagation()}>
         <div className="kb-modal-head">
           <span className="kb-modal-title" id="feedback-title">Обратная связь</span>

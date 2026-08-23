@@ -12,6 +12,8 @@ import { buildExcelRows, buildExcelWorkbook } from "./excelExport.js";
 import { exportPresetsRepository, exportProfileRepository, productEventsRepository, aiFeedbackRepository } from "./backend/runtimeRepositories.js";
 import { normalizePresentationSettings } from "./exportSettings.js";
 import { fetchFreshLogoDataUrl } from "./exportLogo.js";
+import { dismissOnBackdrop, useModalDismiss } from "./components/modalDismiss.js";
+import { userErrorMessage } from "./userError.js";
 
 export { buildExcelRows, buildExcelWorkbook } from "./excelExport.js";
 
@@ -87,11 +89,11 @@ async function exportExcel(model, filename) {
   return model.summary.total;
 }
 
-function pdfDefinition(model) {
+export function pdfDefinition(model) {
   const colors = { ...brandColors(), ...model.brand.colors };
   const rowTextColor = (row) => row.type === "stage" ? model.brand.colors.stageText : row.type === "task" ? model.brand.colors.taskText : colors.muted;
   const labelText = (row) => (row.type === "performer" ? `    ${row.label}` : row.label);
-  const headerCell = (text, overrides = {}) => ({ text, bold: true, fillColor: colors.sunken, color: colors.muted, fontSize: model.typography.task.size, margin: [2, 4, 2, 4], ...overrides });
+  const headerCell = (text, overrides = {}) => ({ text, bold: true, fillColor: model.brand.colors.header, color: model.brand.colors.headerText, fontSize: model.brand.headerFontSize, margin: [2, 4, 2, 4], ...overrides });
   const header = [
     headerCell("№"),
     headerCell("Наименование"),
@@ -111,7 +113,7 @@ function pdfDefinition(model) {
     pageSize: "A4", pageMargins: [40, 40, 40, 40], defaultStyle: { font: "Roboto", fontSize: 10, color: colors.text },
     content: [
       ...(model.brand?.logoUrl ? [{ image: model.brand.logoUrl, fit: [110, 52], alignment: model.brand.logoPosition || "left", margin: [0, 0, 0, 8] }] : []),
-      ...(model.brand?.companyName ? [{ text: model.brand.companyName, bold: true, fontSize: 12, margin: [0, 0, 0, 3] }] : []),
+      ...(model.brand?.companyName ? [{ text: model.brand.companyName, bold: true, alignment: model.brand.companyPosition || "left", fontSize: 12, margin: [0, 0, 0, 3] }] : []),
       ...([model.brand?.phone, model.brand?.email, model.brand?.website].some(Boolean) ? [{ text: [model.brand.phone, model.brand.email, model.brand.website].filter(Boolean).join(" · "), color: colors.muted, fontSize: 9, margin: [0, 0, 0, 10] }] : []),
       { text: model.proposal.title, bold: true, fontSize: model.typography.title.size, margin: [0, 0, 0, model.sheetName ? 3 : 14] },
       ...(model.sheetName ? [{ text: model.sheetName, fontSize: model.typography.stage.size, color: colors.muted, margin: [0, 0, 0, 14] }] : []),
@@ -356,9 +358,8 @@ function PresentationControls({ draft, onChange, project, dispatch, userId, logo
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoError, setLogoError] = useState("");
   const patch = (section, value) => onChange({ ...draft, [section]: { ...draft[section], ...value } });
-  const uploadLogo = async (file) => { if (!file || !userId) return; setLogoBusy(true); setLogoError(""); try { const path = await exportProfileRepository.uploadLogo(userId, file); const url = await exportProfileRepository.createLogoUrl(path); patch("branding", { logoAssetPath: path }); onLogoUrl(url); } catch (error) { setLogoError(error.message); } finally { setLogoBusy(false); } };
-  const removeLogo = async () => { if (!userId) return; setLogoBusy(true); setLogoError(""); try { await exportProfileRepository.removeLogo(); patch("branding", { logoAssetPath: "" }); onLogoUrl(""); } catch (error) { setLogoError(error.message); } finally { setLogoBusy(false); } };
-  const persistProfile = (branding = draft.branding) => { if (userId) exportProfileRepository.upsertProfile(userId, branding).catch((error) => setLogoError(error.message)); };
+  const uploadLogo = async (file) => { if (!file || !userId) return; setLogoBusy(true); setLogoError(""); try { const path = await exportProfileRepository.uploadLogo(userId, file); const url = await exportProfileRepository.createLogoUrl(path); patch("branding", { logoAssetPath: path }); onLogoUrl(url); } catch (error) { setLogoError(userErrorMessage(error, "Не удалось загрузить логотип. Попробуйте ещё раз.")); } finally { setLogoBusy(false); } };
+  const removeLogo = async () => { if (!userId) return; setLogoBusy(true); setLogoError(""); try { await exportProfileRepository.removeLogo(); patch("branding", { logoAssetPath: "" }); onLogoUrl(""); } catch (error) { setLogoError(userErrorMessage(error, "Не удалось удалить логотип. Попробуйте ещё раз.")); } finally { setLogoBusy(false); } };
   const typeSize = (key, label) => (
     <label className="kb-export-field">
       <span>{label}</span>
@@ -375,14 +376,14 @@ function PresentationControls({ draft, onChange, project, dispatch, userId, logo
             <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={!userId || logoBusy} onChange={(event) => uploadLogo(event.target.files?.[0])} />
           </label>
           {logoUrl && <button type="button" className="kb-brand-remove" disabled={logoBusy} onClick={removeLogo} title="Удалить логотип" aria-label="Удалить логотип">×</button>}
-        </div><PositionSegmented value={draft.branding.logoPosition} label="Позиция логотипа" onChange={(value) => { const branding = { ...draft.branding, logoPosition: value }; onChange({ ...draft, branding }); persistProfile(branding); }} /></div>
+        </div><PositionSegmented value={draft.branding.logoPosition} label="Позиция логотипа" onChange={(value) => patch("branding", { logoPosition: value })} /></div>
         {logoError && <small className="kb-export-control-error">{logoError}</small>}
-        <div className="kb-export-brand-row"><span className="kb-export-brand-label">Название компании</span><input className="kb-input kb-export-company-input" value={draft.branding.companyName} onChange={(event) => patch("branding", { companyName: event.target.value })} onBlur={() => persistProfile()} /><PositionSegmented value={draft.branding.companyPosition} label="Позиция названия компании" onChange={(value) => { const branding = { ...draft.branding, companyPosition: value }; onChange({ ...draft, branding }); persistProfile(branding); }} /></div>
+        <div className="kb-export-brand-row"><span className="kb-export-brand-label">Название компании</span><input className="kb-input kb-export-company-input" value={draft.branding.companyName} onChange={(event) => patch("branding", { companyName: event.target.value })} /><PositionSegmented value={draft.branding.companyPosition} label="Позиция названия компании" onChange={(value) => patch("branding", { companyPosition: value })} /></div>
         <div className="kb-export-colors">
           <span aria-hidden="true" />
           <span className="kb-export-color-head kb-export-color-head-bg">Фон</span>
           <span className="kb-export-color-head kb-export-color-head-text">Текст</span>
-          {[["stage", "Этап"], ["task", "Задача"], ["total", "Итого"]].map(([key, label]) => (
+          {[["header", "Шапка таблицы"], ["stage", "Этап"], ["task", "Задача"], ["total", "Итого"]].map(([key, label]) => (
             <Fragment key={key}>
               <span className="kb-export-color-entity">{label}</span>
               <ColorRow value={draft.branding.colors[key]} onChange={(value) => patch("branding", { colors: { ...draft.branding.colors, [key]: value } })} ariaLabel={`${label} — фон`} />
@@ -390,6 +391,7 @@ function PresentationControls({ draft, onChange, project, dispatch, userId, logo
             </Fragment>
           ))}
         </div>
+        <label className="kb-export-field"><span>Размер текста шапки</span><SizeStepper value={draft.branding.headerFontSize} onChange={(headerFontSize) => patch("branding", { headerFontSize })} ariaLabel="Размер текста шапки" /></label>
       </div>
     </details>
     <details className="kb-export-section">
@@ -446,7 +448,7 @@ function ExportPreview({ model }) {
       <div style={{ fontFamily: model.brand.fontFamily, color: model.brand.colors.text }}>
       <div className="kb-export-preview-brand"><span>{model.brand.logoPosition === "left" && model.brand.logoUrl && <img src={model.brand.logoUrl} alt="Логотип компании" />}{model.brand.companyPosition === "left" && model.brand.companyName && <strong>{model.brand.companyName}</strong>}</span><span>{model.brand.logoPosition === "center" && model.brand.logoUrl && <img src={model.brand.logoUrl} alt="Логотип компании" />}{model.brand.companyPosition === "center" && model.brand.companyName && <strong>{model.brand.companyName}</strong>}</span><span>{model.brand.logoPosition === "right" && model.brand.logoUrl && <img src={model.brand.logoUrl} alt="Логотип компании" />}{model.brand.companyPosition === "right" && model.brand.companyName && <strong>{model.brand.companyName}</strong>}</span></div>
       <h2 style={{ fontSize: model.typography.title.size }}>{model.proposal.title}</h2>
-      <div className="kb-export-preview-row kb-export-preview-head"><span>№</span><span>Наименование</span>{model.display.showComments && <span className="kb-export-preview-comment">Комментарии</span>}<span>Сумма</span></div>
+      <div className="kb-export-preview-row kb-export-preview-head" style={{ background: model.brand.colors.header, color: model.brand.colors.headerText, fontSize: model.brand.headerFontSize }}><span>№</span><span>Наименование</span>{model.display.showComments && <span className="kb-export-preview-comment">Комментарии</span>}<span>Сумма</span></div>
       {model.stages.map((stage) => <div className="kb-export-preview-stage" key={stage.id}>
         <div className="kb-export-preview-row" style={{ background: stage.color, color: stage.textColor, fontSize: model.typography.stage.size }}><b>{stage.number}</b><b>{stage.name}</b>{model.display.showComments && <span className="kb-export-preview-comment" />}<b>{money(stage.exportedSubtotal)}</b></div>
         {stage.rows.map((row) => <div className="kb-export-preview-task" key={row.sourceTaskId}>
@@ -463,6 +465,7 @@ function ExportPreview({ model }) {
 }
 
 function ExportModal({ project, format, dispatch, userId, onClose, onExport }) {
+  useModalDismiss(onClose);
   const [draft, setDraft] = useState(() => ({
     ...normalizeExportSettings(project.exportSettings),
     ...normalizePresentationSettings(project.exportSettings),
@@ -475,25 +478,28 @@ function ExportModal({ project, format, dispatch, userId, onClose, onExport }) {
   const [presetName, setPresetName] = useState("");
   const [presetError, setPresetError] = useState("");
   const [exportError, setExportError] = useState("");
-  useEffect(() => { if (!userId) return; let active = true; exportPresetsRepository.list(userId).then((items) => { if (active) setPresets(items); }).catch((error) => { if (active) setPresetError(error.message); }); return () => { active = false; }; }, [userId]);
-  useEffect(() => { if (!userId) return; let active = true; exportProfileRepository.loadProfile(userId).then(async ({ profile }) => { if (!active || !profile) return; const branding = { companyName: profile.company_name, logoAssetPath: profile.logo_asset_path || "", logoPosition: profile.logo_position || "left", companyPosition: profile.company_position || "left", phone: profile.phone, email: profile.email, website: profile.website, colors: profile.default_colors, fontFamily: profile.default_font }; setDraft((current) => ({ ...current, branding: { ...current.branding, ...branding } })); if (profile.logo_asset_path) setLogoUrl(await exportProfileRepository.createLogoUrl(profile.logo_asset_path, 3600)); }).catch((error) => { if (active) setPresetError(error.message); }); return () => { active = false; }; }, [userId]);
-  const save = (next) => { setDraft(next); dispatch((current) => ({ ...current, exportSettings: normalizeExportSettings(next) })); };
+  useEffect(() => { if (!userId) return; let active = true; exportPresetsRepository.list(userId).then((items) => { if (active) setPresets(items); }).catch(() => { if (active) setPresetError("Не удалось загрузить пресеты. Попробуйте ещё раз."); }); return () => { active = false; }; }, [userId]);
+  useEffect(() => { if (!userId) return; let active = true; exportProfileRepository.loadProfile(userId).then(async ({ profile }) => { if (!active || !profile) return; const branding = normalizePresentationSettings({ branding: { companyName: profile.company_name, logoAssetPath: profile.logo_asset_path || "", logoPosition: profile.logo_position || "left", companyPosition: profile.company_position || "left", phone: profile.phone, email: profile.email, website: profile.website, colors: profile.default_colors, headerFontSize: profile.default_colors?.headerFontSize, fontFamily: profile.default_font } }).branding; setDraft((current) => ({ ...current, branding })); if (profile.logo_asset_path) setLogoUrl(await exportProfileRepository.createLogoUrl(profile.logo_asset_path, 3600)); }).catch(() => { if (active) setPresetError("Не удалось загрузить настройки экспорта. Попробуйте ещё раз."); }); return () => { active = false; }; }, [userId]);
+  const save = (next) => setDraft(next);
   const applyPreset = (settings) => save({ ...draft, ...settings, branding: { ...draft.branding, ...settings.branding }, typography: { ...draft.typography, ...settings.typography }, content: { ...draft.content, ...settings.content, visibleExecutorIds: draft.content.visibleExecutorIds, rowColorOverrides: draft.content.rowColorOverrides }, service: { ...draft.service, ...settings.service } });
-  const savePreset = async () => { if (!userId || !presetName.trim()) return; try { const item = presetId ? await exportPresetsRepository.update(userId, presetId, presetName, draft) : await exportPresetsRepository.create(userId, presetName, draft); setPresets((items) => [item, ...items.filter((value) => value.id !== item.id)]); setPresetId(item.id); setPresetError(""); } catch (error) { setPresetError(error.message); } };
-  const deletePreset = async () => { if (!userId || !presetId) return; try { await exportPresetsRepository.remove(userId, presetId); setPresets((items) => items.filter((item) => item.id !== presetId)); setPresetId(""); setPresetName(""); } catch (error) { setPresetError(error.message); } };
-  const duplicatePreset = async () => { const selected = presets.find((item) => item.id === presetId); if (!userId || !selected) return; try { const copy = await exportPresetsRepository.duplicate(userId, selected); setPresets((items) => [copy, ...items]); setPresetId(copy.id); setPresetName(copy.name); } catch (error) { setPresetError(error.message); } };
+  const savePreset = async () => { if (!userId || !presetName.trim()) return; try { const item = presetId ? await exportPresetsRepository.update(userId, presetId, presetName, draft) : await exportPresetsRepository.create(userId, presetName, draft); setPresets((items) => [item, ...items.filter((value) => value.id !== item.id)]); setPresetId(item.id); setPresetError(""); } catch (error) { setPresetError(userErrorMessage(error, "Не удалось сохранить пресет. Попробуйте ещё раз.")); } };
+  const deletePreset = async () => { if (!userId || !presetId) return; try { await exportPresetsRepository.remove(userId, presetId); setPresets((items) => items.filter((item) => item.id !== presetId)); setPresetId(""); setPresetName(""); } catch (error) { setPresetError(userErrorMessage(error, "Не удалось удалить пресет. Попробуйте ещё раз.")); } };
+  const duplicatePreset = async () => { const selected = presets.find((item) => item.id === presetId); if (!userId || !selected) return; try { const copy = await exportPresetsRepository.duplicate(userId, selected); setPresets((items) => [copy, ...items]); setPresetId(copy.id); setPresetName(copy.name); } catch (error) { setPresetError(userErrorMessage(error, "Не удалось создать копию пресета. Попробуйте ещё раз.")); } };
   const run = async () => {
     setBusy(true);
     setExportError("");
     try {
+      dispatch((current) => ({ ...current, exportSettings: normalizeExportSettings(draft) }));
+      if (userId) await exportProfileRepository.upsertProfile(userId, draft.branding);
       await onExport(model);
       if (userId) aiFeedbackRepository.finalize(userId, project.id, project).catch(() => console.warn("AI feedback finalization failed"));
       if (userId) productEventsRepository.track(userId, "export_completed", {}, { format }).catch(() => {});
     } catch (error) {
-      setExportError(error instanceof Error ? error.message : "Не удалось сформировать PDF-файл.");
+      console.error("export_failed", { name: error?.name || "Error" });
+      setExportError("Не удалось сформировать файл. Проверьте подключение и попробуйте ещё раз.");
     } finally { setBusy(false); }
   };
-  return <div className="kb-modal-backdrop" onMouseDown={onClose}>
+  return <div className="kb-modal-backdrop" onMouseDown={dismissOnBackdrop(onClose)}>
     <div className="kb-export-modal" role="dialog" aria-modal="true" aria-label="Настройки экспорта" onMouseDown={(event) => event.stopPropagation()}>
       <div className="kb-export-modal-head"><div><b>Экспорт сметы</b><span>{format === "pdf" ? "PDF" : "Excel"}</span></div><div className="kb-export-modal-head-actions"><button type="button" aria-label="Закрыть" onClick={onClose}><X size={16} /></button></div></div>
       <div className="kb-export-modal-body">

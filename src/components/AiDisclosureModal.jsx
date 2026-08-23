@@ -1,5 +1,8 @@
+import { dismissOnBackdrop, useModalDismiss } from "./modalDismiss.js";
+
 export function AiDisclosureModal({ saving = false, error = "", improve = false, onImproveChange, onCancel, onContinue }) {
-  return <div className="kb-modal-overlay" role="presentation">
+  useModalDismiss(onCancel, !saving);
+  return <div className="kb-modal-overlay" role="presentation" onMouseDown={dismissOnBackdrop(onCancel)}>
     <div className="kb-modal kb-ai-disclosure" role="dialog" aria-modal="true" aria-labelledby="ai-disclosure-title">
       <div className="kb-modal-head"><span className="kb-modal-title" id="ai-disclosure-title">ИИ-функции Kubiki</span></div>
       <div className="kb-modal-body">

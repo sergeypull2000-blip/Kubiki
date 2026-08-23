@@ -7,6 +7,7 @@ import { createProjectTemplate } from "../templates.js";
 import LeftPanel from "./LeftPanel.jsx";
 import { AccountControl } from "./AccountControl.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
+import { dismissOnBackdrop, useModalDismiss } from "./modalDismiss.js";
 
 const DASH_SIDEBAR_MIN = 200;
 const DASH_SIDEBAR_MAX = 340;
@@ -80,6 +81,7 @@ function EntityCard({ item, template = false, onOpen, onDelete, onMakeTemplate, 
 }
 
 function ProjectSourceModal({ mode, aiGenerationReady, onClose, onSubmit }) {
+  useModalDismiss(onClose);
   const [description, setDescription] = useState("");
   const [file, setFile] = useState(null);
   const [over, setOver] = useState(false);
@@ -96,7 +98,7 @@ function ProjectSourceModal({ mode, aiGenerationReady, onClose, onSubmit }) {
     onSubmit({ file, description: description.trim() });
   };
 
-  return <div className="kb-modal-overlay" onMouseDown={onClose}>
+  return <div className="kb-modal-overlay" onMouseDown={dismissOnBackdrop(onClose)}>
     <div className={`kb-modal kb-project-source-modal is-${mode}`} onMouseDown={(event) => event.stopPropagation()}>
       <div className="kb-modal-head">
         <span className="kb-modal-title">{isImport ? "Импортировать смету" : "Создать по описанию"}</span>

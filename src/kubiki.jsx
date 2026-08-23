@@ -10,6 +10,7 @@ import { APP_SECTIONS } from "./appNavigation.js";
 import { createPerformer, removePerformer, savePerformerLibrary, updatePerformer } from "./performerLibrary.js";
 import { applyQuickAccessPreference, migrateLegacyQuickAccess, pinQuickAccessItem, removeQuickAccessByPerformerId, removeQuickAccessItem, saveQuickAccessState, unpinQuickAccessItem } from "./quickAccess.js";
 import { projectRepository, performerRepository, quickAccessRepository, templateLibraryRepository, aiSettingsRepository, userFlagsRepository, productEventsRepository, legalAcceptancesRepository, aiFeedbackRepository } from "./backend/runtimeRepositories.js";
+import { userErrorMessage } from "./userError.js";
 import { LEGAL_DOCUMENT_VERSIONS } from "./legalConfig.js";
 import { createLocalServerBackup, diffProjectCollections, migrateLocalProjects, shouldOfferProjectMigration } from "./projectServer.js";
 import { createPerformerBackup, localPerformersForUser, markPerformerServerOwner, migrateLocalPerformers, missingLocalPerformers } from "./performerServer.js";
@@ -250,7 +251,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     }).catch((error) => {
       if (cancelled) return;
       replacePerformers(local);
-      setPerformerMessage(error.message || "Не удалось загрузить базу исполнителей");
+      setPerformerMessage(userErrorMessage(error, "Не удалось загрузить базу исполнителей"));
       setPerformerState("error");
     });
     return () => { cancelled = true; performerSyncEnabledRef.current = false; performerHydratedUserRef.current = null; serverPerformerIdsRef.current = new Set(); performersRef.current = []; };
@@ -274,7 +275,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
       else { quickAccessSyncEnabledRef.current = true; setQuickAccessState("ready"); if (skipped.length) setQuickAccessMessage(`Пропущено битых ссылок: ${skipped.length}`); }
     }).catch((error) => {
       if (cancelled) return;
-      replaceQuickAccess(local); setQuickAccessState("error"); setQuickAccessMessage(error.message || "Не удалось загрузить быстрый доступ");
+      replaceQuickAccess(local); setQuickAccessState("error"); setQuickAccessMessage(userErrorMessage(error, "Не удалось загрузить быстрый доступ"));
     });
     return () => { cancelled = true; quickAccessSyncEnabledRef.current = false; };
   }, [userId, performerHydrationVersion, quickAccessRetry, replaceQuickAccess]);
@@ -296,7 +297,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     } catch (error) {
       if (!pendingRef.current.has(project.id)) pendingRef.current.set(project.id, project);
       setSaveState("error");
-      setServerMessage(error.message || "Не удалось сохранить проект");
+      setServerMessage(userErrorMessage(error, "Не удалось сохранить проект"));
       return false;
     }
   }, [userId]);
@@ -364,7 +365,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
       setSaveState("saved");
     }).catch((error) => {
       if (cancelled) return;
-      setServerMessage(error.message || "Не удалось загрузить проекты");
+      setServerMessage(userErrorMessage(error, "Не удалось загрузить проекты"));
       setServerState("error");
     });
     return () => {
@@ -453,7 +454,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
       }
     }).catch((error) => {
       if (cancelled) return;
-      replaceTemplateLibrary(local, { schedule: false }); setTemplateState("error"); setTemplateMessage(error.message || "Не удалось загрузить библиотеку шаблонов");
+      replaceTemplateLibrary(local, { schedule: false }); setTemplateState("error"); setTemplateMessage(userErrorMessage(error, "Не удалось загрузить библиотеку шаблонов"));
     });
     return () => { cancelled = true; templateSyncEnabledRef.current = false; if (templateTimerRef.current) clearTimeout(templateTimerRef.current); templateTimerRef.current = null; templatePendingRef.current = null; templateLibraryRef.current = normalizeTemplateLibrary(); };
   }, [userId, templateRetry, replaceTemplateLibrary]);
@@ -499,7 +500,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
         await projectRepository.deleteProject(userId, id);
       } catch (error) {
         setSaveState("error");
-        setServerMessage(error.message || "Не удалось удалить проект");
+        setServerMessage(userErrorMessage(error, "Не удалось удалить проект"));
         return;
       }
     }
@@ -572,7 +573,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     } catch (error) {
       syncEnabledRef.current = false;
       setServerState("migration-offer");
-      setServerMessage(error.message || "Не удалось перенести проекты");
+      setServerMessage(userErrorMessage(error, "Не удалось перенести проекты"));
     }
   };
 

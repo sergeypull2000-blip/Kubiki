@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { usageRepository } from "../backend/runtimeRepositories.js";
+import { dismissOnBackdrop, useModalDismiss } from "./modalDismiss.js";
+import { userErrorMessage } from "../userError.js";
 
 /* «Использование ИИ» — только оставшийся процент лимита и дата сброса.
    Технические метрики (доллары, токены, число вызовов) намеренно скрыты. */
 export function UsageLimitsModal({ onClose }) {
+  useModalDismiss(onClose);
   const [state, setState] = useState("loading");
   const [summary, setSummary] = useState(null);
   const [message, setMessage] = useState("");
@@ -28,7 +31,7 @@ export function UsageLimitsModal({ onClose }) {
       } catch (error) {
         if (cancelled) return;
         setState("error");
-        setMessage(error.message || "Не удалось загрузить использование ИИ");
+        setMessage(userErrorMessage(error, "Не удалось загрузить использование ИИ. Попробуйте ещё раз."));
       }
     })();
     return () => { cancelled = true; };
@@ -38,7 +41,7 @@ export function UsageLimitsModal({ onClose }) {
     ? new Date(summary.resetsAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })
     : "";
 
-  return <div className="kb-modal-overlay" onMouseDown={onClose}>
+  return <div className="kb-modal-overlay" onMouseDown={dismissOnBackdrop(onClose)}>
     <div className="kb-modal kb-usage-modal" role="dialog" aria-modal="true" aria-labelledby="usage-title" onMouseDown={(event) => event.stopPropagation()}>
       <div className="kb-modal-head kb-usage-modal-head">
         <span className="kb-modal-title" id="usage-title">Использование ИИ</span>

@@ -42,7 +42,7 @@ export function buildExcelWorkbook(model, addLogo) {
   sheet.columns = [{ width: 8 }, { width: 48 }, ...(showComments ? [{ width: 40 }] : []), { width: 20 }];
   const brand = model.brand || {};
   if (brand.logoUrl && addLogo) addLogo(workbook, sheet, brand.logoUrl, brand.logoPosition);
-  if (brand.companyName) { sheet.addRow([brand.companyName]); sheet.mergeCells(1, 1, 1, sheet.columnCount); }
+  if (brand.companyName) { const row = sheet.addRow([brand.companyName]); sheet.mergeCells(row.number, 1, row.number, sheet.columnCount); row.getCell(1).alignment = { horizontal: brand.companyPosition || "left" }; }
   const contacts = [brand.phone, brand.email, brand.website].filter(Boolean).join(" · ");
   if (contacts) { sheet.addRow([contacts]); sheet.mergeCells(sheet.rowCount, 1, sheet.rowCount, sheet.columnCount); }
   sheet.addRow([model.proposal?.title || model.projectName]); sheet.mergeCells(sheet.rowCount, 1, sheet.rowCount, sheet.columnCount);
@@ -53,8 +53,8 @@ export function buildExcelWorkbook(model, addLogo) {
   sheet.getCell(dateRow.number, 1).alignment = { horizontal: "left" };
   sheet.addRow([]);
   const headerRow = sheet.addRow(showComments ? ["№", "Наименование", "Комментарии", "Сумма"] : ["№", "Наименование", "Сумма"]);
-  headerRow.font = { bold: true, size: 10, name: brand.fontFamily || "Roboto", color: { argb: "FF64748B" } };
-  paintRow(headerRow, amountColumn, "FFEEF2F7");
+  headerRow.font = { bold: true, size: brand.headerFontSize || 10, name: brand.fontFamily || "Roboto", color: { argb: excelColor(brand.colors?.headerText, "#64748B") } };
+  paintRow(headerRow, amountColumn, excelColor(brand.colors?.header, "#F7FAFC"));
   const totalReferences = [];
   const derivedBaseReferences = [];
   let derivedBaseAmount = 0;

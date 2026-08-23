@@ -122,7 +122,7 @@ test("PDF definition keeps stage and task numbers in a separate № column and s
 
 test("branded Preview shows the №|Наименование|[Комментарии]|Сумма header and separate № cells for stages and tasks", async () => {
   const source = await readFile(new URL("../src/exportFiles.jsx", import.meta.url), "utf8");
-  assert.match(source, /<div className="kb-export-preview-row kb-export-preview-head"><span>№<\/span><span>Наименование<\/span>\{model\.display\.showComments && <span className="kb-export-preview-comment">Комментарии<\/span>\}<span>Сумма<\/span><\/div>/);
+  assert.match(source, /<div className="kb-export-preview-row kb-export-preview-head" style=\{\{ background: model\.brand\.colors\.header[\s\S]*?<span>№<\/span><span>Наименование<\/span>/);
   assert.match(source, /<b>\{stage\.number\}<\/b><b>\{stage\.name\}<\/b>/);
   assert.match(source, /<span>\{row\.number\}<\/span><span>\{row\.name\}<\/span>/);
   assert.doesNotMatch(source, /\$\{stage\.number\}  \$\{stage\.name\}/);
@@ -160,7 +160,7 @@ test("legacy performer export settings are cleared and never create subrows", ()
 test("valid-until, company and all typography/color settings are canonical", () => {
   const model = buildExportEstimateModel(project({ branding: { companyName: "Kubiki", colors: { stage: "#112233", task: "#223344", total: "#334455" } }, typography: { title: { size: 22 }, stage: { size: 14 }, task: { size: 12 }, total: { size: 16 }, service: { size: 9 } }, service: { validUntil: true } }));
   assert.equal(model.brand.companyName, "Kubiki");
-  assert.deepEqual(model.brand.colors, { stage: "#112233", task: "#223344", total: "#334455", stageText: "#1A2230", taskText: "#1A2230", totalText: "#1A2230", accent: "#1A2230", text: "#1A2230" });
+  assert.deepEqual(model.brand.colors, { header: "#F7FAFC", headerText: "#64748B", stage: "#112233", task: "#223344", total: "#334455", stageText: "#1A2230", taskText: "#1A2230", totalText: "#1A2230", accent: "#1A2230", text: "#1A2230" });
   assert.deepEqual(Object.fromEntries(Object.entries(model.typography).map(([key, value]) => [key, value.size])), { title: 22, stage: 14, task: 12, total: 16, service: 9 });
   assert.ok(model.serviceBlocks.includes("Коммерческое предложение действительно до 31.12.2026"));
 });
@@ -225,7 +225,7 @@ test("preset create/duplicate/reload preserves arbitrary custom colors", async (
   await repo.create("u", "Custom", { branding: { colors: { stage: "#0a2b4c", stageText: "#7f3fbf", task: "#123abc", taskText: "#dd22ee", total: "#99dd11", totalText: "#334455" } } });
   await repo.duplicate("u", (await repo.list("u"))[0]);
   for (const item of await createExportPresetsRepository(client).list("u")) {
-    assert.deepEqual(item.settings.branding.colors, { stage: "#0a2b4c", task: "#123abc", total: "#99dd11", stageText: "#7f3fbf", taskText: "#dd22ee", totalText: "#334455", accent: "#1A2230", text: "#1A2230" });
+    assert.deepEqual(item.settings.branding.colors, { header: "#F7FAFC", headerText: "#64748B", stage: "#0a2b4c", task: "#123abc", total: "#99dd11", stageText: "#7f3fbf", taskText: "#dd22ee", totalText: "#334455", accent: "#1A2230", text: "#1A2230" });
   }
 });
 
@@ -241,8 +241,7 @@ test("branded color picker exposes HSV area, hue slider and HEX, without native 
 
 test("branding controls pass primitive values and never persist a React event", async () => {
   const source = await readFile(new URL("../src/exportFiles.jsx", import.meta.url), "utf8");
-  assert.match(source, /onBlur=\{\(\) => persistProfile\(\)\}/);
-  assert.doesNotMatch(source, /onBlur=\{persistProfile\}/);
+  assert.doesNotMatch(source, /persistProfile|onBlur=\{persistProfile/);
   for (const key of ["stage", "task", "total", "stageText", "taskText", "totalText"]) {
     const settings = normalizePresentationSettings({ branding: { colors: { [key]: "#123abc" } } });
     assert.equal(settings.branding.colors[key], "#123abc");

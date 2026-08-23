@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { ArrowUp, X } from "lucide-react";
 import { fmt, formatMoney } from "../utils.js";
 import { buildAiEditContinuation } from "../ai/editContinuation.js";
+import { dismissOnBackdrop, useModalDismiss } from "./modalDismiss.js";
 
 const METRICS = [
   ["internalCost", "Себестоимость", "₽"], ["executorTaxes", "Налоги исполнителей", "₽"],
@@ -62,6 +63,7 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
     try { await onApply(result); onClose(); } catch (failure) { setError(failure.message); setErrorCode(failure.code || ""); setState("ready"); }
   };
   const busy = state === "loading" || state === "applying";
+  useModalDismiss(onClose, variant === "dialog" && !busy);
   const submit = () => request();
   if (submitRef) submitRef.current = state === "idle" && !result && !error && instruction.trim() ? submit : null;
   useEffect(() => {
@@ -177,5 +179,5 @@ export function AiEditTechnicalModal({ scope, contextLabel = "Вся смета"
       </div>
     </div>;
   if (variant === "launcher") return <div className={`kb-ai-launcher-panel${closing ? " is-closing" : ""}`}>{panel}</div>;
-  return <div className="kb-modal-overlay kb-ai-global-overlay" onMouseDown={busy ? undefined : onClose}>{panel}</div>;
+  return <div className="kb-modal-overlay kb-ai-global-overlay" onMouseDown={busy ? undefined : dismissOnBackdrop(onClose)}>{panel}</div>;
 }

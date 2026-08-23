@@ -13,6 +13,7 @@ import { generateEstimateRequest } from "./ai/generationClient.js";
 import { requireAiDisclosure } from "./ai/disclosureGate.js";
 import { extractWordBrief } from "./ai/wordBrief.js";
 import { stagesFromGeneratedEstimate } from "./ai/estimateInsertion.js";
+import { dismissOnBackdrop, useModalDismiss } from "./components/modalDismiss.js";
 import { kubikiApiRequest } from "./backend/apiTransport.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
@@ -250,6 +251,7 @@ function EstimatePreviewStep({ editor, generationMetadata, noteText, draftNotice
 /* Модалка импорта: извлечение текста (Excel-лист / PDF-страницы) → разбор →
    редактируемое превью → вставка. */
 export function ImportModal({ file, instruction = "", onClose, onConfirm }) {
+  useModalDismiss(onClose);
   const isPdf = /\.pdf$/i.test(file.name);
   const isWord = /\.(docx|doc)$/i.test(file.name);
   const [step, setStep] = useState("reading"); // reading|sheet|parsing|preview|error
@@ -344,7 +346,7 @@ export function ImportModal({ file, instruction = "", onClose, onConfirm }) {
   };
 
   return (
-    <div className="kb-modal-overlay" onMouseDown={onClose}>
+    <div className="kb-modal-overlay" onMouseDown={dismissOnBackdrop(onClose)}>
       <div className="kb-modal kb-import-modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="kb-modal-head">
           <span className="kb-modal-title">{isWord ? "Черновая смета по Word-брифу" : "Импорт сметы"}</span>
@@ -395,6 +397,7 @@ export function ImportModal({ file, instruction = "", onClose, onConfirm }) {
    уже введённое описание, поэтому шагов "reading"/"sheet" нет:
    сразу parsing → preview (общий EstimatePreviewStep) → error. */
 export function GenerateEstimateModal({ description, performers = [], onClose, onConfirm }) {
+  useModalDismiss(onClose);
   const [step, setStep] = useState("parsing"); // parsing|preview|error
   const [errorMsg, setErrorMsg] = useState("");
   const [generationMetadata, setGenerationMetadata] = useState(null);
@@ -411,7 +414,7 @@ export function GenerateEstimateModal({ description, performers = [], onClose, o
   }, [description]);
 
   return (
-    <div className="kb-modal-overlay" onMouseDown={onClose}>
+    <div className="kb-modal-overlay" onMouseDown={dismissOnBackdrop(onClose)}>
       <div className="kb-modal kb-import-modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="kb-modal-head">
           <span className="kb-modal-title">Черновая смета по описанию</span>
