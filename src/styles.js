@@ -156,7 +156,6 @@ export const CSS = `
    полю, а не растянуты по краям широкого экрана */
 .kb-layout{position:relative; display:flex; align-items:stretch; justify-content:center; height:calc(100vh - var(--kb-header-h)); overflow:hidden; width:100%; min-width:0}
 .kb-template-context{font-size:var(--fs-sm); color:var(--text-muted); white-space:nowrap}
-.kb-root-workspace.is-template-edit .kb-panel-shell{display:none}
 .kb-panel-shell{position:absolute; top:0; bottom:0; flex:0 0 auto; min-width:0; display:flex; overflow:visible}
 .kb-panel-shell-left{min-width:210px; max-width:calc((100vw - var(--workspace-fixed-width)) / 2 - var(--workspace-sidebar-gap))}.kb-panel-shell-right{min-width:250px; max-width:calc((100vw - var(--workspace-fixed-width)) / 2 - var(--workspace-sidebar-gap))}
 .kb-panel-shell>.kb-palette,.kb-panel-shell>.kb-rightpanel{width:100%; min-width:0}

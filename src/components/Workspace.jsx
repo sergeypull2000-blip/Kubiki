@@ -601,10 +601,10 @@ const toggleAllCollapsed = () =>
               </div>
             )}
           </main>
-          <div className="kb-panel-shell kb-panel-shell-right" style={{ width: rightPanelWidth, right: 0 }}>
+          {!editingTemplate && <div className="kb-panel-shell kb-panel-shell-right" style={{ width: rightPanelWidth, right: 0 }}>
             <div className="kb-panel-resizer kb-panel-resizer-right" role="separator" aria-label="Изменить ширину правой панели" aria-orientation="vertical" onPointerDown={(event) => beginPanelResize("right", event)} />
             {rightPanel}
-          </div>
+          </div>}
           {performerModal && <PerformerModal initial={performerModal.draft} isNew={!performerModal.existingId} initialAddToQuickAccess={performerModal.addToQuickAccess} onSave={savePerformerCard} onClose={() => setPerformerModal(null)} />}
           {localAiPopover && <AiEditTechnicalModal variant="inline" position={{ x: localAiPopover.x, y: localAiPopover.y }} scope={localScope(localAiPopover.context)} contextLabel={localAiPopover.context.label} onRequest={onRequestAiEdit} onCancelRequest={onCancelAiEdit} onApply={onApplyAiEdit} onClose={() => setLocalAiPopover(null)} />}
       </div>

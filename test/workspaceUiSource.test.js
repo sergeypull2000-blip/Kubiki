@@ -28,6 +28,14 @@ test("workspace uses edge-to-edge flex center and bounded panel resizers", async
   assert.match(workspace, /kb-panel-resizer-right/);
 });
 
+test("template editor keeps the reusable left performer quick-access panel and omits the right panel", async () => {
+  const [workspace, styles] = await Promise.all([source("src/components/Workspace.jsx"), source("src/styles.js")]);
+  assert.match(workspace, /quickAccessItems=\{visibleQuickAccess\}/);
+  assert.match(workspace, /onApplyQuickAccess=\{applyQuickAccess\}/);
+  assert.match(workspace, /\{!editingTemplate && <div className="kb-panel-shell kb-panel-shell-right"/);
+  assert.doesNotMatch(styles, /is-template-edit \.kb-panel-shell\{display:none\}/);
+});
+
 test("stage and task titles rest as text and enter explicit pencil edit mode", async () => {
   const [stage, task] = await Promise.all([source("src/components/Stage.jsx"), source("src/components/Task.jsx")]);
   for (const component of [stage, task]) {
