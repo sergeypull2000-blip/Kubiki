@@ -60,7 +60,7 @@ test("all AI endpoints are blocked server-side for the current disclosure versio
 
 test("AI cancel rejects pending action and continue persists before resolving", async () => {
   const [provider, modal, importUi, editClient] = await Promise.all([source("src/components/AiDisclosureProvider.jsx"), source("src/components/AiDisclosureModal.jsx"), source("src/importExcel.jsx"), source("src/ai/editClient.js")]);
-  assert.match(provider, /await legalAcceptancesRepository\.accept/);
+  assert.match(provider, /await saveAiDisclosureConsents/);
   assert.ok(provider.indexOf("await legalAcceptancesRepository.accept") < provider.indexOf("pending.current.splice(0).forEach"));
   assert.match(provider, /requests\.forEach\(\(\{ reject \}\) => reject/);
   assert.match(modal, /Отмена/); assert.match(modal, /Продолжить/);

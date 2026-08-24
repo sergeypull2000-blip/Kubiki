@@ -3,6 +3,7 @@ import { legalAcceptancesRepository } from "../backend/runtimeRepositories.js";
 import { LEGAL_DOCUMENT_VERSIONS } from "../legalConfig.js";
 import { installAiDisclosureGate } from "../ai/disclosureGate.js";
 import { AiDisclosureModal } from "./AiDisclosureModal.jsx";
+import { saveAiDisclosureConsents } from "./aiDisclosureConsent.js";
 
 const KEY = "ai_disclosure";
 
@@ -49,8 +50,7 @@ export function AiDisclosureProvider({ userId, children }) {
   const proceed = async () => {
     setSaving(true); setError("");
     try {
-      await legalAcceptancesRepository.accept(userId, KEY, LEGAL_DOCUMENT_VERSIONS[KEY]);
-      if (improve) await legalAcceptancesRepository.accept(userId, "ai_improvement_consent", LEGAL_DOCUMENT_VERSIONS.ai_improvement_consent);
+      await saveAiDisclosureConsents({ repository: legalAcceptancesRepository, userId, versions: LEGAL_DOCUMENT_VERSIONS, improvementConsent: improve });
       setAccepted(true); setOpen(false);
       pending.current.splice(0).forEach(({ resolve }) => resolve(true));
     } catch {
