@@ -23,12 +23,18 @@ export async function startBackend({ env = process.env, logger = console } = {})
   const serverData = Object.assign(createServerDataRepository(pool), createUsageRepository(pool));
   const ownerApi = createOwnerApiRepository(pool);
   const authHandler = createBetterAuthHttpHandler(auth.handler, {
+    logger,
     recordSignUpAcceptances: (authUserId) => recordSignUpLegalAcceptances(pool, authUserId),
     rollbackSignUp: (authUserId) => rollbackFailedSignUp(pool, authUserId),
     sendSignUpVerificationEmail: ({ email, callbackURL, headers }) => auth.api.sendVerificationEmail({
       body: { email, callbackURL },
       headers,
     }),
+    classifyExistingSignUp: async (email) => {
+      const result = await authPool.query('select "emailVerified" from auth."user" where lower(email)=lower($1) limit 1', [email]);
+      if (!result.rows[0]) return null;
+      return result.rows[0].emailVerified ? "verified" : "unverified";
+    },
   });
   const server = createBackendServer({ pool, authHandler, authenticate, serverData, ownerApi, objectStorage, requestSecurity, logger, ...config });
   await new Promise((resolve, reject) => {

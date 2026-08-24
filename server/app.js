@@ -114,8 +114,9 @@ export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMill
         return;
       }
       void authHandler(request, response).catch((error) => {
-        logger.error("Better Auth HTTP request failed", { name: error?.name || "Error" });
-        if (!response.headersSent) sendJson(response, 500, { error: "internal_error" });
+        const requestId = request.headers["x-request-id"] || crypto.randomUUID();
+        logger.error("Better Auth HTTP request failed", { requestId, name: error?.name || "Error", cause: error?.cause?.message || error?.message || "unknown" });
+        if (!response.headersSent) sendJson(response, 500, { error: "internal_error", requestId });
         else if (!response.writableEnded) response.destroy(error);
       });
       return;

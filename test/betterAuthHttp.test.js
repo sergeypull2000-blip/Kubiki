@@ -158,7 +158,9 @@ for (const failedInsert of ["first", "second"]) {
     }), fixture.baseURL));
 
     assert.equal(response.status, 500);
-    assert.deepEqual(await response.json(), { error: "internal_error" });
+    const errorBody = await response.json();
+    assert.equal(errorBody.error, "internal_error");
+    assert.match(errorBody.requestId, /^[0-9a-f-]{36}$/);
     assert.equal(fixture.db.user.some((user) => user.email === email), false);
     assert.equal(fixture.db.account.length, 0, "credential account must cascade with auth user");
     assert.deepEqual(fixture.publicUsers, [], "public.users bridge must not remain");

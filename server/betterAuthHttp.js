@@ -66,6 +66,8 @@ export function createBetterAuthHttpHandler(handler, {
   recordSignUpAcceptances,
   rollbackSignUp,
   sendSignUpVerificationEmail,
+  classifyExistingSignUp,
+  logger = console,
 } = {}) {
   if (typeof handler !== "function") throw new TypeError("Better Auth handler must be a function");
   return async (request, response) => {
@@ -82,6 +84,17 @@ export function createBetterAuthHttpHandler(handler, {
     if (!(webResponse instanceof Response)) {
       throw new TypeError("Better Auth handler must return a Response");
     }
+    if (isSignUp && !webResponse.ok && classifyExistingSignUp) {
+      const duplicate = await webResponse.clone().json().catch(() => null);
+      if (duplicate?.code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL") {
+        const state = await classifyExistingSignUp(signUpBody?.email);
+        if (state === "verified") {
+          webResponse = Response.json({ code: "ACCOUNT_EXISTS_VERIFIED" }, { status: 409 });
+        } else if (state === "unverified") {
+          webResponse = Response.json({ code: "ACCOUNT_EXISTS_UNVERIFIED" }, { status: 409 });
+        }
+      }
+    }
     if (isSignUp && webResponse.ok && recordSignUpAcceptances) {
       const result = await webResponse.clone().json().catch(() => null);
       if (result?.user?.id) {
@@ -96,7 +109,9 @@ export function createBetterAuthHttpHandler(handler, {
               throw new AggregateError([error, rollbackError], "Signup rollback failed");
             }
           }
-          throw new Error("Signup could not be completed", { cause: error });
+          const requestId = webRequest.headers.get("x-request-id") || crypto.randomUUID();
+          logger.error("Signup legal persistence failed", { requestId, cause: error?.message || "unknown" });
+          throw new Error(`Signup could not be completed (requestId: ${requestId})`, { cause: error });
         }
         if (created && sendSignUpVerificationEmail) {
           try {
