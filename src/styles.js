@@ -167,7 +167,7 @@ export const CSS = `
 .kb-palette{width:298px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--line-strong);
   display:flex; flex-direction:column; overflow:hidden; min-height:0}
 .kb-palette-scroll{flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:14px 12px 22px; display:flex; flex-direction:column; gap:2px}
-.kb-canvas{flex:0 0 var(--workspace-fixed-width); width:var(--workspace-fixed-width); min-width:var(--workspace-fixed-width); display:flex; flex-direction:column; overflow:hidden}
+.kb-canvas{flex:0 0 var(--workspace-fixed-width); width:var(--workspace-fixed-width); min-width:var(--workspace-fixed-width); display:flex; flex-direction:column; align-items:stretch; overflow:hidden}
 .kb-canvas-scroll{flex:1 1 auto; min-height:0; overflow-y:auto; padding:20px 28px 120px}
 /* рабочее поле центрировано в своей колонке между палитрой и правой панелью */
 .kb-canvas-inner{width:100%; min-width:0; margin:0 auto}

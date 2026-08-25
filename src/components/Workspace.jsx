@@ -585,7 +585,7 @@ const toggleAllCollapsed = () =>
               <button type="button" className={`kb-ai-launcher${globalAiOpen && !globalAiClosing ? " is-open" : ""}`} aria-label={globalAiOpen ? "Предпросмотр изменений" : "Открыть AI-ассистента"} onClick={() => { setLocalAiPopover(null); if (globalAiOpen) globalAiSubmitRef.current?.(); else setGlobalAiOpen(true); }}><ArrowUp size={20} strokeWidth={1.8} /></button>
             </div>}
             {!editingTemplate && sheets.length > 0 && (
-              <div className="kb-sheets-dock">
+              <div className="kb-sheets-dock" aria-label="Панель вкладок смет">
                 <div ref={sheetsBarRef} className="kb-sheets-bar" role="tablist" aria-label="Сметы" onMouseDown={(event) => event.stopPropagation()}>
                   {sheets.map((sheet) => (
                     <SheetTab
