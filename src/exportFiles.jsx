@@ -27,6 +27,25 @@ const defaultFilename = (project, format) => {
   return `${stem}_СМЕТА.${format === "pdf" ? "pdf" : "xlsx"}`;
 };
 
+function ExportFormatPicker({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useOutsideClose(ref, open ? () => setOpen(false) : null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKeyDown = (event) => { if (event.key === "Escape") { event.preventDefault(); setOpen(false); } };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+  const label = value === "excel" ? "Excel" : "PDF";
+  return <div className="kb-export-format-picker" ref={ref}>
+    <button type="button" className="kb-export-format-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((current) => !current)}><span>Формат: {label}</span><ChevronDown size={14} /></button>
+    {open && <div className="kb-export-format-menu" role="listbox" aria-label="Формат экспорта">
+      {[['pdf', 'PDF'], ['excel', 'Excel']].map(([option, optionLabel]) => <button type="button" role="option" aria-selected={value === option} className={value === option ? "is-active" : ""} key={option} onClick={() => { onChange(option); setOpen(false); }}>{optionLabel}</button>)}
+    </div>}
+  </div>;
+}
+
 function brandColors() {
   const styles = getComputedStyle(document.documentElement);
   const read = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
@@ -534,7 +553,7 @@ function ExportModal({ project, dispatch, userId, onClose, onExport }) {
         </div>
       </div>
       {exportError && <div className="kb-export-error" role="alert">{exportError}</div>}
-      <div className="kb-export-modal-actions"><div className="kb-export-format" role="group" aria-label="Формат экспорта"><span>Формат</span>{[["pdf", "PDF"], ["excel", "Excel"]].map(([value, label]) => <button type="button" key={value} className={format === value ? "is-active" : ""} aria-pressed={format === value} onClick={() => setFormat(value)}>{label}</button>)}</div><div className="kb-export-modal-action-buttons"><button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button><button type="button" className="kb-export-go2" disabled={busy || !model.validation.valid} onClick={run}>{busy ? <><Loader2 className="kb-spin" size={13} /> Экспорт…</> : "Экспорт"}</button></div></div>
+      <div className="kb-export-modal-actions"><ExportFormatPicker value={format} onChange={setFormat} /><div className="kb-export-modal-action-buttons"><button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button><button type="button" className="kb-export-go2" disabled={busy || !model.validation.valid} onClick={run}>{busy ? <><Loader2 className="kb-spin" size={13} /> Экспорт…</> : "Экспорт"}</button></div></div>
     </div>
   </div>;
 }
