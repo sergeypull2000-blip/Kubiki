@@ -84,7 +84,8 @@ body {
 @keyframes kb-ai-feedback-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 
 /* Sheet tabs (multi-sheet estimates) — spreadsheet-style, pinned to the bottom of the working area */
-.kb-sheets-bar { display: flex; align-items: center; gap: 4px; padding: 6px 14px; border-top: 1px solid var(--line, #E3E9F0); background: var(--surface, #FFFFFF); flex: 0 0 auto; min-width: 0; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.kb-sheets-dock { flex: 0 0 auto; width: 100%; min-width: 0; box-sizing: border-box; border-top: 1px solid var(--line, #E3E9F0); background: var(--surface, #FFFFFF); }
+.kb-sheets-bar { display: flex; align-items: center; gap: 4px; width: 100%; box-sizing: border-box; padding: 6px 14px; flex: 0 0 auto; min-width: 0; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 .kb-sheets-bar::-webkit-scrollbar { display: none; }
 .kb-sheet-tab { position: relative; display: flex; align-items: center; gap: 4px; flex: 0 0 auto; width: 155px; min-width: 155px; height: 30px; padding: 0 8px; border: 1px solid transparent; border-radius: 6px; cursor: pointer; color: var(--text-muted, #64748B); font-size: 13px; background: var(--surface, #FFFFFF); transition: background .12s ease, color .12s ease; }
 .kb-sheet-tab:hover:not(.is-active) { background: var(--surface-sunken, #FAFBFD); }

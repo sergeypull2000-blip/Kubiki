@@ -585,20 +585,22 @@ const toggleAllCollapsed = () =>
               <button type="button" className={`kb-ai-launcher${globalAiOpen && !globalAiClosing ? " is-open" : ""}`} aria-label={globalAiOpen ? "Предпросмотр изменений" : "Открыть AI-ассистента"} onClick={() => { setLocalAiPopover(null); if (globalAiOpen) globalAiSubmitRef.current?.(); else setGlobalAiOpen(true); }}><ArrowUp size={20} strokeWidth={1.8} /></button>
             </div>}
             {!editingTemplate && sheets.length > 0 && (
-              <div ref={sheetsBarRef} className="kb-sheets-bar" role="tablist" aria-label="Сметы" onMouseDown={(event) => event.stopPropagation()}>
-                {sheets.map((sheet) => (
-                  <SheetTab
-                    key={sheet.id}
-                    sheet={sheet}
-                    isActive={sheet.id === currentSheetId}
-                    canRemove={sheets.length > 1}
-                    onSwitch={switchActiveSheet}
-                    onRename={renameActiveSheet}
-                    onDuplicate={duplicateActiveSheet}
-                    onDelete={deleteActiveSheet}
-                  />
-                ))}
-                <button type="button" className="kb-sheet-add" onClick={addSheet} title="Новая смета">+</button>
+              <div className="kb-sheets-dock">
+                <div ref={sheetsBarRef} className="kb-sheets-bar" role="tablist" aria-label="Сметы" onMouseDown={(event) => event.stopPropagation()}>
+                  {sheets.map((sheet) => (
+                    <SheetTab
+                      key={sheet.id}
+                      sheet={sheet}
+                      isActive={sheet.id === currentSheetId}
+                      canRemove={sheets.length > 1}
+                      onSwitch={switchActiveSheet}
+                      onRename={renameActiveSheet}
+                      onDuplicate={duplicateActiveSheet}
+                      onDelete={deleteActiveSheet}
+                    />
+                  ))}
+                  <button type="button" className="kb-sheet-add" onClick={addSheet} title="Новая смета">+</button>
+                </div>
               </div>
             )}
           </main>
