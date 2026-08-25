@@ -65,8 +65,8 @@ body {
 .kb-ai-launcher-feedback-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .kb-ai-inline-prompt { min-height: 128px; animation: kb-menu-in .14s ease-out; transform-origin: top left; }
 .kb-ai-inline-prompt .kb-generate-textarea { padding-right: 42px; }
-.kb-ai-inline-panel { position: relative; width: 100%; min-width: 0; overflow-x: hidden; }
-.kb-ai-inline-surface { display: grid; min-width: 0; gap: 12px; overflow-x: hidden; background: transparent; }
+.kb-ai-inline-panel { position: relative; width: 100%; min-width: 0; }
+.kb-ai-inline-surface { display: grid; min-width: 0; gap: 12px; background: transparent; }
 .kb-ai-inline-feedback { position: static; width: 100%; min-width: 0; max-height: min(360px, calc(100vh - 190px)); margin: 0; overflow-x: hidden; overflow-y: auto; border: 0; outline: 0; border-radius: 13px; background:#fff; box-shadow:0 14px 38px rgba(24,31,48,.09),0 0 24px rgba(74,103,155,.04); }
 .kb-ai-inline-input-section { border: 0; outline: 0; border-radius: 13px; background:#fff; box-shadow:0 14px 38px rgba(24,31,48,.09),0 0 24px rgba(74,103,155,.04); }
 .kb-ai-inline-feedback .kb-ai-launcher-answer { align-items: stretch; }

@@ -113,7 +113,7 @@ export function pdfDefinition(model) {
   const brandIndex = (position) => ({ left: 0, center: 1, right: 2 }[position] ?? 0);
   if (model.brand?.companyName) brandCells[brandIndex(model.brand.companyPosition || "left")].push({ text: model.brand.companyName, bold: true, fontSize: 12, alignment: model.brand.companyPosition || "left" });
   if (model.brand?.logoUrl) brandCells[brandIndex(model.brand.logoPosition || "left")].push({ image: model.brand.logoUrl, fit: [110, 52], alignment: model.brand.logoPosition || "left" });
-  const brandHeader = brandCells.map((items) => items.length === 0 ? "" : items.length === 1 ? items[0] : { stack: items });
+  const brandHeader = brandCells.map((items) => items.length === 0 ? "" : items.length === 1 ? { ...items[0], margin: [0, 0, 0, 0], valign: "middle" } : { stack: items, valign: "middle" });
   return {
     pageSize: "A4", pageMargins: [40, 40, 40, 40], defaultStyle: { font: model.brand.fontFamily, fontSize: 10, color: colors.text },
     content: [

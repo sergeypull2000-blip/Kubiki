@@ -43,7 +43,8 @@ export function buildExcelWorkbook(model, addLogo) {
   const brand = model.brand || {};
   const brandRow = brand.companyName ? sheet.addRow([brand.companyName]) : sheet.addRow([]);
   sheet.mergeCells(brandRow.number, 1, brandRow.number, sheet.columnCount);
-  brandRow.getCell(1).alignment = { horizontal: brand.companyPosition || "left", vertical: "top" };
+  brandRow.height = 42;
+  brandRow.getCell(1).alignment = { horizontal: brand.companyPosition || "left", vertical: "middle", wrapText: false };
   if (brand.companyName) brandRow.getCell(1).font = { bold: true, size: 12, name: brand.fontFamily || "Roboto" };
   if (brand.logoUrl && addLogo) addLogo(workbook, sheet, brand.logoUrl, brand.logoPosition);
   const contacts = [brand.phone, brand.email, brand.website].filter(Boolean).join(" · ");
