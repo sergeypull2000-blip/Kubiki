@@ -81,7 +81,9 @@ test("sidebar feedback pill hugs text and aligns with account avatar", async () 
   const pills = (left.match(/className="kb-feedback-float" onClick=\{onOpenFeedback\}>Оставить отзыв/g) || []).length;
   assert.equal(pills, 1, "the shared sidebar action component hosts the feedback pill");
   assert.match(styles, /\.kb-sidebar-actions\{[^}]*position:absolute/);
-  assert.match(styles, /\.kb-sidebar-actions\{[^}]*left:25px[^}]*bottom:calc\(100% \+ 12px\)/);
+  assert.match(styles, /\.kb-sidebar-actions\{[^}]*left:25px[^}]*right:14px[^}]*bottom:calc\(100% \+ 12px\)/);
+  assert.match(styles, /\.kb-sidebar-actions\{[^}]*justify-content:space-between/);
+  assert.match(styles, /\.kb-help-button\{[^}]*flex:0 0 auto/);
   assert.match(styles, /\.kb-feedback-float\{[^}]*width:auto[^}]*height:45px/);
   assert.match(styles, /\.kb-feedback-float\{[^}]*padding:0 16px/);
   assert.match(styles, /\.kb-feedback-float\{[^}]*border-radius:12px/);

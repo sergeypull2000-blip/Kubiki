@@ -15,6 +15,14 @@ test("AI settings are minimal, history is explicit opt-in and studio templates d
   assert.deepEqual(Object.keys(normalizeAiSettings({ universal: true, currency: "RUB" })), ["personalization", "useProjectHistory", "useStudioTemplates"]);
 });
 
+test("AI personalization controls keep ON/OFF/OFF defaults", () => {
+  const modal = readFileSync(new URL("../src/components/AIPersonalizationModal.jsx", import.meta.url), "utf8");
+  const app = readFileSync(new URL("../src/kubiki.jsx", import.meta.url), "utf8");
+  assert.match(modal, /improvementConsent = false/);
+  assert.match(app, /const \[improvementConsent, setImprovementConsent\] = useState\(false\)/);
+  assert.deepEqual(normalizeAiSettings(), { personalization: "", useProjectHistory: false, useStudioTemplates: true });
+});
+
 test("new users get the performer-library default without overriding a saved empty personalization", () => {
   assert.equal(normalizeAiSettings(undefined, { defaults: true }).personalization, DEFAULT_AI_PERSONALIZATION);
   assert.equal(normalizeAiSettings({ personalization: "" }, { defaults: true }).personalization, "");

@@ -23,7 +23,23 @@ test("only a recently created account repairs a missing Beta flag", () => {
 
 test("fresh flow chains Beta to onboarding while manual help never opens Beta", async () => {
   const source = await readFile(new URL("../src/kubiki.jsx", import.meta.url), "utf8");
+  assert.match(source, /flags\.beta_welcome_seen === false && isGenuinelyNewUser\(user\)/);
   assert.match(source, /handleWelcomeStart[\s\S]*setWelcomeOpen\(false\)[\s\S]*setOnboardingOpen\(true\)[\s\S]*markBetaWelcomeSeen/);
   assert.match(source, /onOpenHelp=\{\(\) => setOnboardingOpen\(true\)\}/);
   assert.doesNotMatch(source, /onOpenHelp=\{[^}]*setWelcomeOpen/);
+});
+
+test("returning users do not trigger either onboarding modal automatically", async () => {
+  const source = await readFile(new URL("../src/kubiki.jsx", import.meta.url), "utf8");
+  assert.match(source, /const \[welcomeOpen, setWelcomeOpen\] = useState\(false\)/);
+  assert.match(source, /const \[onboardingOpen, setOnboardingOpen\] = useState\(false\)/);
+  assert.doesNotMatch(source, /setOnboardingOpen\(true\)[\s\S]{0,300}isGenuinelyNewUser/);
+});
+
+test("onboarding uses a plain vertical guide without cards or shortcuts", async () => {
+  const source = await readFile(new URL("../src/components/OnboardingModal.jsx", import.meta.url), "utf8");
+  assert.match(source, /Память вашей студии/);
+  assert.match(source, /Настройки → Персонализация ИИ/);
+  assert.match(source, />Начать работу<\/button>/);
+  assert.doesNotMatch(source, /kb-onboarding-grid|kb-onboarding-shortcuts|<kbd>/);
 });

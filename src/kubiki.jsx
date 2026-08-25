@@ -143,7 +143,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
         if (cancelled) return;
         flags = await userFlagsRepository.getFlags(userId).catch(() => null);
       }
-      if (flags && flags.beta_welcome_seen === false) setWelcomeOpen(true);
+      if (flags && flags.beta_welcome_seen === false && isGenuinelyNewUser(user)) setWelcomeOpen(true);
     })();
     return () => { cancelled = true; };
   }, [userId, user]);
