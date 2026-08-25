@@ -109,11 +109,15 @@ export function pdfDefinition(model) {
       { text: money(row.amount), ...text, alignment: "right" },
     ];
   })];
+  const brandCells = [[], [], []];
+  const brandIndex = (position) => ({ left: 0, center: 1, right: 2 }[position] ?? 0);
+  if (model.brand?.companyName) brandCells[brandIndex(model.brand.companyPosition || "left")].push({ text: model.brand.companyName, bold: true, fontSize: 12, alignment: model.brand.companyPosition || "left" });
+  if (model.brand?.logoUrl) brandCells[brandIndex(model.brand.logoPosition || "left")].push({ image: model.brand.logoUrl, fit: [110, 52], alignment: model.brand.logoPosition || "left" });
+  const brandHeader = brandCells.map((items) => items.length === 0 ? "" : items.length === 1 ? items[0] : { stack: items });
   return {
     pageSize: "A4", pageMargins: [40, 40, 40, 40], defaultStyle: { font: model.brand.fontFamily, fontSize: 10, color: colors.text },
     content: [
-      ...(model.brand?.logoUrl ? [{ image: model.brand.logoUrl, fit: [110, 52], alignment: model.brand.logoPosition || "left", margin: [0, 0, 0, 8] }] : []),
-      ...(model.brand?.companyName ? [{ text: model.brand.companyName, bold: true, alignment: model.brand.companyPosition || "left", fontSize: 12, margin: [0, 0, 0, 3] }] : []),
+      ...(model.brand?.companyName || model.brand?.logoUrl ? [{ table: { widths: ["*", "*", "*"], body: [brandHeader] }, layout: "noBorders", margin: [0, 0, 0, 8] }] : []),
       ...([model.brand?.phone, model.brand?.email, model.brand?.website].some(Boolean) ? [{ text: [model.brand.phone, model.brand.email, model.brand.website].filter(Boolean).join(" · "), color: colors.muted, fontSize: 9, margin: [0, 0, 0, 10] }] : []),
       { text: model.proposal.title, bold: true, fontSize: model.typography.title.size, margin: [0, 0, 0, model.sheetName ? 3 : 14] },
       ...(model.sheetName ? [{ text: model.sheetName, fontSize: model.typography.stage.size, color: colors.muted, margin: [0, 0, 0, 14] }] : []),
@@ -509,7 +513,6 @@ function ExportModal({ project, dispatch, userId, onClose, onExport }) {
           {!model.validation.valid && <div className="kb-export-error">Итог экспортной модели не совпадает с итогом проекта.</div>}
         </div>
         <div className="kb-export-settings-pane">
-          <div className="kb-export-format" role="group" aria-label="Формат экспорта"><span>Формат</span>{[["pdf", "PDF"], ["excel", "Excel"]].map(([value, label]) => <button type="button" key={value} className={format === value ? "is-active" : ""} aria-pressed={format === value} onClick={() => setFormat(value)}>{label}</button>)}</div>
           {userId && <div className="kb-export-presets">
             <select className="kb-select" value={presetId} onChange={(event) => { const item = presets.find((value) => value.id === event.target.value); setPresetId(event.target.value); setPresetName(item?.name || ""); if (item) applyPreset(item.settings); }}>
               <option value="">Новый пресет</option>
@@ -531,7 +534,7 @@ function ExportModal({ project, dispatch, userId, onClose, onExport }) {
         </div>
       </div>
       {exportError && <div className="kb-export-error" role="alert">{exportError}</div>}
-      <div className="kb-export-modal-actions"><button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button><button type="button" className="kb-export-go2" disabled={busy || !model.validation.valid} onClick={run}>{busy ? <><Loader2 className="kb-spin" size={13} /> Экспорт…</> : "Экспорт"}</button></div>
+      <div className="kb-export-modal-actions"><div className="kb-export-format" role="group" aria-label="Формат экспорта"><span>Формат</span>{[["pdf", "PDF"], ["excel", "Excel"]].map(([value, label]) => <button type="button" key={value} className={format === value ? "is-active" : ""} aria-pressed={format === value} onClick={() => setFormat(value)}>{label}</button>)}</div><div className="kb-export-modal-action-buttons"><button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button><button type="button" className="kb-export-go2" disabled={busy || !model.validation.valid} onClick={run}>{busy ? <><Loader2 className="kb-spin" size={13} /> Экспорт…</> : "Экспорт"}</button></div></div>
     </div>
   </div>;
 }

@@ -41,8 +41,11 @@ export function buildExcelWorkbook(model, addLogo) {
   const amountColumn = showComments ? 4 : 3;
   sheet.columns = [{ width: 8 }, { width: 48 }, ...(showComments ? [{ width: 40 }] : []), { width: 20 }];
   const brand = model.brand || {};
+  const brandRow = brand.companyName ? sheet.addRow([brand.companyName]) : sheet.addRow([]);
+  sheet.mergeCells(brandRow.number, 1, brandRow.number, sheet.columnCount);
+  brandRow.getCell(1).alignment = { horizontal: brand.companyPosition || "left", vertical: "top" };
+  if (brand.companyName) brandRow.getCell(1).font = { bold: true, size: 12, name: brand.fontFamily || "Roboto" };
   if (brand.logoUrl && addLogo) addLogo(workbook, sheet, brand.logoUrl, brand.logoPosition);
-  if (brand.companyName) { const row = sheet.addRow([brand.companyName]); sheet.mergeCells(row.number, 1, row.number, sheet.columnCount); row.getCell(1).alignment = { horizontal: brand.companyPosition || "left" }; }
   const contacts = [brand.phone, brand.email, brand.website].filter(Boolean).join(" · ");
   if (contacts) { sheet.addRow([contacts]); sheet.mergeCells(sheet.rowCount, 1, sheet.rowCount, sheet.columnCount); }
   sheet.addRow([model.proposal?.title || model.projectName]); sheet.mergeCells(sheet.rowCount, 1, sheet.rowCount, sheet.columnCount);

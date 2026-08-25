@@ -252,7 +252,7 @@ test("Workspace exposes profile dropdown, floating global launcher and direct lo
   assert.match(workspace, /canUndoAiEdit &&/); assert.match(modal, /canUndo && onUndo/);
   assert.match(modal, /createPortal/); assert.match(modal, /window\.innerWidth/); assert.match(modal, /window\.innerHeight/); assert.match(modal, /ResizeObserver/);
   const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
-  assert.match(css, /\.kb-ai-inline-anchor[^}]*max-height:[^}]*overflow-x:\s*hidden[^}]*overflow-y:\s*hidden/);
+  assert.match(css, /\.kb-ai-inline-anchor[^}]*max-height:[^}]*overflow:\s*visible/);
   assert.match(css, /\.kb-ai-inline-feedback[^}]*overflow-x:\s*hidden[^}]*overflow-y:\s*auto/);
   assert.match(css, /\.kb-ai-launcher-choices\s*>\s*\.kb-btn[^}]*white-space:\s*normal[^}]*overflow-wrap:\s*anywhere/);
   // Floating launcher опущен на 8px, Undo AI — с явным зазором слева от кнопки.
