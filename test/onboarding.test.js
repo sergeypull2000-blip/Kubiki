@@ -38,7 +38,7 @@ test("returning users do not trigger either onboarding modal automatically", asy
 
 test("onboarding uses a plain vertical guide without cards or shortcuts", async () => {
   const source = await readFile(new URL("../src/components/OnboardingModal.jsx", import.meta.url), "utf8");
-  assert.match(source, /Память вашей студии/);
+  assert.match(source, /Kubiki - память вашей студии/);
   assert.match(source, /Настройки → Персонализация ИИ/);
   assert.match(source, />Начать работу<\/button>/);
   assert.doesNotMatch(source, /kb-onboarding-grid|kb-onboarding-shortcuts|<kbd>/);

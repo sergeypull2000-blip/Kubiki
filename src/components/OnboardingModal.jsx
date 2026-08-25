@@ -17,7 +17,7 @@ export function OnboardingModal({ onClose }) {
     <div className="kb-modal kb-onboarding-modal" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" onMouseDown={(event) => event.stopPropagation()}>
       <div className="kb-onboarding-content">
         <div className="kb-onboarding-brand"><Logo size={22} /><button type="button" className="kb-icon-btn kb-onboarding-close" onClick={onClose} aria-label="Закрыть"><X size={16} /></button></div>
-        <h1 className="kb-onboarding-title" id="onboarding-title">Память вашей студии</h1>
+        <h1 className="kb-onboarding-title" id="onboarding-title">Kubiki - память вашей студии</h1>
         <div className="kb-onboarding-sections">
           {sections.map(([heading, text]) => <section key={heading}><h2>{heading}</h2><p>{text}</p></section>)}
         </div>
