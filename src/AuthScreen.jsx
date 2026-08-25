@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createSessionGateway } from './backend/betterAuthClient.js'
 import { describeAuthError } from './authErrors.js'
+import { EXPIRED_VERIFICATION_MESSAGE } from './verificationCallback.js'
 
 const auth = createSessionGateway()
 
@@ -13,8 +14,8 @@ const MIN_PASSWORD_LENGTH = 8
    error/notice состоянием; факт успешного входа/регистрации обрабатывает
    родитель через обновление Better Auth session.
 */
-export function AuthScreen({ mode = 'signin', resetToken, onPasswordUpdated, onAuthenticated }) {
-  const [view, setView] = useState(mode === 'reset' ? 'reset' : 'signin')
+export function AuthScreen({ mode = 'signin', resetToken, verificationError, onPasswordUpdated, onAuthenticated }) {
+  const [view, setView] = useState(verificationError ? 'verification-error' : mode === 'reset' ? 'reset' : 'signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -114,6 +115,23 @@ export function AuthScreen({ mode = 'signin', resetToken, onPasswordUpdated, onA
       else setNotice('Письмо отправлено повторно.')
     } finally { setSubmitting(false) }
   }
+
+  if (view === 'verification-error') return (
+    <div className="kb-auth-screen"><div className="kb-auth-card">
+      <div className="kb-auth-heading">Подтвердите email</div>
+      <div className="kb-auth-error" role="alert">{EXPIRED_VERIFICATION_MESSAGE}</div>
+      <label className="kb-auth-field">
+        <span>Email</span>
+        <input className="kb-input" type="email" value={verificationEmail}
+          onChange={(event) => setVerificationEmail(event.target.value)}
+          autoComplete="email" required autoFocus />
+      </label>
+      {notice && <div className="kb-auth-notice" role="status">{notice}</div>}
+      {error && <div className="kb-auth-error" role="alert">{error}</div>}
+      <button className="kb-auth-submit" type="button" onClick={resendVerification} disabled={submitting || !verificationEmail}>Отправить новое письмо</button>
+      <button type="button" className="kb-auth-link" onClick={() => switchView('signin')}>Вернуться ко входу</button>
+    </div></div>
+  )
 
   const handleForgot = async (event) => {
     event.preventDefault()

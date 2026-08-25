@@ -34,6 +34,7 @@ async function createFixture(t) {
     baseURL,
     emailVerification: {
       sendOnSignUp: false,
+      autoSignInAfterVerification: true,
       async sendVerificationEmail(message) {
         if (verificationFailures > 0) {
           verificationFailures -= 1;
@@ -131,6 +132,63 @@ test("Better Auth HTTP bridge preserves sign-up and email verification responses
   assert.equal(verify.status, 302);
   assert.equal(verify.headers.get("location"), `${baseURL}/verified`);
   assert.equal(db.user.find((user) => user.email === email)?.emailVerified, true);
+});
+
+test("successful email verification creates a session and redirects to the app root", async (t) => {
+  const fixture = await createFixture(t);
+  const email = "auto-sign-in-verification@example.test";
+  await fetch(`${fixture.baseURL}/api/auth/sign-up/email`, jsonRequest(legalSignUp({
+    name: "Auto Sign In",
+    email,
+    password: "correct-horse-battery-staple",
+    callbackURL: `${fixture.baseURL}/`,
+  }), fixture.baseURL));
+
+  const verificationUrl = new URL(fixture.emails.verification[0].url);
+  const verify = await fetch(`${fixture.baseURL}${verificationUrl.pathname}${verificationUrl.search}`, { redirect: "manual" });
+  assert.equal(verify.status, 302);
+  assert.equal(verify.headers.get("location"), `${fixture.baseURL}/`);
+  assert.equal(fixture.db.user[0].emailVerified, true);
+  const cookie = cookieHeader(verify);
+  assert.ok(cookie, "verification response must set the automatic sign-in cookie");
+
+  const session = await fetch(`${fixture.baseURL}/api/auth/get-session`, { headers: { cookie } });
+  assert.equal(session.status, 200);
+  assert.equal((await session.json()).user.email, email);
+});
+
+test("invalid email verification redirects with a callback error and does not create a session", async (t) => {
+  const fixture = await createFixture(t);
+  await fetch(`${fixture.baseURL}/api/auth/sign-up/email`, jsonRequest(legalSignUp({
+    name: "Expired Verification",
+    email: "expired-verification@example.test",
+    password: "correct-horse-battery-staple",
+    callbackURL: `${fixture.baseURL}/`,
+  }), fixture.baseURL));
+  const verificationUrl = new URL(fixture.emails.verification[0].url);
+  verificationUrl.searchParams.set("token", `${verificationUrl.searchParams.get("token")}tampered`);
+  const verify = await fetch(`${fixture.baseURL}${verificationUrl.pathname}${verificationUrl.search}`, { redirect: "manual" });
+  assert.equal(verify.status, 302);
+  const redirect = new URL(verify.headers.get("location"));
+  assert.equal(redirect.pathname, "/");
+  assert.match(redirect.searchParams.get("error") || "", /invalid_token|token_expired/i);
+  assert.equal(fixture.db.user[0].emailVerified, false);
+  assert.equal(verify.headers.getSetCookie().length, 0);
+});
+
+test("unverified user still cannot sign in with valid credentials", async (t) => {
+  const fixture = await createFixture(t);
+  const email = "still-unverified@example.test";
+  await fetch(`${fixture.baseURL}/api/auth/sign-up/email`, jsonRequest(legalSignUp({
+    name: "Still Unverified", email, password: "correct-horse-battery-staple",
+  }), fixture.baseURL));
+
+  const signIn = await fetch(`${fixture.baseURL}/api/auth/sign-in/email`, jsonRequest({
+    email, password: "correct-horse-battery-staple",
+  }, fixture.baseURL));
+  assert.equal(signIn.status, 403);
+  assert.equal((await signIn.json()).code, "EMAIL_NOT_VERIFIED");
+  assert.equal(signIn.headers.getSetCookie().length, 0);
 });
 
 test("Better Auth HTTP bridge rejects signup before Better Auth unless both legal acceptances are explicit", async (t) => {

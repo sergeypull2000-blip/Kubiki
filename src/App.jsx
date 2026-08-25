@@ -8,6 +8,7 @@ import { CSS } from "./styles.js";
 import { LegalPage, isLegalRoute } from "./legalDocuments.jsx";
 import { AiDisclosureProvider } from "./components/AiDisclosureProvider.jsx";
 import { resolveAppSessionView } from "./appSessionView.js";
+import { consumeVerificationCallbackError } from "./verificationCallback.js";
 
 function App() {
   useGeistFont();
@@ -15,6 +16,7 @@ function App() {
   const { data: session, isPending, refetch } = kubikiAuthClient.useSession();
   const sessionHasResolved = useRef(false);
   const [resetCompleted, setResetCompleted] = useState(false);
+  const [verificationError] = useState(() => consumeVerificationCallbackError());
   const resetToken = new URLSearchParams(globalThis.location?.search || "").get("token");
   const recoveryMode = globalThis.location?.pathname === "/reset-password" && Boolean(resetToken);
 
@@ -52,7 +54,7 @@ function App() {
   let content;
   if (sessionView.view === "loading") content = <div className="kb-auth-screen"><div className="kb-auth-loading">Проверяем сессию…</div></div>;
   else if (sessionView.view === "reset") content = <AuthScreen mode="reset" resetToken={resetToken} onPasswordUpdated={finishPasswordReset} />;
-  else if (sessionView.view === "auth") content = <AuthScreen mode="signin" onAuthenticated={refetch} />;
+  else if (sessionView.view === "auth") content = <AuthScreen mode="signin" verificationError={verificationError} onAuthenticated={refetch} />;
   else content = <AiDisclosureProvider userId={session.user.id}><KubikiApp key={session.user.id} userId={session.user.id} user={session.user} onSignOut={handleSignOut} /></AiDisclosureProvider>;
 
   if (isLegalRoute(pathname)) return <><style>{CSS}</style><LegalPage pathname={pathname} /></>;

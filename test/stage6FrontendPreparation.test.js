@@ -118,7 +118,8 @@ test("session gateway delegates to the prepared Better Auth client without activ
   await session.resetPassword("new-secret", "token");
   await session.sendVerificationEmail("a@example.com");
   assert.deepEqual(calls.map(([name]) => name), ["signIn", "signUp", "signOut", "requestPasswordReset", "resetPassword", "sendVerificationEmail"]);
-  assert.deepEqual(calls.find(([name]) => name === "signUp")[1], { email: "b@example.com", password: "secret", name: "B", acceptedBetaTerms: true, acceptedPersonalDataConsent: true });
+  assert.deepEqual(calls.find(([name]) => name === "signUp")[1], { email: "b@example.com", password: "secret", name: "B", callbackURL: "/", acceptedBetaTerms: true, acceptedPersonalDataConsent: true });
+  assert.equal(calls.find(([name]) => name === "sendVerificationEmail")[1].callbackURL, "/");
 });
 
 test("auth errors are always localized and never expose Better Auth details", () => {
