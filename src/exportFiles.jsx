@@ -10,7 +10,7 @@ import { useOutsideClose } from "./hooks.js";
 import { clamp, hexToRgb, hsvToHex, normalizeHex, rgbToHsv } from "./color.js";
 import { buildExcelRows, buildExcelWorkbook } from "./excelExport.js";
 import { exportPresetsRepository, exportProfileRepository, productEventsRepository, aiFeedbackRepository } from "./backend/runtimeRepositories.js";
-import { normalizePresentationSettings } from "./exportSettings.js";
+import { EXPORT_FONT_FAMILIES, normalizePresentationSettings } from "./exportSettings.js";
 import { fetchFreshLogoDataUrl } from "./exportLogo.js";
 import { dismissOnBackdrop, useModalDismiss } from "./components/modalDismiss.js";
 import { userErrorMessage } from "./userError.js";
@@ -110,7 +110,7 @@ export function pdfDefinition(model) {
     ];
   })];
   return {
-    pageSize: "A4", pageMargins: [40, 40, 40, 40], defaultStyle: { font: "Roboto", fontSize: 10, color: colors.text },
+    pageSize: "A4", pageMargins: [40, 40, 40, 40], defaultStyle: { font: model.brand.fontFamily, fontSize: 10, color: colors.text },
     content: [
       ...(model.brand?.logoUrl ? [{ image: model.brand.logoUrl, fit: [110, 52], alignment: model.brand.logoPosition || "left", margin: [0, 0, 0, 8] }] : []),
       ...(model.brand?.companyName ? [{ text: model.brand.companyName, bold: true, alignment: model.brand.companyPosition || "left", fontSize: 12, margin: [0, 0, 0, 3] }] : []),
@@ -391,7 +391,6 @@ function PresentationControls({ draft, onChange, project, dispatch, userId, logo
             </Fragment>
           ))}
         </div>
-        <label className="kb-export-field"><span>Размер текста шапки</span><SizeStepper value={draft.branding.headerFontSize} onChange={(headerFontSize) => patch("branding", { headerFontSize })} ariaLabel="Размер текста шапки" /></label>
       </div>
     </details>
     <details className="kb-export-section">
@@ -399,8 +398,9 @@ function PresentationControls({ draft, onChange, project, dispatch, userId, logo
       <div className="kb-export-section-body kb-export-typography">
         <label className="kb-export-field">
           <span>Шрифт документа</span>
-          <select className="kb-select" value={draft.branding.fontFamily} onChange={(event) => patch("branding", { fontFamily: event.target.value })}><option>Roboto</option></select>
+          <select className="kb-select" value={draft.branding.fontFamily} onChange={(event) => patch("branding", { fontFamily: event.target.value })}>{EXPORT_FONT_FAMILIES.map((font) => <option key={font}>{font}</option>)}</select>
         </label>
+        <label className="kb-export-field"><span>Размер текста шапки</span><SizeStepper value={draft.branding.headerFontSize} onChange={(headerFontSize) => patch("branding", { headerFontSize })} ariaLabel="Размер текста шапки" /></label>
         {typeSize("title", "Заголовок")}
         {typeSize("stage", "Этап")}
         {typeSize("task", "Задача")}
@@ -464,7 +464,7 @@ function ExportPreview({ model }) {
   );
 }
 
-function ExportModal({ project, format, dispatch, userId, onClose, onExport }) {
+function ExportModal({ project, dispatch, userId, onClose, onExport }) {
   useModalDismiss(onClose);
   const [draft, setDraft] = useState(() => ({
     ...normalizeExportSettings(project.exportSettings),
@@ -478,6 +478,7 @@ function ExportModal({ project, format, dispatch, userId, onClose, onExport }) {
   const [presetName, setPresetName] = useState("");
   const [presetError, setPresetError] = useState("");
   const [exportError, setExportError] = useState("");
+  const [format, setFormat] = useState("pdf");
   useEffect(() => { if (!userId) return; let active = true; exportPresetsRepository.list(userId).then((items) => { if (active) setPresets(items); }).catch(() => { if (active) setPresetError("Не удалось загрузить пресеты. Попробуйте ещё раз."); }); return () => { active = false; }; }, [userId]);
   useEffect(() => { if (!userId) return; let active = true; exportProfileRepository.loadProfile(userId).then(async ({ profile }) => { if (!active || !profile) return; const branding = normalizePresentationSettings({ branding: { companyName: profile.company_name, logoAssetPath: profile.logo_asset_path || "", logoPosition: profile.logo_position || "left", companyPosition: profile.company_position || "left", phone: profile.phone, email: profile.email, website: profile.website, colors: profile.default_colors, headerFontSize: profile.default_colors?.headerFontSize, fontFamily: profile.default_font } }).branding; setDraft((current) => ({ ...current, branding })); if (profile.logo_asset_path) setLogoUrl(await exportProfileRepository.createLogoUrl(profile.logo_asset_path, 3600)); }).catch(() => { if (active) setPresetError("Не удалось загрузить настройки экспорта. Попробуйте ещё раз."); }); return () => { active = false; }; }, [userId]);
   const save = (next) => setDraft(next);
@@ -491,7 +492,7 @@ function ExportModal({ project, format, dispatch, userId, onClose, onExport }) {
     try {
       dispatch((current) => ({ ...current, exportSettings: normalizeExportSettings(draft) }));
       if (userId) await exportProfileRepository.upsertProfile(userId, draft.branding);
-      await onExport(model);
+      await onExport(model, format);
       if (userId) aiFeedbackRepository.finalize(userId, project.id, project).catch(() => console.warn("AI feedback finalization failed"));
       if (userId) productEventsRepository.track(userId, "export_completed", {}, { format }).catch(() => {});
     } catch (error) {
@@ -501,13 +502,14 @@ function ExportModal({ project, format, dispatch, userId, onClose, onExport }) {
   };
   return <div className="kb-modal-backdrop" onMouseDown={dismissOnBackdrop(onClose)}>
     <div className="kb-export-modal" role="dialog" aria-modal="true" aria-label="Настройки экспорта" onMouseDown={(event) => event.stopPropagation()}>
-      <div className="kb-export-modal-head"><div><b>Экспорт сметы</b><span>{format === "pdf" ? "PDF" : "Excel"}</span></div><div className="kb-export-modal-head-actions"><button type="button" aria-label="Закрыть" onClick={onClose}><X size={16} /></button></div></div>
+      <div className="kb-export-modal-head"><div><b>Экспорт сметы</b><span>Настройки файла</span></div><div className="kb-export-modal-head-actions"><button type="button" aria-label="Закрыть" onClick={onClose}><X size={16} /></button></div></div>
       <div className="kb-export-modal-body">
         <div className="kb-export-preview-pane">
           <ExportPreview model={model} />
           {!model.validation.valid && <div className="kb-export-error">Итог экспортной модели не совпадает с итогом проекта.</div>}
         </div>
         <div className="kb-export-settings-pane">
+          <div className="kb-export-format" role="group" aria-label="Формат экспорта"><span>Формат</span>{[["pdf", "PDF"], ["excel", "Excel"]].map(([value, label]) => <button type="button" key={value} className={format === value ? "is-active" : ""} aria-pressed={format === value} onClick={() => setFormat(value)}>{label}</button>)}</div>
           {userId && <div className="kb-export-presets">
             <select className="kb-select" value={presetId} onChange={(event) => { const item = presets.find((value) => value.id === event.target.value); setPresetId(event.target.value); setPresetName(item?.name || ""); if (item) applyPreset(item.settings); }}>
               <option value="">Новый пресет</option>
@@ -535,19 +537,11 @@ function ExportModal({ project, format, dispatch, userId, onClose, onExport }) {
 }
 
 export function ExportPanel({ project, dispatch, userId }) {
-  const [format, setFormat] = useState("pdf");
-  const [formatOpen, setFormatOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const formatRef = useRef(null);
-  useOutsideClose(formatRef, () => setFormatOpen(false));
-  const run = (model) => format === "pdf" ? exportPdf(model, defaultFilename(project, format)) : exportExcel(model, defaultFilename(project, format));
+  const run = (model, format) => format === "pdf" ? exportPdf(model, defaultFilename(project, format)) : exportExcel(model, defaultFilename(project, format));
   return <div className="kb-export">
-    <div className="kb-fmt" ref={formatRef}>
-      <button type="button" className="kb-fmt-btn" onClick={() => setFormatOpen((value) => !value)}><span>{format === "pdf" ? "PDF" : "Excel"}</span><ChevronDown size={13} /></button>
-      {formatOpen && <div className="kb-fmt-menu">{[["pdf", "PDF"], ["excel", "Excel"]].map(([value, label]) => <button key={value} type="button" className={"kb-fmt-item" + (format === value ? " is-active" : "")} onClick={() => { setFormat(value); setFormatOpen(false); }}>{label}</button>)}</div>}
-    </div>
     <button type="button" className="kb-export-go2" onClick={() => setModalOpen(true)}>Настроить и экспортировать</button>
     <div className="kb-export-hint">Экспорт строится из текущей рабочей сметы</div>
-    {modalOpen && <ExportModal project={project} format={format} dispatch={dispatch} userId={userId} onClose={() => setModalOpen(false)} onExport={run} />}
+    {modalOpen && <ExportModal project={project} dispatch={dispatch} userId={userId} onClose={() => setModalOpen(false)} onExport={run} />}
   </div>;
 }

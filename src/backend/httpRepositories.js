@@ -75,6 +75,7 @@ export function createHttpRepositories(request) {
 
   const userFlags = {
     getFlags: () => request("/api/user-flags"),
+    ensureFlags: () => request("/api/user-flags", { method: "PUT", json: {} }),
     markBetaWelcomeSeen: () => request("/api/user-flags/beta-welcome-seen", { method: "PUT", json: {} }),
   };
 

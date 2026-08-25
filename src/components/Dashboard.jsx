@@ -146,7 +146,7 @@ function NewProjectCard({ onCreate }) {
   </div>;
 }
 
-export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, aiGenerationReady = false, onDelete, projectTemplates, onTemplatesChange, categories, onCategoriesChange, openCategoryIds, onOpenCategoryIdsChange, onEditTemplate, onToggleFavorite, onRenameProject, onSectionChange, onOpenAiSettings, onOpenUsage, onSignOut, onOpenFeedback, userAccount }) {
+export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, aiGenerationReady = false, onDelete, projectTemplates, onTemplatesChange, categories, onCategoriesChange, openCategoryIds, onOpenCategoryIdsChange, onEditTemplate, onToggleFavorite, onRenameProject, onSectionChange, onOpenAiSettings, onOpenUsage, onSignOut, onOpenFeedback, onOpenHelp, userAccount }) {
   const [activeNav, setActiveNav] = useState("all");
   const [toast, setToast] = useState("");
   const [sourceModal, setSourceModal] = useState(null);
@@ -226,7 +226,7 @@ export function Dashboard({ projects, onOpen, onCreate, onImport, onGenerate, ai
         openCategoryIds={openCategoryIds} onOpenCategoryIdsChange={onOpenCategoryIdsChange}
         templates={templates} onMoveTemplate={moveTemplate} onDeleteCategory={deleteCategory}
         onRenameTemplate={renameTemplate} onDeleteTemplate={deleteTemplate} onOpenTemplate={(id) => onCreate(templates.find((template) => template.id === id) || null)}
-        width={sidebarWidth} accountControl={accountControl} onOpenFeedback={onOpenFeedback} />
+        width={sidebarWidth} accountControl={accountControl} onOpenFeedback={onOpenFeedback} onOpenHelp={onOpenHelp} />
       <div className="kb-dash-resizer" role="separator" aria-label="Изменить ширину панели" aria-orientation="vertical" onPointerDown={beginSidebarResize} />
       <main className="kb-dashboard"><div className="kb-board">
         {activeCategory ? (visibleTemplates.length ? visibleTemplates.map((template) =>

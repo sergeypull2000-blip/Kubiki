@@ -35,6 +35,7 @@ export function matchOwnerApiRoute(method, pathname) {
     "POST /api/export-presets": r=>r.createPreset,
     "POST /api/product-events": r=>r.trackEvent,
     "GET /api/user-flags": r=>r.getFlags,
+    "PUT /api/user-flags": r=>r.ensureFlags,
     "PUT /api/user-flags/beta-welcome-seen": r=>r.markBetaWelcomeSeen,
     "POST /api/beta-feedback": r=>r.insertFeedback,
     "GET /api/legal-acceptances": r=>r.listLegalAcceptances,
@@ -84,6 +85,7 @@ export async function handleOwnerApiRoute(route, request, repository, userId) {
   if(name==="DELETE preset")return response(200,{ok:await repository.deletePreset(userId,uuid(p))});
   if(name==="POST /api/product-events"){const v=payload(request),eventType=text(v.eventType??v.event_type,{max:64});if(!EVENTS.has(eventType))throw badRequest("invalid_event_type");const meta=object(v.meta??{});return response(201,await repository.trackEvent(userId,eventType,{requestId:text(meta.requestId??"",{min:0,max:200,nullable:true}),sessionId:text(meta.sessionId??"",{min:0,max:200,nullable:true})},boundedObject(v.metadata??{},16000)));}
   if(name==="GET /api/user-flags")return response(200,await repository.getFlags(userId));
+  if(name==="PUT /api/user-flags")return response(200,await repository.ensureFlags(userId));
   if(name==="PUT /api/user-flags/beta-welcome-seen")return response(200,await repository.markBetaWelcomeSeen(userId));
   if(name==="POST /api/beta-feedback"){const v=payload(request);return response(201,await repository.insertFeedback(userId,{message:text(v.message,{max:4000}),context:text(v.context??"",{min:0,max:1000,nullable:true}),projectId:text(v.projectId??v.project_id??"",{min:0,max:200,nullable:true}),sheetId:text(v.sheetId??v.sheet_id??"",{min:0,max:200,nullable:true})}));}
   if(name==="GET /api/legal-acceptances")return response(200,{acceptances:await repository.listLegalAcceptances(userId)});

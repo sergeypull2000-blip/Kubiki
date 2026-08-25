@@ -23,7 +23,7 @@ import { sortQuickAccessItems } from "../quickAccess.js";
 import { createTaskTemplate, createStageTemplate, cloneTaskTemplate, cloneStageTemplate } from "../templates.js";
 import { AccountControl } from "./AccountControl.jsx";
 import { BetaBadge } from "./BetaBadge.jsx";
-import { shouldHandleExecutorCopy } from "../keyboardShortcuts.js";
+import { shouldHandleExecutorCopy, shouldHandleExecutorPaste } from "../keyboardShortcuts.js";
 
 const WORKSPACE_FIXED_WIDTH = 1250;
 const WORKSPACE_SIDEBAR_GAP = 10;
@@ -89,7 +89,7 @@ function SheetTab({ sheet, isActive, canRemove, onSwitch, onRename, onDuplicate,
 /* ============================================================
    Рабочая зона
    ============================================================ */
-export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onOpenAiSettings, onOpenUsage, onOpenFeedback, onTrackAiGenerate, onSignOut, userAccount, aiGenerationReady = false, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange, onRequestAiEdit, onCancelAiEdit, onApplyAiEdit, onUndoAiEdit, canUndoAiEdit = false }) {
+export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onOpenAiSettings, onOpenUsage, onOpenFeedback, onOpenHelp, onTrackAiGenerate, onSignOut, userAccount, aiGenerationReady = false, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange, onRequestAiEdit, onCancelAiEdit, onApplyAiEdit, onUndoAiEdit, canUndoAiEdit = false }) {
   const [leftPanelWidth, setLeftPanelWidth] = useState(() => clampPanelWidth(localStorage.getItem("kb-workspace-left-width"), LEFT_PANEL_RANGE, 298));
   const [rightPanelWidth, setRightPanelWidth] = useState(() => clampPanelWidth(localStorage.getItem("kb-workspace-right-width"), RIGHT_PANEL_RANGE, 338));
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
@@ -211,7 +211,7 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
         const found = findExecutor(project, activeExecutorId);
         if (found) { clipboardRef.current = found.executor; e.preventDefault(); }
       } else if (code === "KeyV") {
-        if (inField) return;
+        if (!shouldHandleExecutorPaste(e, window.getSelection?.())) return;
         if (!clipboardRef.current) return;
         // цель: задача выделенного исполнителя → иначе выделенная задача
         let toStageId = activeStageId, toTaskId = activeTaskId;
@@ -515,6 +515,7 @@ const toggleAllCollapsed = () =>
             onRemoveStageTemplate={handleRemoveStageTemplate}
             accountControl={accountControl}
             onOpenFeedback={onOpenFeedback}
+            onOpenHelp={onOpenHelp}
           />
           <div className="kb-panel-resizer kb-panel-resizer-left" role="separator" aria-label="Изменить ширину левой панели" aria-orientation="vertical" onPointerDown={(event) => beginPanelResize("left", event)} />
         </div>

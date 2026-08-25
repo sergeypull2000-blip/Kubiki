@@ -10,9 +10,11 @@ test("template interactions keep creation and edit actions separate", () => {
   const leftPanel = source("../src/components/LeftPanel.jsx");
   assert.match(dashboard, /onOpen=\{\(\) => onCreate\(template\)\}/);
   assert.match(dashboard, /onEdit=\{onEditTemplate\}/);
-  assert.match(leftPanel, /onClick=\{\(\) => onOpenTemplate\?\.\(template\.id\)\}/);
+  assert.match(leftPanel, /onOpenTemplate\?\.\(template\.id\)/);
   assert.match(leftPanel, /kb-template-drag-handle/);
   assert.match(leftPanel, /Переименовать шаблон/);
+  assert.match(leftPanel, /editingTemplateId === template\.id/);
+  assert.doesNotMatch(leftPanel, /window\.prompt/);
 });
 
 test("branding keeps independent positions and normalizes them", () => {

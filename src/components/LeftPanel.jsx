@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, FileText, Pencil, Pin, Plus, Trash2, UserRound, X } from "lucide-react";
 import { DND_TYPES, useDragSource } from "../store.js";
 import { formatMoney, uid } from "../utils.js";
@@ -30,7 +30,14 @@ function QuickItem({ item, performer, onApply, onPin, onRemove }) {
   </div>;
 }
 
-export function PalettePanel({ taskTemplates = [], stageTemplates = [], quickAccessItems = [], onCreatePerformer, onApplyQuickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onApplyTaskTemplate, onApplyStageTemplate, onRemoveTaskTemplate, onRemoveStageTemplate, accountControl, onOpenFeedback }) {
+function SidebarActions({ onOpenFeedback, onOpenHelp }) {
+  return <div className="kb-sidebar-actions">
+    {onOpenFeedback && <button type="button" className="kb-feedback-float" onClick={onOpenFeedback}>Оставить отзыв</button>}
+    {onOpenHelp && <button type="button" className="kb-help-button" onClick={onOpenHelp} title="Помощь" aria-label="Открыть помощь">?</button>}
+  </div>;
+}
+
+export function PalettePanel({ taskTemplates = [], stageTemplates = [], quickAccessItems = [], onCreatePerformer, onApplyQuickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onApplyTaskTemplate, onApplyStageTemplate, onRemoveTaskTemplate, onRemoveStageTemplate, accountControl, onOpenFeedback, onOpenHelp }) {
   return <aside className="kb-palette">
     <div className="kb-palette-scroll">
       <PaletteSection title="Этапы" templates={stageTemplates} dndType={DND_TYPES.STAGE} payloadKey="templateStageId" fallback="Этап" onApply={onApplyStageTemplate} onRemove={onRemoveStageTemplate} />
@@ -40,7 +47,7 @@ export function PalettePanel({ taskTemplates = [], stageTemplates = [], quickAcc
       </div>
     </div>
     <div className="kb-palette-foot">
-      {onOpenFeedback && <button type="button" className="kb-feedback-float" onClick={onOpenFeedback}>Оставить отзыв</button>}
+      <SidebarActions onOpenFeedback={onOpenFeedback} onOpenHelp={onOpenHelp} />
       {accountControl || "Палитра этапов, задач и исполнителей"}
     </div>
   </aside>;
@@ -68,12 +75,15 @@ export function loadDashboardCategories() {
   } catch { return DEFAULT_CATEGORIES; }
 }
 
-export default function LeftPanel({ activeNav, onNavChange, categories = [], onCategoriesChange, openCategoryIds = ["new"], onOpenCategoryIdsChange, templates = [], onMoveTemplate, onDeleteCategory, onRenameTemplate, onDeleteTemplate, onOpenTemplate, width, accountControl, onOpenFeedback }) {
+export default function LeftPanel({ activeNav, onNavChange, categories = [], onCategoriesChange, openCategoryIds = ["new"], onOpenCategoryIdsChange, templates = [], onMoveTemplate, onDeleteCategory, onRenameTemplate, onDeleteTemplate, onOpenTemplate, width, accountControl, onOpenFeedback, onOpenHelp }) {
   const [addingFolder, setAddingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [openFolders, setOpenFolders] = useState(() => new Set(openCategoryIds));
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState("");
+  const [editingTemplateId, setEditingTemplateId] = useState(null);
+  const [editingTemplateName, setEditingTemplateName] = useState("");
+  const cancelTemplateRenameRef = useRef(false);
 
   useEffect(() => setOpenFolders(new Set(openCategoryIds)), [openCategoryIds]);
   const updateCategories = (next) => onCategoriesChange(next);
@@ -89,6 +99,11 @@ export default function LeftPanel({ activeNav, onNavChange, categories = [], onC
     if (!editingName.trim()) return;
     updateCategories(categories.map((category) => category.id === id ? { ...category, name: editingName.trim() } : category));
     setEditingId(null);
+  };
+  const finishTemplateRename = (id) => {
+    const name = editingTemplateName.trim();
+    if (name) onRenameTemplate(id, name);
+    setEditingTemplateId(null);
   };
 
   return <aside className="kb-dash-sidebar" style={width ? { width } : undefined}>
@@ -106,13 +121,13 @@ export default function LeftPanel({ activeNav, onNavChange, categories = [], onC
           {editingId === category.id ? <input className="kb-dash-nav-input" value={editingName} autoFocus onChange={(event) => setEditingName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") renameFolder(category.id); if (event.key === "Escape") setEditingId(null); }} /> : <button type="button" className="kb-dash-nav-item kb-tree-folder-btn" onClick={() => { onNavChange(`category:${category.id}`); setOpenFolders((old) => new Set(old).add(category.id)); }}><span>{category.name}</span></button>}
           {!category.system && <div className="kb-dash-nav-folder-actions">{editingId === category.id ? <><button type="button" className="kb-icon-btn-small" onClick={() => renameFolder(category.id)}><Check size={13} /></button><button type="button" className="kb-icon-btn-small" onClick={() => setEditingId(null)}><X size={13} /></button></> : <><button type="button" className="kb-icon-btn-small" onClick={() => { setEditingId(category.id); setEditingName(category.name); }} title="Переименовать"><Pencil size={12} /></button><button type="button" className="kb-icon-btn-small" onClick={() => onDeleteCategory(category.id)} title="Удалить"><Trash2 size={12} /></button></>}</div>}
         </div>
-        {open && <div className="kb-template-tree-files">{folderTemplates.map((template) => <div key={template.id} className="kb-template-tree-file" onClick={() => onOpenTemplate?.(template.id)}><button type="button" className="kb-template-drag-handle" draggable onDragStart={(event) => { event.stopPropagation(); event.dataTransfer.setData("application/x-kubiki-template", template.id); event.dataTransfer.effectAllowed = "move"; }} title="Перетащить шаблон" aria-label="Перетащить шаблон">⠿</button><FileText size={13} /><span>{template.templateName || template.name || "Без названия"}</span><div className="kb-template-tree-actions" onClick={(event) => event.stopPropagation()}><button type="button" className="kb-icon-btn-small" onClick={() => { const name = window.prompt("Название шаблона", template.templateName || template.name); if (name?.trim()) onRenameTemplate(template.id, name.trim()); }} title="Переименовать шаблон"><Pencil size={11} /></button><button type="button" className="kb-icon-btn-small" onClick={() => onDeleteTemplate(template.id)} title="Удалить шаблон"><Trash2 size={11} /></button></div></div>)}</div>}
+        {open && <div className="kb-template-tree-files">{folderTemplates.map((template) => <div key={template.id} className="kb-template-tree-file" onClick={() => { if (editingTemplateId !== template.id) onOpenTemplate?.(template.id); }}><button type="button" className="kb-template-drag-handle" draggable={editingTemplateId !== template.id} onDragStart={(event) => { event.stopPropagation(); event.dataTransfer.setData("application/x-kubiki-template", template.id); event.dataTransfer.effectAllowed = "move"; }} title="Перетащить шаблон" aria-label="Перетащить шаблон">⠿</button><FileText size={13} />{editingTemplateId === template.id ? <input className="kb-dash-nav-input kb-template-name-input" value={editingTemplateName} autoFocus onFocus={(event) => event.currentTarget.select()} onClick={(event) => event.stopPropagation()} onChange={(event) => setEditingTemplateName(event.target.value)} onBlur={() => { if (cancelTemplateRenameRef.current) { cancelTemplateRenameRef.current = false; setEditingTemplateId(null); } else finishTemplateRename(template.id); }} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); if (event.key === "Escape") { cancelTemplateRenameRef.current = true; event.currentTarget.blur(); } }} /> : <span>{template.templateName || template.name || "Без названия"}</span>}<div className="kb-template-tree-actions" onClick={(event) => event.stopPropagation()}>{editingTemplateId !== template.id && <button type="button" className="kb-icon-btn-small" onClick={() => { setEditingTemplateId(template.id); setEditingTemplateName(template.templateName || template.name || ""); }} title="Переименовать шаблон"><Pencil size={11} /></button>}<button type="button" className="kb-icon-btn-small" onClick={() => onDeleteTemplate(template.id)} title="Удалить шаблон"><Trash2 size={11} /></button></div></div>)}</div>}
       </div>;
     })}
     <div className="kb-dash-nav-new-row">{addingFolder ? <div style={{ display: "flex", gap: 4, alignItems: "center" }}><input className="kb-dash-nav-input" value={newFolderName} onChange={(event) => setNewFolderName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addFolder(); if (event.key === "Escape") { setAddingFolder(false); setNewFolderName(""); } }} placeholder="Название категории" autoFocus style={{ flex: 1 }} /><button type="button" className="kb-icon-btn-small" onClick={addFolder} title="Сохранить"><Check size={13} /></button><button type="button" className="kb-icon-btn-small" onClick={() => { setAddingFolder(false); setNewFolderName(""); }} title="Отмена"><X size={13} /></button></div> : <button type="button" className="kb-dash-nav-new-btn" onClick={() => setAddingFolder(true)}><Plus size={13} />Новая категория</button>}</div>
     </div>
     {accountControl && <div className="kb-dash-sidebar-foot">
-      {onOpenFeedback && <button type="button" className="kb-feedback-float" onClick={onOpenFeedback}>Оставить отзыв</button>}
+      <SidebarActions onOpenFeedback={onOpenFeedback} onOpenHelp={onOpenHelp} />
       {accountControl}
     </div>}
   </aside>;

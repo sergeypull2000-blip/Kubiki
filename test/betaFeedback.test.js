@@ -79,9 +79,9 @@ test("Dashboard and Workspace forward onOpenFeedback to sidebar and account cont
 test("sidebar feedback pill hugs text and aligns with account avatar", async () => {
   const [left, styles] = await Promise.all([source("src/components/LeftPanel.jsx"), source("src/styles.js")]);
   const pills = (left.match(/className="kb-feedback-float" onClick=\{onOpenFeedback\}>Оставить отзыв/g) || []).length;
-  assert.equal(pills, 2, "palette and dashboard sidebar both host the floating pill");
-  assert.match(styles, /\.kb-feedback-float\{[^}]*position:absolute/);
-  assert.match(styles, /\.kb-feedback-float\{[^}]*left:25px[^}]*bottom:calc\(100% \+ 12px\)/);
+  assert.equal(pills, 1, "the shared sidebar action component hosts the feedback pill");
+  assert.match(styles, /\.kb-sidebar-actions\{[^}]*position:absolute/);
+  assert.match(styles, /\.kb-sidebar-actions\{[^}]*left:25px[^}]*bottom:calc\(100% \+ 12px\)/);
   assert.match(styles, /\.kb-feedback-float\{[^}]*width:auto[^}]*height:45px/);
   assert.match(styles, /\.kb-feedback-float\{[^}]*padding:0 16px/);
   assert.match(styles, /\.kb-feedback-float\{[^}]*border-radius:12px/);

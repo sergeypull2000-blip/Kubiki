@@ -19,6 +19,8 @@ import { createTemplateLibraryBackup, hasMeaningfulTemplateLibrary, localTemplat
 import { loadLocalAiSettings, normalizeAiSettings, saveLocalAiSettings } from "./aiSettings.js";
 import { AIPersonalizationModal } from "./components/AIPersonalizationModal.jsx";
 import { WelcomeModal } from "./components/WelcomeModal.jsx";
+import { OnboardingModal } from "./components/OnboardingModal.jsx";
+import { isGenuinelyNewUser, markOnboardingSeen } from "./onboarding.js";
 import { UsageLimitsModal } from "./components/UsageLimitsModal.jsx";
 import { BetaFeedbackModal } from "./components/BetaFeedbackModal.jsx";
 import { isAiHydrationReady } from "./ai/hydrationGate.js";
@@ -119,6 +121,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [improvementConsent, setImprovementConsent] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
 
@@ -135,21 +138,22 @@ export default function KubikiApp({ userId, user, onSignOut }) {
     (async () => {
       let flags = await userFlagsRepository.getFlags(userId).catch(() => null);
       if (cancelled) return;
-      if (!flags) {
-        await new Promise((resolve) => setTimeout(resolve, 700));
+      if (!flags && isGenuinelyNewUser(user)) {
+        await userFlagsRepository.ensureFlags(userId).catch(() => null);
         if (cancelled) return;
         flags = await userFlagsRepository.getFlags(userId).catch(() => null);
-        if (cancelled) return;
       }
       if (flags && flags.beta_welcome_seen === false) setWelcomeOpen(true);
     })();
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, user]);
 
   const handleWelcomeStart = () => {
     setWelcomeOpen(false);
+    setOnboardingOpen(true);
     userFlagsRepository.markBetaWelcomeSeen(userId).catch(() => {});
   };
+  const closeOnboarding = () => { setOnboardingOpen(false); markOnboardingSeen(userId); };
   const trackProductEvent = (eventType, meta = {}, metadata = {}) => {
     productEventsRepository.track(userId, eventType, meta, metadata).catch(() => {});
   };
@@ -718,6 +722,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
       </div>}
       {aiSettingsOpen && <AIPersonalizationModal settings={aiSettings} improvementConsent={improvementConsent} state={aiSettingsState} message={aiSettingsMessage} onSave={saveAiSettings} onClose={() => setAiSettingsOpen(false)} />}
       {welcomeOpen && <WelcomeModal onStart={handleWelcomeStart} />}
+      {onboardingOpen && <OnboardingModal onClose={closeOnboarding} />}
       {usageOpen && <UsageLimitsModal onClose={() => setUsageOpen(false)} />}
       {feedbackOpen && <BetaFeedbackModal userId={userId} context={feedbackContext} onClose={() => setFeedbackOpen(false)} />}
       {(templateState === "migration-offer" || templateState === "migrating") && <div className="kb-modal-overlay kb-server-overlay">
@@ -772,6 +777,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
           onOpenAiSettings={() => setAiSettingsOpen(true)}
           onOpenUsage={() => setUsageOpen(true)}
           onOpenFeedback={() => setFeedbackOpen(true)}
+          onOpenHelp={() => setOnboardingOpen(true)}
 
           userAccount={{ id: userId, displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }}
           aiGenerationReady={aiGenerationReady}
@@ -786,6 +792,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
           onOpenAiSettings={() => setAiSettingsOpen(true)}
           onOpenUsage={() => setUsageOpen(true)}
           onOpenFeedback={() => setFeedbackOpen(true)}
+          onOpenHelp={() => setOnboardingOpen(true)}
 
           userAccount={{ id: userId, displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }}
           aiGenerationReady={aiGenerationReady}
@@ -806,7 +813,7 @@ export default function KubikiApp({ userId, user, onSignOut }) {
           onTemplatesChange={handleTemplatesChange} onEditTemplate={setEditingTemplateId}
           categories={templateLibrary.categories} onCategoriesChange={(categories) => replaceTemplateLibrary((library) => ({ ...library, categories }))}
           openCategoryIds={templateLibrary.metadata.openCategoryIds || ["new"]} onOpenCategoryIdsChange={(openCategoryIds) => replaceTemplateLibrary((library) => ({ ...library, metadata: { ...library.metadata, openCategoryIds } }))}
-          onToggleFavorite={toggleFavorite} onRenameProject={renameProject} onSectionChange={setActiveSection} onOpenAiSettings={() => setAiSettingsOpen(true)} onOpenUsage={() => setUsageOpen(true)} onOpenFeedback={() => setFeedbackOpen(true)} onSignOut={handleSignOut}
+          onToggleFavorite={toggleFavorite} onRenameProject={renameProject} onSectionChange={setActiveSection} onOpenAiSettings={() => setAiSettingsOpen(true)} onOpenUsage={() => setUsageOpen(true)} onOpenFeedback={() => setFeedbackOpen(true)} onOpenHelp={() => setOnboardingOpen(true)} onSignOut={handleSignOut}
           userAccount={{ id: userId, displayName: user?.user_metadata?.full_name || "Аккаунт Kubiki", accountLabel: user?.email || "Авторизованный пользователь" }} />
       )}
     </>

@@ -77,6 +77,7 @@ export function createOwnerApiRepository(pool) {
     async deletePreset(userId,id){one(await query(`delete from public.export_presets where user_id=$1 and id=$2 returning id`,[userId,id]));return true;},
     async trackEvent(userId,eventType,meta,metadata){return one(await query(`insert into public.product_events(user_id,event_type,request_id,session_id,metadata) values($1,$2,$3,$4,$5) returning id,event_type,created_at`,[userId,eventType,meta.requestId,meta.sessionId,metadata]));},
     async getFlags(userId){return (await query(`select * from public.user_flags where user_id=$1`,[userId])).rows[0]||null;},
+    async ensureFlags(userId){return one(await query(`insert into public.user_flags(user_id,beta_welcome_seen) values($1,false) on conflict(user_id) do update set user_id=excluded.user_id returning *`,[userId]));},
     async markBetaWelcomeSeen(userId){return one(await query(`insert into public.user_flags(user_id,beta_welcome_seen) values($1,true) on conflict(user_id) do update set beta_welcome_seen=true returning *`,[userId]));},
     async insertFeedback(userId,value){await query(`insert into public.beta_feedback(user_id,message,context,project_id,sheet_id) values($1,$2,$3,$4,$5)`,[userId,value.message,value.context,value.projectId,value.sheetId]);return {ok:true};},
     async listLegalAcceptances(userId){return (await query(`select document_key,version,accepted_at,revoked_at from public.user_legal_acceptances where user_id=$1 order by accepted_at desc`,[userId])).rows;},
