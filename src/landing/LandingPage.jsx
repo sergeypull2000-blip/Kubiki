@@ -1,5 +1,5 @@
+import { useState } from 'react'
 import { Logo } from '../Logo.jsx'
-import productScreenshot from '../../local-ai-dialog-preview.png'
 import './landing.css'
 
 const signupHref = '/signup'
@@ -9,6 +9,8 @@ function Cta({ className = '' }) {
 }
 
 export function LandingPage() {
+  const [screenshotAvailable, setScreenshotAvailable] = useState(true)
+
   return (
     <div className="lp-page">
       <header className="lp-header">
@@ -30,17 +32,25 @@ export function LandingPage() {
             <div className="lp-hero-action"><Cta /><small>Закрытая beta · Бесплатно для вашей студии</small></div>
           </div>
           <figure className="lp-product-shot">
-            <img src={productScreenshot} width="1280" height="800" alt="Рабочее пространство Kubiki со сметой и встроенным AI Edit" fetchPriority="high" />
-            <figcaption>Настоящий интерфейс Kubiki</figcaption>
+            {screenshotAvailable && <img src="/kubiki-product-screenshot.webp" alt="Актуальный интерфейс Kubiki со сметой" fetchPriority="high" onError={() => setScreenshotAvailable(false)} />}
+            {!screenshotAvailable && <div className="lp-product-placeholder"><Logo size={32} /><strong>Актуальный интерфейс Kubiki</strong><span>Добавьте screenshot в<br /><code>public/kubiki-product-screenshot.webp</code></span></div>}
+            <figcaption>{screenshotAvailable ? 'Актуальный интерфейс Kubiki' : 'Место подготовлено для настоящего product screenshot'}</figcaption>
           </figure>
         </section>
 
         <section className="lp-section lp-container" id="how" aria-labelledby="how-title">
           <div className="lp-section-heading"><p className="lp-kicker">От брифа к рабочей смете</p><h2 id="how-title">Как это работает</h2></div>
-          <div className="lp-steps">
-            <article><span>01</span><h3>Дайте Kubiki бриф</h3><p>Опишите задачу своими словами или импортируйте бриф клиента.</p></article>
-            <article><span>02</span><h3>Получите первую версию сметы</h3><p>Kubiki поможет разложить проект на этапы, задачи и работы и собрать первую версию сметы.</p></article>
-            <article><span>03</span><h3>Доработайте под себя</h3><p>Меняйте смету вручную или через встроенного ИИ-агента.</p></article>
+          <div className="lp-workflow" aria-label="Бриф, первая версия сметы, корректировки, готово">
+            <div className="lp-workflow-tabs" aria-hidden="true"><span className="is-active">Структура</span><span>Смета</span><span>Корректировки</span></div>
+            <div className="lp-workflow-row">
+              <article><span className="lp-workflow-label">Бриф</span><h3>Дайте Kubiki бриф</h3><p>Опишите задачу своими словами или импортируйте бриф клиента.</p></article>
+              <i aria-hidden="true">→</i>
+              <article><span className="lp-workflow-label">Первая версия сметы</span><h3>Получите первую версию сметы</h3><p>Kubiki поможет разложить проект на этапы, задачи и работы и собрать первую версию сметы.</p></article>
+              <i aria-hidden="true">→</i>
+              <article><span className="lp-workflow-label">Корректировки</span><h3>Доработайте под себя</h3><p>Меняйте смету вручную или через встроенного ИИ-агента.</p></article>
+              <i aria-hidden="true">→</i>
+              <div className="lp-workflow-done"><span>Готово</span></div>
+            </div>
           </div>
           <div className="lp-centered-action"><Cta /></div>
         </section>
@@ -48,8 +58,11 @@ export function LandingPage() {
         <section className="lp-section lp-memory" id="memory" aria-labelledby="memory-title">
           <div className="lp-container lp-memory-grid">
             <div><p className="lp-kicker">Память студии</p><h2 id="memory-title">Kubiki знает, как считает именно ваша студия</h2><p className="lp-body-large">Kubiki может учитывать релевантные шаблоны, историю прошлых проектов и исполнителей вашей студии при подготовке следующих смет.</p><p>Чем больше вы работаете в Kubiki, тем меньше приходится каждый раз объяснять одно и то же с нуля.</p></div>
-            <div className="lp-memory-list" aria-label="Контекст студии">
-              {['Прошлые проекты', 'Шаблоны', 'Исполнители', 'Ставки', 'Типы оплаты', 'Правила генерации', 'Персонализация'].map((item) => <span key={item}>{item}</span>)}
+            <div className="lp-memory-panel" aria-label="Контекст студии">
+              <div className="lp-memory-panel-head"><span>Контекст студии</span><small>Используется при подготовке сметы</small></div>
+              <div className="lp-memory-group"><strong>Опыт</strong><div><span>Прошлые проекты</span><span>Шаблоны</span></div></div>
+              <div className="lp-memory-group"><strong>Команда и расчёты</strong><div><span>Исполнители</span><span>Ставки</span><span>Типы оплаты</span></div></div>
+              <div className="lp-memory-group"><strong>Правила студии</strong><div><span>Правила генерации</span><span>Персонализация</span></div></div>
             </div>
           </div>
         </section>
