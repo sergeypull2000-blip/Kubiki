@@ -62,7 +62,7 @@
 .lp-workflow-track .is-active { border-color: var(--lp-accent); background: var(--lp-accent); }
 .lp-workflow-track .is-done { border-color: var(--lp-accent); background: var(--lp-accent-soft); }
 .lp-workflow-stages { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 13px; }
-.lp-workflow-stages > div { width: min(100%, 210px); min-width: 0; justify-self: center; padding-right: 0; }
+.lp-workflow-stages > div { width: min(100%, 210px); min-width: 0; justify-self: center; padding-right: 0; text-align: center; }
 .lp-workflow-stages strong, .lp-workflow-stages small { display: block; }
 .lp-workflow-stages strong { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
 .lp-workflow-stages small { max-width: 210px; margin-top: 5px; color: var(--lp-muted); font-size: 12px; line-height: 1.45; }
