@@ -26,6 +26,7 @@ export const CSS = `
   --layout-max: 1602px;
   /* Ширина центрального Workspace рассчитана на полный ряд Executor-тегов и полей. */
   --workspace-fixed-width: 1350px;
+  --workspace-readable-width: 1000px;
   --workspace-sidebar-gap: 24px;
 
   /* dashboard sidebar */
@@ -172,8 +173,15 @@ export const CSS = `
 /* рабочее поле центрировано в своей колонке между палитрой и правой панелью */
 .kb-canvas-inner{width:100%; min-width:0; margin:0 auto}
 
-/* 1350px Workspace + the wider 250px panel minimum on each side + 24px gaps. */
-@media(max-width:1897px){
+/* Between full desktop and collapse, keep all three columns at their real minima:
+   210px + 24px + 1000px + 24px + 250px = 1508px. */
+@media(min-width:1508px) and (max-width:1897px){
+  .kb-root-workspace:not(.is-template-edit) .kb-layout{display:grid; grid-template-columns:210px minmax(var(--workspace-readable-width),var(--workspace-fixed-width)) 250px; justify-content:space-between; gap:var(--workspace-sidebar-gap)}
+  .kb-root-workspace:not(.is-template-edit) .kb-panel-shell{position:relative; inset:auto!important; width:100%!important; max-width:none}
+  .kb-root-workspace:not(.is-template-edit) .kb-panel-resizer{display:none}
+  .kb-root-workspace:not(.is-template-edit) .kb-canvas{width:100%; min-width:0; max-width:var(--workspace-fixed-width)}
+}
+@media(max-width:1507px){
   .kb-panel-shell{display:none}
   .kb-canvas{flex:1 1 auto; width:100%; min-width:0; max-width:var(--workspace-fixed-width)}
 }

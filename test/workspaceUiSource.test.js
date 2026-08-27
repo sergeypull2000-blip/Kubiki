@@ -28,7 +28,10 @@ test("workspace uses edge-to-edge flex center and bounded panel resizers", async
   assert.match(workspace, /side === "left" \? LEFT_PANEL_RANGE : RIGHT_PANEL_RANGE/);
   assert.match(workspace, /kb-panel-resizer-left/);
   assert.match(workspace, /kb-panel-resizer-right/);
-  assert.match(styles, /@media\(max-width:1897px\)\{\s*\.kb-panel-shell\{display:none\}/);
+  assert.match(styles, /--workspace-readable-width: 1000px/);
+  assert.match(styles, /@media\(min-width:1508px\) and \(max-width:1897px\)/);
+  assert.match(styles, /grid-template-columns:210px minmax\(var\(--workspace-readable-width\),var\(--workspace-fixed-width\)\) 250px/);
+  assert.match(styles, /@media\(max-width:1507px\)\{\s*\.kb-panel-shell\{display:none\}/);
   assert.match(workspace, /const visibleRight = Math\.min\(window\.innerWidth, rect\.right\)/);
   assert.match(workspace, /right: Math\.max\(12, window\.innerWidth - visibleRight - 10\)/);
 });
