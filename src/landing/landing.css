@@ -21,7 +21,7 @@
 .lp-page * { box-sizing: border-box; }
 .lp-page a { color: inherit; }
 .lp-container, .lp-header { width: min(1240px, calc(100% - 64px)); margin-inline: auto; }
-.lp-header { display: flex; align-items: center; justify-content: space-between; height: 76px; border-bottom: 1px solid var(--lp-line); }
+.lp-header { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; height: 76px; border-bottom: 1px solid var(--lp-line); background: color-mix(in srgb, var(--lp-bg) 96%, transparent); }
 .lp-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600; letter-spacing: -.02em; text-decoration: none; }
 .lp-nav { display: flex; align-items: center; gap: 30px; }
 .lp-nav a { color: var(--lp-muted); font-size: 13px; text-decoration: none; }
@@ -40,7 +40,7 @@
 .lp-cta:hover { border-color: var(--lp-accent-hover); background: var(--lp-accent-hover); }
 .lp-cta:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: 3px; }
 .lp-product-shot { min-width: 0; margin: 0; }
-.lp-product-shot img, .lp-product-placeholder { display: block; width: 100%; aspect-ratio: 16 / 10; border: 1px solid var(--lp-line-strong); border-radius: 8px; background: var(--lp-surface); box-shadow: 0 12px 32px rgba(26,34,48,.07); }
+.lp-product-shot img, .lp-product-placeholder { display: block; width: 100%; border: 1px solid var(--lp-line-strong); border-radius: 8px; background: var(--lp-surface); box-shadow: 0 12px 32px rgba(26,34,48,.07); }
 .lp-product-shot img { height: auto; object-fit: contain; }
 .lp-product-placeholder { display: grid; place-content: center; justify-items: center; gap: 12px; padding: 32px; color: var(--lp-muted); text-align: center; }
 .lp-product-placeholder strong { color: var(--lp-text); font-size: 15px; font-weight: 600; }
@@ -48,7 +48,7 @@
 .lp-product-placeholder code { color: var(--lp-accent); font: inherit; }
 .lp-product-shot figcaption { margin-top: 8px; color: var(--lp-faint); font-size: 11px; text-align: right; }
 
-.lp-section { padding-block: 82px; border-top: 1px solid var(--lp-line); scroll-margin-top: 24px; }
+.lp-section { padding-block: 82px; border-top: 1px solid var(--lp-line); scroll-margin-top: 92px; }
 .lp-section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; margin-bottom: 42px; }
 .lp-section h2, .lp-final h2 { margin: 0; font-size: clamp(32px, 3vw, 46px); line-height: 1.1; letter-spacing: -.042em; }
 .lp-section-heading h2 { max-width: 760px; }

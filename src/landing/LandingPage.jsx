@@ -74,7 +74,7 @@ export function LandingPage() {
         <section className="lp-section lp-container" id="features" aria-labelledby="compare-title">
           <div className="lp-section-heading lp-process-heading"><p className="lp-kicker">Рабочий процесс</p><h2 id="compare-title"><span>Сметы быстрее.</span><span>Ошибок меньше.</span><span>Контроля больше.</span></h2></div>
           <div className="lp-compare">
-            <article><h3>Обычно</h3><p>Бриф <i>→</i> поиск старой сметы <i>→</i> копирование <i>→</i> сверка ставок <i>→</i> правки <i>→</i> ещё правки</p></article>
+            <article><h3>Обычно</h3><p>Бриф <i>→</i> поиск старой сметы <i>→</i> копирование <i>→</i> сверка ставок <i>→</i> правки <i>→</i> ручной пересчёт <i>→</i> проверка формул <i>→</i> ещё правки</p></article>
             <article className="is-kubiki"><h3>С Kubiki</h3><p>Бриф <i>→</i> первая версия сметы <i>→</i> корректировки <i>→</i> готово</p></article>
           </div>
         </section>
