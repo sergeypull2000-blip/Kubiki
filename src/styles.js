@@ -172,8 +172,13 @@ export const CSS = `
 /* рабочее поле центрировано в своей колонке между палитрой и правой панелью */
 .kb-canvas-inner{width:100%; min-width:0; margin:0 auto}
 
-/* Fallback: когда панели и фиксированный Workspace физически не помещаются,
-   возвращаемся к обычной адаптивной сетке с горизонтальным скроллом контента. */
+/* 1350px Workspace + the wider 250px panel minimum on each side + 24px gaps. */
+@media(max-width:1897px){
+  .kb-panel-shell{display:none}
+  .kb-canvas{flex:1 1 auto; width:100%; min-width:0; max-width:var(--workspace-fixed-width)}
+}
+
+/* Below that threshold Workspace owns the viewport and remains fluid. */
 .kb-generation-knowledge{margin:0 0 10px; color:var(--text-muted); font-size:11px; line-height:1.4}
 .kb-ai-hydration-note{margin-right:auto; color:var(--text-muted); font-size:11px}
 
