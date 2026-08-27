@@ -26,10 +26,15 @@ test("legacy import endpoint has no wildcard CORS and hides provider configurati
   assert.doesNotMatch(source, /json\(\{ error: [^\n]*(DEEPSEEK_API_KEY|AI_API_KEY|Vercel)/);
 });
 
-test("PDF import pins the patched library and disables scripting", () => {
+test("PDF import pins the Safari-compatible library and disables scripting", () => {
   const source = readFileSync(new URL("../src/importExcel.jsx", import.meta.url), "utf8");
   const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-  assert.equal(packageJson.dependencies["pdfjs-dist"], "6.2.108");
+  const pdfModule = readFileSync(new URL("../node_modules/pdfjs-dist/build/pdf.mjs", import.meta.url), "utf8");
+  const pdfWorker = readFileSync(new URL("../node_modules/pdfjs-dist/build/pdf.worker.mjs", import.meta.url), "utf8");
+
+  assert.equal(packageJson.dependencies["pdfjs-dist"], "5.4.624");
+  assert.doesNotMatch(pdfModule, /\bIterator\s*\./);
+  assert.doesNotMatch(pdfWorker, /\bIterator\s*\./);
   assert.match(source, /enableScripting:\s*false/);
   assert.match(source, /isEvalSupported:\s*false/);
 });
