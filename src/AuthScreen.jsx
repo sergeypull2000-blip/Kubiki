@@ -31,6 +31,8 @@ export function AuthScreen({ mode = 'signin', resetToken, verificationError, onP
     setError('')
     setNotice('')
     setView(next)
+    if (next === 'signin' || next === 'forgot') globalThis.history?.replaceState({}, '', '/login')
+    if (next === 'signup') globalThis.history?.replaceState({}, '', '/signup')
     if (next === 'signup') { setTermsAccepted(false); setPersonalDataAccepted(false) }
   }
 
