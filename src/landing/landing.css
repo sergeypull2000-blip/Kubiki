@@ -73,15 +73,20 @@
 .lp-memory h2 { max-width: 670px; }
 .lp-memory p, .lp-knowledge p, .lp-small-features p { margin: 0; color: var(--lp-muted); font-size: 14px; }
 .lp-memory .lp-body-large { margin: 22px 0 12px; color: #4d596c; font-size: 17px; }
-.lp-memory-panel { overflow: hidden; border: 1px solid var(--lp-line-strong); border-radius: 8px; background: var(--lp-surface); }
-.lp-memory-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 48px; padding: 10px 14px; border-bottom: 1px solid var(--lp-line); background: var(--lp-sunken); }
-.lp-memory-panel-head > span { font-size: 13px; font-weight: 600; }
-.lp-memory-panel-head small { color: var(--lp-faint); font-size: 10px; }
-.lp-memory-group { display: grid; grid-template-columns: 142px 1fr; min-height: 58px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--lp-line); }
-.lp-memory-group:last-child { border-bottom: 0; }
-.lp-memory-group strong { color: var(--lp-muted); font-size: 11px; font-weight: 500; }
-.lp-memory-group div { display: flex; flex-wrap: wrap; gap: 6px; }
-.lp-memory-group span { padding: 5px 7px; border: 1px solid var(--lp-line); border-radius: 5px; background: var(--lp-surface); color: var(--lp-text); font-size: 11px; }
+.lp-memory-diagram { position: relative; display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); min-height: 310px; overflow: hidden; border: 1px solid var(--lp-line-strong); border-radius: 8px; background: var(--lp-surface); }
+.lp-memory-connections { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.lp-memory-connections path { fill: none; stroke: var(--lp-line-strong); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.lp-memory-source { position: relative; z-index: 1; display: flex; align-self: center; justify-self: center; align-items: center; justify-content: center; min-height: 29px; padding: 5px 9px; border: 1px solid var(--lp-line); border-radius: 5px; background: var(--lp-surface); color: var(--lp-muted); font-size: 11px; white-space: nowrap; }
+.lp-memory-source.is-projects { grid-area: 1 / 1; }
+.lp-memory-source.is-templates { grid-area: 1 / 2; }
+.lp-memory-source.is-performers { grid-area: 1 / 3; }
+.lp-memory-source.is-payments { grid-area: 2 / 1; }
+.lp-memory-source.is-rates { grid-area: 2 / 3; }
+.lp-memory-source.is-rules { grid-area: 3 / 1; }
+.lp-memory-source.is-personalization { grid-area: 3 / 2 / 4 / 4; }
+.lp-memory-core { position: relative; z-index: 2; display: grid; grid-area: 2 / 2; align-self: center; justify-self: center; justify-items: center; min-width: 104px; padding: 13px 16px 12px; border: 1px solid var(--lp-accent); border-radius: 8px; background: var(--lp-surface); box-shadow: 0 0 0 3px var(--lp-accent-soft); }
+.lp-memory-core strong { margin-top: 7px; font-size: 13px; }
+.lp-memory-core small { margin-top: 1px; color: var(--lp-faint); font-size: 9px; }
 
 .lp-compare { display: grid; grid-template-columns: 1fr 1fr; border-block: 1px solid var(--lp-line); }
 .lp-compare article { padding: 24px 28px 27px; }
@@ -148,8 +153,17 @@
   .lp-workflow-principle { align-items: flex-start; flex-direction: column; gap: 3px; margin-top: 18px; padding: 12px 0 0; }
   .lp-workflow-principle i { display: none; }
   .lp-memory-grid { gap: 30px; }
-  .lp-memory-group { grid-template-columns: 1fr; gap: 8px; }
-  .lp-memory-panel-head { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .lp-memory-diagram { grid-template-areas: "projects templates" "performers rates" "core core" "payments rules" "personalization personalization"; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(5, auto); gap: 12px 8px; min-height: 0; padding: 18px 12px; }
+  .lp-memory-connections { display: none; }
+  .lp-memory-source { width: 100%; min-width: 0; white-space: normal; text-align: center; }
+  .lp-memory-source.is-projects { grid-area: projects; }
+  .lp-memory-source.is-templates { grid-area: templates; }
+  .lp-memory-source.is-performers { grid-area: performers; }
+  .lp-memory-source.is-rates { grid-area: rates; }
+  .lp-memory-source.is-payments { grid-area: payments; }
+  .lp-memory-source.is-rules { grid-area: rules; }
+  .lp-memory-source.is-personalization { grid-area: personalization; width: calc(50% - 4px); }
+  .lp-memory-core { grid-area: core; margin-block: 5px; }
   .lp-compare { grid-template-columns: 1fr; }
   .lp-compare article { padding: 22px 0; }
   .lp-compare article + article { padding-inline: 12px; border-top: 1px solid var(--lp-line); border-left: 0; }

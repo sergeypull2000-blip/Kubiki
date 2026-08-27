@@ -55,11 +55,18 @@ export function LandingPage() {
         <section className="lp-section lp-memory" id="memory" aria-labelledby="memory-title">
           <div className="lp-container lp-memory-grid">
             <div><p className="lp-kicker">Память студии</p><h2 id="memory-title">Kubiki знает, как считает именно ваша студия</h2><p className="lp-body-large">Kubiki может учитывать релевантные шаблоны, историю прошлых проектов и исполнителей вашей студии при подготовке следующих смет.</p><p>Чем больше вы работаете в Kubiki, тем меньше приходится каждый раз объяснять одно и то же с нуля.</p></div>
-            <div className="lp-memory-panel" aria-label="Контекст студии">
-              <div className="lp-memory-panel-head"><span>Контекст студии</span><small>Используется при подготовке сметы</small></div>
-              <div className="lp-memory-group"><strong>Опыт</strong><div><span>Прошлые проекты</span><span>Шаблоны</span></div></div>
-              <div className="lp-memory-group"><strong>Команда и расчёты</strong><div><span>Исполнители</span><span>Ставки</span><span>Типы оплаты</span></div></div>
-              <div className="lp-memory-group"><strong>Правила студии</strong><div><span>Правила генерации</span><span>Персонализация</span></div></div>
+            <div className="lp-memory-diagram" aria-label="Источники памяти студии сходятся в Kubiki">
+              <svg className="lp-memory-connections" viewBox="0 0 600 310" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M78 48 L300 155 M300 48 L300 155 M522 48 L300 155 M78 155 L300 155 M522 155 L300 155 M78 262 L300 155 M410 262 L300 155" />
+              </svg>
+              <span className="lp-memory-source is-projects">Прошлые проекты</span>
+              <span className="lp-memory-source is-templates">Шаблоны</span>
+              <span className="lp-memory-source is-performers">Исполнители</span>
+              <span className="lp-memory-source is-payments">Типы оплаты</span>
+              <div className="lp-memory-core"><Logo size={28} /><strong>Kubiki</strong><small>Контекст студии</small></div>
+              <span className="lp-memory-source is-rates">Ставки</span>
+              <span className="lp-memory-source is-rules">Правила генерации</span>
+              <span className="lp-memory-source is-personalization">Персонализация</span>
             </div>
           </div>
         </section>
