@@ -28,7 +28,7 @@ export function LandingPage() {
           <div className="lp-hero-copy">
             <p className="lp-eyebrow">Сметы для CG-студий</p>
             <h1 id="hero-title">Kubiki — память вашей студии</h1>
-            <p className="lp-lead">Собирайте сметы из клиентских брифов с учётом шаблонов, прошлых проектов, исполнителей и правил именно вашей студии.</p>
+            <p className="lp-lead">Собирайте сметы из клиентских брифов с учётом шаблонов, прошлых проектов, исполнителей и правил вашей студии. Kubiki AI объединяет накопленные знания в единую память и использует её в работе.</p>
             <div className="lp-hero-action"><Cta /><small>Закрытая beta · Бесплатно для вашей студии</small></div>
           </div>
           <figure className="lp-product-shot">
@@ -44,8 +44,8 @@ export function LandingPage() {
             <div className="lp-workflow-track" aria-hidden="true"><span className="is-active" /><span /><span /><span className="is-done" /></div>
             <div className="lp-workflow-stages">
               <div><strong>Бриф клиента</strong><small>Опишите задачу или импортируйте файл</small></div>
-              <div><strong>Первая версия сметы</strong><small>Kubiki собирает структуру проекта</small></div>
-              <div><strong>Корректировки</strong><small>Вручную или через ИИ-агента</small></div>
+              <div><strong>Первая версия сметы</strong><small>Kubiki AI собирает структуру проекта</small></div>
+              <div><strong>Корректировки</strong><small>Вручную или через Kubiki AI</small></div>
               <div><strong>Готово</strong><small>Проверяете и используете смету</small></div>
             </div>
             <p className="lp-workflow-principle"><span>Вы задаёте проект</span><i>→</i><span>Kubiki собирает основу</span><i>→</i><strong>Вы доводите её до готовой сметы</strong></p>
@@ -54,7 +54,7 @@ export function LandingPage() {
 
         <section className="lp-section lp-memory" id="memory" aria-labelledby="memory-title">
           <div className="lp-container lp-memory-grid">
-            <div><p className="lp-kicker">Память студии</p><h2 id="memory-title">Kubiki знает, как считает именно ваша студия</h2><p className="lp-body-large">Kubiki может учитывать релевантные шаблоны, историю прошлых проектов и исполнителей вашей студии при подготовке следующих смет.</p><p>Чем больше вы работаете в Kubiki, тем меньше приходится каждый раз объяснять одно и то же с нуля.</p></div>
+            <div><p className="lp-kicker">Память студии</p><h2 id="memory-title">Kubiki знает, как считает именно ваша студия</h2><p className="lp-body-large">Kubiki AI может учитывать релевантные шаблоны, историю прошлых проектов и исполнителей вашей студии при подготовке следующих смет.</p><p>Чем больше вы работаете в Kubiki, тем меньше приходится каждый раз объяснять одно и то же с нуля.</p></div>
             <div className="lp-memory-diagram" aria-label="Источники памяти студии сходятся в Kubiki">
               <svg className="lp-memory-connections" viewBox="0 0 600 310" preserveAspectRatio="none" aria-hidden="true">
                 <path d="M78 48 L300 155 M300 48 L300 155 M522 48 L300 155 M78 155 L300 155 M522 155 L300 155 M78 262 L300 155 M410 262 L300 155" />
@@ -74,7 +74,7 @@ export function LandingPage() {
         <section className="lp-section lp-container" id="features" aria-labelledby="compare-title">
           <div className="lp-section-heading lp-process-heading"><p className="lp-kicker">Рабочий процесс</p><h2 id="compare-title"><span>Сметы быстрее.</span><span>Ошибок меньше.</span><span>Контроля больше.</span></h2></div>
           <div className="lp-compare">
-            <article><h3>Обычно</h3><p>Бриф <i>→</i> поиск старой сметы <i>→</i> копирование <i>→</i> сверка ставок <i>→</i> правки <i>→</i> ручной пересчёт <i>→</i> проверка формул <i>→</i> ещё правки</p></article>
+            <article><h3>Обычно</h3><p>Бриф <i>→</i> анализ брифа <i>→</i> сверка с прошлыми проектами <i>→</i> поиск подходящей сметы <i>→</i> копирование <i>→</i> сверка ставок <i>→</i> правки <i>→</i> ручной пересчёт <i>→</i> проверка формул <i>→</i> ещё правки</p></article>
             <article className="is-kubiki"><h3>С Kubiki</h3><p>Бриф <i>→</i> первая версия сметы <i>→</i> корректировки <i>→</i> готово</p></article>
           </div>
         </section>
@@ -86,9 +86,9 @@ export function LandingPage() {
 
         <section className="lp-section lp-container lp-small-features" aria-label="Возможности Kubiki">
           <article>
-            <p className="lp-kicker">AI Edit</p><h2>Дорабатывайте смету через встроенного ИИ-агента</h2><p>Получите структуру проекта, а затем обычным языком попросите Kubiki изменить её.</p>
+            <p className="lp-kicker">KUBIKI AI</p><h2>Дорабатывайте смету обычным языком</h2><p>Получите структуру проекта, а затем обычным языком попросите Kubiki AI изменить её.</p>
             <ul className="lp-commands"><li>«Добавь этап препродакшна»</li><li>«Увеличь сроки композа»</li><li>«Добавь арт-директора»</li><li>«Пересчитай эту часть проекта»</li></ul>
-            <figure className="lp-ai-product-shot"><img src="/ai-edit-product.png" alt="Реальный интерфейс Kubiki со сметой и результатом AI Edit" /><figcaption>AI Edit в рабочей смете Kubiki</figcaption></figure>
+            <figure className="lp-ai-product-shot"><img src="/ai-edit-product.png" alt="Реальный интерфейс Kubiki со сметой и результатом AI Edit" /><figcaption>Kubiki AI в рабочей смете Kubiki</figcaption></figure>
           </article>
           <article>
             <p className="lp-kicker">Импорт</p><h2>Импортируйте готовые сметы</h2><p>Если у студии уже есть готовые сметы, их можно импортировать в Kubiki, доработать и сохранить как шаблоны студии.</p><p>Сохранённые шаблоны Kubiki сможет учитывать при подготовке следующих смет.</p>
