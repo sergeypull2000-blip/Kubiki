@@ -52,21 +52,21 @@
 .lp-section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; margin-bottom: 42px; }
 .lp-section h2, .lp-final h2 { margin: 0; font-size: clamp(32px, 3vw, 46px); line-height: 1.1; letter-spacing: -.042em; }
 .lp-section-heading h2 { max-width: 760px; }
-.lp-centered-action { margin-top: 38px; text-align: center; }
-
-.lp-workflow { overflow: hidden; border: 1px solid var(--lp-line-strong); border-radius: 8px; background: var(--lp-surface); }
-.lp-workflow-tabs { display: flex; gap: 24px; height: 42px; padding-inline: 20px; border-bottom: 1px solid var(--lp-line); background: var(--lp-sunken); }
-.lp-workflow-tabs span { position: relative; display: flex; align-items: center; color: var(--lp-muted); font-size: 12px; }
-.lp-workflow-tabs .is-active { color: var(--lp-text); font-weight: 500; }
-.lp-workflow-tabs .is-active::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; border-radius: 2px 2px 0 0; background: var(--lp-accent); content: ''; }
-.lp-workflow-row { display: grid; grid-template-columns: .9fr auto 1.15fr auto .9fr auto auto; align-items: stretch; }
-.lp-workflow-row article { padding: 24px 20px 26px; }
-.lp-workflow-row > i { display: grid; place-items: center; width: 22px; color: var(--lp-faint); font-style: normal; }
-.lp-workflow-label { display: inline-flex; min-height: 25px; align-items: center; padding: 2px 7px; border: 1px solid var(--lp-line); border-radius: 5px; background: var(--lp-sunken); color: var(--lp-muted); font-size: 11px; }
-.lp-workflow h3 { margin: 18px 0 8px; font-size: 16px; letter-spacing: -.015em; }
-.lp-workflow p { margin: 0; color: var(--lp-muted); font-size: 13px; line-height: 1.55; }
-.lp-workflow-done { display: grid; place-items: center; min-width: 88px; padding: 16px; border-left: 1px solid var(--lp-line); background: var(--lp-accent-soft); }
-.lp-workflow-done span { color: var(--lp-accent-hover); font-size: 12px; font-weight: 600; }
+.lp-how-heading { display: grid; grid-template-columns: minmax(160px, .36fr) 1fr; align-items: end; gap: 32px; margin-bottom: 34px; }
+.lp-workflow { padding: 24px 26px 20px; border-block: 1px solid var(--lp-line-strong); background: var(--lp-surface); }
+.lp-workflow-track { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); align-items: center; margin-inline: 7px; }
+.lp-workflow-track::before { position: absolute; top: 5px; right: calc(25% - 5px); left: 5px; height: 1px; background: var(--lp-line-strong); content: ''; }
+.lp-workflow-track span { position: relative; z-index: 1; width: 10px; height: 10px; border: 2px solid var(--lp-line-strong); border-radius: 3px; background: var(--lp-surface); }
+.lp-workflow-track .is-active { border-color: var(--lp-accent); background: var(--lp-accent); }
+.lp-workflow-track .is-done { border-color: var(--lp-accent); background: var(--lp-accent-soft); }
+.lp-workflow-stages { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 13px; }
+.lp-workflow-stages > div { min-width: 0; padding-right: 24px; }
+.lp-workflow-stages strong, .lp-workflow-stages small { display: block; }
+.lp-workflow-stages strong { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+.lp-workflow-stages small { max-width: 210px; margin-top: 5px; color: var(--lp-muted); font-size: 12px; line-height: 1.45; }
+.lp-workflow-principle { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 22px -6px -2px; padding: 12px; border-top: 1px solid var(--lp-line); color: var(--lp-muted); font-size: 12px; }
+.lp-workflow-principle i { color: var(--lp-faint); font-style: normal; }
+.lp-workflow-principle strong { color: var(--lp-text); font-weight: 500; }
 
 .lp-memory { background: var(--lp-sunken); }
 .lp-memory-grid { display: grid; grid-template-columns: 1.08fr .92fr; align-items: center; gap: 84px; }
@@ -117,9 +117,6 @@
   .lp-hero-copy { text-align: center; }
   .lp-hero h1, .lp-lead { margin-inline: auto; }
   .lp-section { padding-block: 68px; }
-  .lp-workflow-row { grid-template-columns: 1fr; }
-  .lp-workflow-row > i { width: auto; height: 24px; transform: rotate(90deg); }
-  .lp-workflow-done { min-height: 48px; border-top: 1px solid var(--lp-line); border-left: 0; }
   .lp-memory-grid, .lp-knowledge { grid-template-columns: 1fr; gap: 40px; }
   .lp-small-features { grid-template-columns: 1fr; gap: 48px; }
   .lp-small-features article { padding: 0; }
@@ -138,9 +135,18 @@
   .lp-section { padding-block: 56px; }
   .lp-section-heading { display: block; margin-bottom: 30px; }
   .lp-section h2 { font-size: 33px; }
-  .lp-workflow-tabs { gap: 18px; padding-inline: 14px; }
-  .lp-workflow-row article { padding: 20px 16px 22px; }
-  .lp-centered-action { margin-top: 32px; }
+  .lp-how-heading { display: block; margin-bottom: 26px; }
+  .lp-workflow { padding: 20px 16px 16px; }
+  .lp-workflow-track { display: none; }
+  .lp-workflow-stages { grid-template-columns: 1fr; gap: 0; margin: 0; }
+  .lp-workflow-stages > div { position: relative; padding: 0 0 20px 20px; border-left: 1px solid var(--lp-line-strong); }
+  .lp-workflow-stages > div:last-child { padding-bottom: 4px; border-left-color: transparent; }
+  .lp-workflow-stages > div::before { position: absolute; top: 4px; left: -5px; width: 9px; height: 9px; border: 2px solid var(--lp-line-strong); border-radius: 3px; background: var(--lp-surface); content: ''; }
+  .lp-workflow-stages > div:first-child::before { border-color: var(--lp-accent); background: var(--lp-accent); }
+  .lp-workflow-stages > div:last-child::before { border-color: var(--lp-accent); background: var(--lp-accent-soft); }
+  .lp-workflow-stages small { max-width: none; }
+  .lp-workflow-principle { align-items: flex-start; flex-direction: column; gap: 3px; margin-top: 18px; padding: 12px 0 0; }
+  .lp-workflow-principle i { display: none; }
   .lp-memory-grid { gap: 30px; }
   .lp-memory-group { grid-template-columns: 1fr; gap: 8px; }
   .lp-memory-panel-head { align-items: flex-start; flex-direction: column; gap: 2px; }

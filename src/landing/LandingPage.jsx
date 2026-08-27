@@ -39,20 +39,17 @@ export function LandingPage() {
         </section>
 
         <section className="lp-section lp-container" id="how" aria-labelledby="how-title">
-          <div className="lp-section-heading"><p className="lp-kicker">От брифа к рабочей смете</p><h2 id="how-title">Как это работает</h2></div>
-          <div className="lp-workflow" aria-label="Бриф, первая версия сметы, корректировки, готово">
-            <div className="lp-workflow-tabs" aria-hidden="true"><span className="is-active">Структура</span><span>Смета</span><span>Корректировки</span></div>
-            <div className="lp-workflow-row">
-              <article><span className="lp-workflow-label">Бриф</span><h3>Дайте Kubiki бриф</h3><p>Опишите задачу своими словами или импортируйте бриф клиента.</p></article>
-              <i aria-hidden="true">→</i>
-              <article><span className="lp-workflow-label">Первая версия сметы</span><h3>Получите первую версию сметы</h3><p>Kubiki поможет разложить проект на этапы, задачи и работы и собрать первую версию сметы.</p></article>
-              <i aria-hidden="true">→</i>
-              <article><span className="lp-workflow-label">Корректировки</span><h3>Доработайте под себя</h3><p>Меняйте смету вручную или через встроенного ИИ-агента.</p></article>
-              <i aria-hidden="true">→</i>
-              <div className="lp-workflow-done"><span>Готово</span></div>
+          <div className="lp-how-heading"><p className="lp-kicker">Как это работает</p><h2 id="how-title">От брифа до рабочей сметы</h2></div>
+          <div className="lp-workflow" aria-label="Бриф клиента, первая версия сметы, корректировки, готово">
+            <div className="lp-workflow-track" aria-hidden="true"><span className="is-active" /><span /><span /><span className="is-done" /></div>
+            <div className="lp-workflow-stages">
+              <div><strong>Бриф клиента</strong><small>Опишите задачу или импортируйте файл</small></div>
+              <div><strong>Первая версия сметы</strong><small>Kubiki собирает структуру проекта</small></div>
+              <div><strong>Корректировки</strong><small>Вручную или через ИИ-агента</small></div>
+              <div><strong>Готово</strong><small>Проверяете и используете смету</small></div>
             </div>
+            <p className="lp-workflow-principle"><span>Вы задаёте проект</span><i>→</i><span>Kubiki собирает основу</span><i>→</i><strong>Вы доводите её до готовой сметы</strong></p>
           </div>
-          <div className="lp-centered-action"><Cta /></div>
         </section>
 
         <section className="lp-section lp-memory" id="memory" aria-labelledby="memory-title">
