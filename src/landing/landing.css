@@ -52,6 +52,8 @@
 .lp-section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; margin-bottom: 42px; }
 .lp-section h2, .lp-final h2 { margin: 0; font-size: clamp(32px, 3vw, 46px); line-height: 1.1; letter-spacing: -.042em; }
 .lp-section-heading h2 { max-width: 760px; }
+.lp-process-heading { display: block; margin-bottom: 32px; }
+.lp-process-heading h2 span { display: block; }
 .lp-how-heading { display: grid; grid-template-columns: minmax(160px, .36fr) 1fr; align-items: end; gap: 32px; margin-bottom: 34px; }
 .lp-workflow { padding: 24px 26px 20px; border-block: 1px solid var(--lp-line-strong); background: var(--lp-surface); }
 .lp-workflow-track { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); align-items: center; margin-inline: 0; }
