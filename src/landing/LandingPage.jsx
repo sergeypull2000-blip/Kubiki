@@ -88,6 +88,7 @@ export function LandingPage() {
           <article>
             <p className="lp-kicker">AI Edit</p><h2>Дорабатывайте смету через встроенного ИИ-агента</h2><p>Получите структуру проекта, а затем обычным языком попросите Kubiki изменить её.</p>
             <ul className="lp-commands"><li>«Добавь этап препродакшна»</li><li>«Увеличь сроки композа»</li><li>«Добавь арт-директора»</li><li>«Пересчитай эту часть проекта»</li></ul>
+            <figure className="lp-ai-product-shot"><img src="/ai-edit-product.png" alt="Реальный интерфейс Kubiki со сметой и результатом AI Edit" /><figcaption>AI Edit в рабочей смете Kubiki</figcaption></figure>
           </article>
           <article>
             <p className="lp-kicker">Импорт</p><h2>Импортируйте готовые сметы</h2><p>Если у студии уже есть готовые сметы, их можно импортировать в Kubiki, доработать и сохранить как шаблоны студии.</p><p>Сохранённые шаблоны Kubiki сможет учитывать при подготовке следующих смет.</p>
