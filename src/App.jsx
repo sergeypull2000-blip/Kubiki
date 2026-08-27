@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-import KubikiApp from "./kubiki.jsx";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { AuthScreen } from "./AuthScreen.jsx";
 import { useGeistFont } from "./hooks.js";
 import { kubikiAuthClient } from "./backend/betterAuthClient.js";
@@ -9,6 +8,9 @@ import { LegalPage, isLegalRoute } from "./legalDocuments.jsx";
 import { AiDisclosureProvider } from "./components/AiDisclosureProvider.jsx";
 import { resolveAppSessionView } from "./appSessionView.js";
 import { consumeVerificationCallbackError } from "./verificationCallback.js";
+import { LandingPage } from "./landing/LandingPage.jsx";
+
+const KubikiApp = lazy(() => import("./kubiki.jsx"));
 
 function App() {
   useGeistFont();
@@ -38,7 +40,7 @@ function App() {
   };
 
   const finishPasswordReset = () => {
-    globalThis.history?.replaceState({}, "", "/");
+    globalThis.history?.replaceState({}, "", "/login");
     setResetCompleted(true);
     refetch();
   };
@@ -54,8 +56,9 @@ function App() {
   let content;
   if (sessionView.view === "loading") content = <div className="kb-auth-screen"><div className="kb-auth-loading">Проверяем сессию…</div></div>;
   else if (sessionView.view === "reset") content = <AuthScreen mode="reset" resetToken={resetToken} onPasswordUpdated={finishPasswordReset} />;
-  else if (sessionView.view === "auth") content = <AuthScreen mode="signin" verificationError={verificationError} onAuthenticated={refetch} />;
-  else content = <AiDisclosureProvider userId={session.user.id}><KubikiApp key={session.user.id} userId={session.user.id} user={session.user} onSignOut={handleSignOut} /></AiDisclosureProvider>;
+  else if (sessionView.view === "auth" && pathname === "/" && !verificationError) content = <LandingPage />;
+  else if (sessionView.view === "auth") content = <AuthScreen key={pathname} mode={pathname === "/signup" ? "signup" : "signin"} verificationError={verificationError} onAuthenticated={refetch} />;
+  else content = <AiDisclosureProvider userId={session.user.id}><Suspense fallback={<div className="kb-auth-screen"><div className="kb-auth-loading">Загружаем Kubiki…</div></div>}><KubikiApp key={session.user.id} userId={session.user.id} user={session.user} onSignOut={handleSignOut} /></Suspense></AiDisclosureProvider>;
 
   if (isLegalRoute(pathname)) return <><style>{CSS}</style><LegalPage pathname={pathname} /></>;
   return <><style>{CSS}</style>{content}</>;

@@ -15,7 +15,7 @@ const MIN_PASSWORD_LENGTH = 8
    родитель через обновление Better Auth session.
 */
 export function AuthScreen({ mode = 'signin', resetToken, verificationError, onPasswordUpdated, onAuthenticated }) {
-  const [view, setView] = useState(verificationError ? 'verification-error' : mode === 'reset' ? 'reset' : 'signin')
+  const [view, setView] = useState(verificationError ? 'verification-error' : mode === 'reset' ? 'reset' : mode === 'signup' ? 'signup' : 'signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -31,6 +31,8 @@ export function AuthScreen({ mode = 'signin', resetToken, verificationError, onP
     setError('')
     setNotice('')
     setView(next)
+    if (next === 'signin' || next === 'forgot') globalThis.history?.replaceState({}, '', '/login')
+    if (next === 'signup') globalThis.history?.replaceState({}, '', '/signup')
     if (next === 'signup') { setTermsAccepted(false); setPersonalDataAccepted(false) }
   }
 
