@@ -25,8 +25,8 @@ import { AccountControl } from "./AccountControl.jsx";
 import { BetaBadge } from "./BetaBadge.jsx";
 import { shouldHandleExecutorCopy, shouldHandleExecutorPaste } from "../keyboardShortcuts.js";
 
-const WORKSPACE_FIXED_WIDTH = 1250;
-const WORKSPACE_SIDEBAR_GAP = 10;
+const WORKSPACE_FIXED_WIDTH = 1350;
+const WORKSPACE_SIDEBAR_GAP = 24;
 const LEFT_PANEL_RANGE = [210, Number.POSITIVE_INFINITY];
 const RIGHT_PANEL_RANGE = [250, Number.POSITIVE_INFINITY];
 const clampPanelWidth = (value, [min, max], fallback) => Math.min(max, Math.max(min, Number(value) || fallback));
@@ -114,7 +114,12 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
     if (!canvasInner) return;
     const update = () => {
       const rect = canvasInner.getBoundingClientRect();
-      setAiAnchor({ right: Math.max(0, window.innerWidth - (rect.left + rect.width)), width: Math.max(0, rect.width) });
+      const visibleLeft = Math.max(0, rect.left);
+      const visibleRight = Math.min(window.innerWidth, rect.right);
+      setAiAnchor({
+        right: Math.max(12, window.innerWidth - visibleRight - 10),
+        width: Math.max(0, visibleRight - visibleLeft),
+      });
     };
     update();
     const observer = new ResizeObserver(update);
@@ -147,15 +152,6 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, { once: true });
   }, [leftPanelWidth, rightPanelWidth]);
-  useEffect(() => {
-    const constrainPanels = () => {
-      setLeftPanelWidth((width) => Math.min(width, panelViewportMax(LEFT_PANEL_RANGE)));
-      setRightPanelWidth((width) => Math.min(width, panelViewportMax(RIGHT_PANEL_RANGE)));
-    };
-    constrainPanels();
-    window.addEventListener("resize", constrainPanels);
-    return () => window.removeEventListener("resize", constrainPanels);
-  }, []);
   useEffect(() => { localStorage.setItem("kb-workspace-left-width", String(leftPanelWidth)); }, [leftPanelWidth]);
   useEffect(() => { localStorage.setItem("kb-workspace-right-width", String(rightPanelWidth)); }, [rightPanelWidth]);
 
@@ -579,7 +575,7 @@ const toggleAllCollapsed = () =>
               )}
               </div>
             </div>
-            {!editingTemplate && onRequestAiEdit && project.stages.length > 0 && <div ref={globalAiBoundaryRef} className="kb-ai-launcher-wrap" style={{ right: Math.max(0, aiAnchor.right - 10), "--kb-ai-panel-width": `${aiAnchor.width}px` }}>
+            {!editingTemplate && onRequestAiEdit && project.stages.length > 0 && <div ref={globalAiBoundaryRef} className="kb-ai-launcher-wrap" style={{ right: aiAnchor.right, "--kb-ai-panel-width": `${aiAnchor.width}px` }}>
               {globalAiOpen && <AiEditTechnicalModal variant="launcher" closing={globalAiClosing} submitRef={globalAiSubmitRef} outsideBoundaryRef={globalAiBoundaryRef} scope={globalScope} contextLabel="Вся смета" onRequest={onRequestAiEdit} onCancelRequest={onCancelAiEdit} onApply={onApplyAiEdit} onUndo={onUndoAiEdit} canUndo={canUndoAiEdit} onClose={closeGlobalAi} />}
               {canUndoAiEdit && !globalAiOpen && <button type="button" className="kb-ai-undo-chip" onClick={onUndoAiEdit}>Undo AI</button>}
               <button type="button" className={`kb-ai-launcher${globalAiOpen && !globalAiClosing ? " is-open" : ""}`} aria-label={globalAiOpen ? "Предпросмотр изменений" : "Открыть AI-ассистента"} onClick={() => { setLocalAiPopover(null); if (globalAiOpen) globalAiSubmitRef.current?.(); else setGlobalAiOpen(true); }}><ArrowUp size={20} strokeWidth={1.8} /></button>

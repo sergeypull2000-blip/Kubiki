@@ -23,9 +23,17 @@ test("workspace uses edge-to-edge flex center and bounded panel resizers", async
   assert.match(styles, /\.kb-canvas-inner\{width:100%; min-width:0/);
   assert.match(workspace, /const LEFT_PANEL_RANGE = \[210, Number\.POSITIVE_INFINITY\]/);
   assert.match(workspace, /const RIGHT_PANEL_RANGE = \[250, Number\.POSITIVE_INFINITY\]/);
+  assert.match(workspace, /const WORKSPACE_FIXED_WIDTH = 1350/);
+  assert.match(workspace, /const WORKSPACE_SIDEBAR_GAP = 24/);
   assert.match(workspace, /side === "left" \? LEFT_PANEL_RANGE : RIGHT_PANEL_RANGE/);
   assert.match(workspace, /kb-panel-resizer-left/);
   assert.match(workspace, /kb-panel-resizer-right/);
+  assert.match(styles, /--workspace-readable-width: 1000px/);
+  assert.match(styles, /@media\(min-width:1508px\) and \(max-width:1897px\)/);
+  assert.match(styles, /grid-template-columns:210px minmax\(var\(--workspace-readable-width\),var\(--workspace-fixed-width\)\) 250px/);
+  assert.match(styles, /@media\(max-width:1507px\)\{\s*\.kb-panel-shell\{display:none\}/);
+  assert.match(workspace, /const visibleRight = Math\.min\(window\.innerWidth, rect\.right\)/);
+  assert.match(workspace, /right: Math\.max\(12, window\.innerWidth - visibleRight - 10\)/);
 });
 
 test("template editor keeps the reusable left performer quick-access panel and omits the right panel", async () => {
