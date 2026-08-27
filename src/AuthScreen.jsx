@@ -15,7 +15,7 @@ const MIN_PASSWORD_LENGTH = 8
    родитель через обновление Better Auth session.
 */
 export function AuthScreen({ mode = 'signin', resetToken, verificationError, onPasswordUpdated, onAuthenticated }) {
-  const [view, setView] = useState(verificationError ? 'verification-error' : mode === 'reset' ? 'reset' : 'signin')
+  const [view, setView] = useState(verificationError ? 'verification-error' : mode === 'reset' ? 'reset' : mode === 'signup' ? 'signup' : 'signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -220,6 +220,7 @@ export function AuthScreen({ mode = 'signin', resetToken, verificationError, onP
 
   return (
     <div className="kb-auth-screen">
+      {(view === 'signin' || view === 'signup') && <a className="kb-auth-back" href="/" aria-label="Вернуться на главную">←</a>}
       <form className="kb-auth-card" onSubmit={onSubmit}>
         <div className="kb-auth-heading">{heading}</div>
         {subtext && <div className="kb-auth-subtext">{subtext}</div>}

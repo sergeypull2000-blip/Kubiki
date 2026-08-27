@@ -54,7 +54,7 @@ function App() {
   let content;
   if (sessionView.view === "loading") content = <div className="kb-auth-screen"><div className="kb-auth-loading">Проверяем сессию…</div></div>;
   else if (sessionView.view === "reset") content = <AuthScreen mode="reset" resetToken={resetToken} onPasswordUpdated={finishPasswordReset} />;
-  else if (sessionView.view === "auth") content = <AuthScreen mode="signin" verificationError={verificationError} onAuthenticated={refetch} />;
+  else if (sessionView.view === "auth") content = <AuthScreen mode={pathname === "/signup" ? "signup" : "signin"} verificationError={verificationError} onAuthenticated={refetch} />;
   else content = <AiDisclosureProvider userId={session.user.id}><KubikiApp key={session.user.id} userId={session.user.id} user={session.user} onSignOut={handleSignOut} /></AiDisclosureProvider>;
 
   if (isLegalRoute(pathname)) return <><style>{CSS}</style><LegalPage pathname={pathname} /></>;

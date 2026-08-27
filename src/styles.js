@@ -83,7 +83,8 @@ export const CSS = `
 .kb-btn-secondary{border:1px solid var(--line); background:transparent; color:var(--text);
   font-size:var(--fs-base); font-weight:var(--fw-medium); padding:7px 13px; border-radius:6px; cursor:pointer; transition:.15s}
 .kb-btn-secondary:hover{background:var(--accent-soft); border-color:var(--accent)}
-.kb-auth-screen{min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg);font-family:'Geist','Inter',system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--text)}
+.kb-auth-screen{position:relative;min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg);font-family:'Geist','Inter',system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--text)}
+.kb-auth-back{position:absolute;top:24px;left:24px;color:var(--text-muted);font-size:22px;line-height:1;text-decoration:none;transition:color .15s ease}.kb-auth-back:hover{color:var(--text)}.kb-auth-back:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:3px}
 .kb-auth-loading{font-size:var(--fs-base);color:var(--text-muted)}
 .kb-auth-card{width:100%;max-width:360px;display:flex;flex-direction:column;gap:18px;padding:30px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(26,34,48,.06)}
 .kb-auth-heading{font-size:var(--fs-xl);font-weight:var(--fw-semibold);letter-spacing:-.02em}
