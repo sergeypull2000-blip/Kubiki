@@ -54,9 +54,9 @@
 .lp-section-heading h2 { max-width: 760px; }
 .lp-how-heading { display: grid; grid-template-columns: minmax(160px, .36fr) 1fr; align-items: end; gap: 32px; margin-bottom: 34px; }
 .lp-workflow { padding: 24px 26px 20px; border-block: 1px solid var(--lp-line-strong); background: var(--lp-surface); }
-.lp-workflow-track { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); align-items: center; margin-inline: 7px; }
-.lp-workflow-track::before { position: absolute; top: 5px; right: calc(25% - 5px); left: 5px; height: 1px; background: var(--lp-line-strong); content: ''; }
-.lp-workflow-track span { position: relative; z-index: 1; width: 10px; height: 10px; border: 2px solid var(--lp-line-strong); border-radius: 3px; background: var(--lp-surface); }
+.lp-workflow-track { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); align-items: center; margin-inline: 0; }
+.lp-workflow-track::before { position: absolute; top: 5px; right: 12.5%; left: 12.5%; height: 1px; background: var(--lp-line-strong); content: ''; }
+.lp-workflow-track span { position: relative; z-index: 1; justify-self: center; width: 10px; height: 10px; border: 2px solid var(--lp-line-strong); border-radius: 3px; background: var(--lp-surface); }
 .lp-workflow-track .is-active { border-color: var(--lp-accent); background: var(--lp-accent); }
 .lp-workflow-track .is-done { border-color: var(--lp-accent); background: var(--lp-accent-soft); }
 .lp-workflow-stages { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 13px; }
