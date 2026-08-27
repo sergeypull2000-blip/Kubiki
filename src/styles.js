@@ -396,6 +396,7 @@ export const CSS = `
 .kb-card:hover{border-color:var(--line-strong)}
 .kb-card-icon{color:var(--text-faint)}
 .kb-card-name{font-weight:var(--fw-semibold); font-size:var(--fs-base); margin-top:auto; color:var(--text); letter-spacing:-.01em}
+.kb-card-title-edit{width:100%;margin-top:auto}.kb-card-title-edit .kb-card-name{margin-top:0}.kb-card:hover .kb-card-title-edit .kb-title-edit-btn{opacity:1;color:var(--text-muted)}
 .kb-card-name-input{display:block; width:100%; min-width:0; padding:2px 3px; margin-left:-3px; border:1px solid transparent; border-radius:4px; background:transparent; font-family:inherit; line-height:1.35; outline:none}
 .kb-card-name-input:hover{border-color:var(--line)}
 .kb-card-name-input:focus{border-color:var(--accent); background:var(--surface)}

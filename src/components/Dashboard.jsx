@@ -27,6 +27,9 @@ const sheetsLabel = (n) => (n === 1 ? "1 смета" : (n >= 2 && n <= 4 ? `${n}
 
 function EntityCard({ item, template = false, onOpen, onDelete, onMakeTemplate, onToggleFavorite, onEdit, onRename }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(item.name ?? "");
+  const cancelNameEditRef = useRef(false);
   const cardRef = useRef(null);
   useEffect(() => {
     if (!menuOpen) return;
@@ -36,12 +39,27 @@ function EntityCard({ item, template = false, onOpen, onDelete, onMakeTemplate, 
   }, [menuOpen]);
 
   const count = sheetCount(item);
+  const startNameEdit = (event) => {
+    event.stopPropagation();
+    setNameDraft(item.name ?? "");
+    setEditingName(true);
+  };
+  const commitNameEdit = () => {
+    if (!editingName) return;
+    onRename(item.id, nameDraft);
+    setEditingName(false);
+  };
+  const cancelNameEdit = () => {
+    cancelNameEditRef.current = true;
+    setNameDraft(item.name ?? "");
+    setEditingName(false);
+  };
 
   return (
     <div ref={cardRef} className={`kb-card${template ? " kb-card-template" : ""}`}
       draggable={template}
       onDragStart={template ? (event) => { event.dataTransfer.setData("application/x-kubiki-template", item.id); event.dataTransfer.effectAllowed = "move"; } : undefined}
-      onClick={() => onOpen(item)}>
+      onClick={() => { if (!editingName) onOpen(item); }}>
       {template ? (
         <>
           <span className="kb-template-badge">Шаблон</span>
@@ -59,12 +77,34 @@ function EntityCard({ item, template = false, onOpen, onDelete, onMakeTemplate, 
         </button>
       )}
       <div className="kb-card-icon">{template ? <FileText size={19} strokeWidth={1.25} /> : <Box size={19} strokeWidth={1.25} />}</div>
-      <input className="kb-card-name kb-card-name-input"
-        value={template ? (item.templateName ?? item.name ?? "") : (item.name ?? "")}
-        placeholder={template ? "Шаблон без названия" : "Без названия"}
-        aria-label={template ? "Название шаблона" : "Название проекта"}
+      {template ? <input className="kb-card-name kb-card-name-input"
+        value={item.templateName ?? item.name ?? ""}
+        placeholder="Шаблон без названия"
+        aria-label="Название шаблона"
         onClick={(event) => event.stopPropagation()}
-        onChange={(event) => onRename(item.id, event.target.value)} />
+        onChange={(event) => onRename(item.id, event.target.value)} /> :
+        <div className="kb-title-edit kb-card-title-edit">
+          {editingName ? <input className="kb-card-name kb-card-name-input"
+            value={nameDraft}
+            placeholder="Без названия"
+            aria-label="Название проекта"
+            autoFocus
+            onChange={(event) => setNameDraft(event.target.value)}
+            onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onBlur={() => {
+              if (cancelNameEditRef.current) cancelNameEditRef.current = false;
+              else commitNameEdit();
+            }}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === "Enter") event.currentTarget.blur();
+              if (event.key === "Escape") cancelNameEdit();
+            }} /> : <>
+            <span className="kb-card-name kb-title-text" title={item.name || "Название проекта"}>{item.name || "Без названия"}</span>
+            <button type="button" className="kb-title-edit-btn" aria-label="Редактировать название проекта" title="Редактировать название" onClick={startNameEdit}><Pencil size={11} strokeWidth={1.6} /></button>
+          </>}
+        </div>}
       <div className="kb-card-sum">{count <= 1 ? `${formatMoney(projectSum(item))} ₽` : sheetsLabel(count)}</div>
       {count <= 1 && <div className="kb-card-meta">{`${item.stages?.length || 0} этапов`}</div>}
       {!template && <div className="kb-card-actions">

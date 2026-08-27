@@ -58,6 +58,17 @@ test("stage and task titles rest as text and enter explicit pencil edit mode", a
   assert.match(task, /kb-task-title-edit" onMouseDown=\{onTaskMouseDown\}/);
 });
 
+test("dashboard project titles use guarded inline pencil editing", async () => {
+  const dashboard = await source("src/components/Dashboard.jsx");
+  assert.match(dashboard, /if \(!editingName\) onOpen\(item\)/);
+  assert.match(dashboard, /aria-label="Редактировать название проекта"/);
+  assert.match(dashboard, /autoFocus/);
+  assert.match(dashboard, /if \(event\.key === "Enter"\) event\.currentTarget\.blur\(\)/);
+  assert.match(dashboard, /if \(event\.key === "Escape"\) cancelNameEdit\(\)/);
+  assert.match(dashboard, /onMouseDown=\{\(event\) => event\.stopPropagation\(\)\}/);
+  assert.match(dashboard, /else commitNameEdit\(\)/);
+});
+
 test("workspace top-right total shows the final client total (base + markup + tax + VAT)", async () => {
   const workspace = await source("src/components/Workspace.jsx");
   assert.match(workspace, /import \{[^}]*\bprojectTotalWithTax\b[^}]*\} from "\.\.\/calculations\.js"/);
