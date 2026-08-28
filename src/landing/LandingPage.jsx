@@ -100,8 +100,10 @@ export function LandingPage() {
           </article>
         </section>
 
-        <section className="lp-final lp-container" aria-labelledby="final-title">
-          <p className="lp-kicker">Закрытая beta</p><h2 id="final-title">Сейчас Kubiki в закрытой beta</h2><p>Ищем CG-студии, которые готовы попробовать Kubiki на реальных проектах и дать обратную связь.</p><Cta /><small>Бесплатно для вашей студии</small>
+        <section className="lp-final lp-beta-note" aria-labelledby="beta-note-title">
+          <p className="lp-kicker">ЗАКРЫТАЯ BETA</p><h2 id="beta-note-title">Помогите сделать Kubiki удобнее для вашей студии</h2>
+          <p className="lp-beta-note-copy">Мы хотим строить Kubiki вместе с теми, кто будет пользоваться им каждый день. Расскажите, что важно именно вашей студии — и мы обязательно учтём это при разработке.</p>
+          <Cta /><small>Бесплатно для вашей студии</small>
         </section>
       </main>
 

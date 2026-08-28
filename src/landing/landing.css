@@ -1,3 +1,12 @@
+.lp-page { scrollbar-width: auto; -ms-overflow-style: auto; }
+html:has(.lp-page) { overflow-y: scroll !important; scrollbar-width: auto !important; -ms-overflow-style: auto !important; }
+body:has(.lp-page) { overflow-y: visible !important; scrollbar-width: auto !important; -ms-overflow-style: auto !important; }
+html:has(.lp-page) { scrollbar-color: #94a3b8 transparent !important; }
+html:has(.lp-page)::-webkit-scrollbar { width: 12px !important; height: 12px !important; display: block !important; }
+html:has(.lp-page)::-webkit-scrollbar-track { background: transparent !important; }
+html:has(.lp-page)::-webkit-scrollbar-thumb { min-height: 32px; border: 3px solid transparent !important; border-radius: 999px; background-clip: padding-box !important; background-color: #94a3b8 !important; }
+html:has(.lp-page)::-webkit-scrollbar-thumb:hover { background-color: #64748b !important; }
+
 .lp-page {
   --lp-bg: #fcfdfe;
   --lp-surface: #fff;
@@ -126,6 +135,8 @@
 .lp-ai-product-shot img { display: block; width: 100%; height: auto; border: 1px solid var(--lp-line-strong); border-radius: 8px; }
 .lp-ai-product-shot figcaption { margin-top: 7px; color: var(--lp-meta); font-size: 11px; font-weight: 400; line-height: 1.4; }
 .lp-final { display: flex; flex-direction: column; align-items: center; margin-bottom: 64px; padding: 62px 40px; border-block: 1px solid var(--lp-line-strong); background: var(--lp-sunken); text-align: center; }
+.lp-beta-note { width: 100%; max-width: none; }
+.lp-beta-note-copy { max-width: 700px; margin: 22px 0 26px; color: var(--lp-body); font-size: 14px; font-weight: 400; line-height: 1.6; }
 .lp-final h2 { font-size: clamp(34px, 3.3vw, 48px); }
 .lp-final > p:not(.lp-kicker) { max-width: 650px; margin: 18px 0 26px; color: var(--lp-body); font-size: 16px; font-weight: 400; line-height: 1.6; }
 .lp-final small { margin-top: 9px; }
