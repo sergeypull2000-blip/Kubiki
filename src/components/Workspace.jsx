@@ -23,7 +23,7 @@ import { sortQuickAccessItems } from "../quickAccess.js";
 import { createTaskTemplate, createStageTemplate, cloneTaskTemplate, cloneStageTemplate } from "../templates.js";
 import { AccountControl } from "./AccountControl.jsx";
 import { BetaBadge } from "./BetaBadge.jsx";
-import { shouldHandleExecutorCopy, shouldHandleExecutorPaste } from "../keyboardShortcuts.js";
+import { blockGlobalUndo, shouldHandleExecutorCopy, shouldHandleExecutorPaste } from "../keyboardShortcuts.js";
 
 const WORKSPACE_FIXED_WIDTH = 1350;
 const WORKSPACE_SIDEBAR_GAP = 24;
@@ -201,7 +201,9 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
       const mod = e.ctrlKey || e.metaKey;
       if (!mod) return;
       const code = e.code; // физическая клавиша, не зависит от раскладки (RU/EN)
-      if (code === "KeyC") {
+      if (code === "KeyZ") {
+        blockGlobalUndo(e);
+      } else if (code === "KeyC") {
         if (!shouldHandleExecutorCopy(e, window.getSelection?.())) return;
         if (!activeExecutorId) return;
         const found = findExecutor(project, activeExecutorId);
