@@ -91,7 +91,7 @@ export function LandingPage() {
 
         <section className="lp-section lp-container lp-small-features" aria-label="Возможности Kubiki">
           <article id="ai-edit">
-            <p className="lp-kicker">KUBIKI AI</p><h2>Дорабатывайте смету обычным языком</h2><p>Kubiki AI собирает первую версию сметы, а затем помогает дорабатывать её обычными командами.</p>
+            <p className="lp-kicker">KUBIKI AI</p><h2>Дорабатывайте смету обычным языком</h2><p>Kubiki AI собирает первую версию сметы и позволяет дорабатывать её обычными командами.</p>
             <ul className="lp-commands"><li>«Добавь этап препродакшна»</li><li>«Увеличь сроки композа»</li><li>«Добавь арт-директора»</li><li>«Пересчитай эту часть проекта»</li></ul>
             <figure className="lp-ai-product-shot"><img src="/ai-edit-product.png" alt="Реальный интерфейс Kubiki со сметой и результатом AI Edit" /><figcaption>Kubiki AI в рабочей смете Kubiki</figcaption></figure>
           </article>
