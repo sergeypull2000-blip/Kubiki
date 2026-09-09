@@ -17,7 +17,7 @@ export function LandingPage() {
         <a className="lp-brand" href="/" aria-label="Kubiki — главная"><Logo size={24} /><span>Kubiki</span></a>
         <nav className="lp-nav" aria-label="Навигация по странице">
           <a href="#how">Как это работает</a>
-          <a href="#memory">Память студии</a>
+          <a href="#memory">Память компании</a>
           <a href="#ai-edit">Kubiki AI</a>
           <a href="/login">Войти</a>
         </nav>
@@ -26,10 +26,10 @@ export function LandingPage() {
       <main>
         <section className="lp-hero lp-container" aria-labelledby="hero-title">
           <div className="lp-hero-copy">
-            <p className="lp-eyebrow">Сметы для CG-студий</p>
+            <p className="lp-eyebrow">Сметы для креативных индустрий</p>
             <h1 id="hero-title">Загрузите бриф.<br />Kubiki AI соберёт смету за Вас.</h1>
-            <p className="lp-lead">Kubiki AI разбирает клиентский бриф, собирает этапы и задачи, добавляет исполнителей и рассчитывает первую версию сметы с учётом шаблонов, прошлых проектов и ставок именно Вашей студии.</p>
-            <div className="lp-hero-action"><Cta /><small>Закрытая beta · Бесплатно для Вашей студии</small></div>
+            <p className="lp-lead">Kubiki AI разбирает клиентский бриф, собирает этапы и задачи, добавляет исполнителей и рассчитывает первую версию сметы с учётом шаблонов, прошлых проектов и ставок именно вашей компании.</p>
+            <div className="lp-hero-action"><Cta /><small>Закрытая beta · Бесплатно для вашей компании</small></div>
           </div>
           <figure className="lp-product-shot">
             {screenshotAvailable && <img src="/kubiki-workspace-hero-4x.png" alt="Актуальный интерфейс Kubiki со сметой" fetchPriority="high" onError={() => setScreenshotAvailable(false)} />}
@@ -61,8 +61,8 @@ export function LandingPage() {
 
         <section className="lp-section lp-memory" id="memory" aria-labelledby="memory-title">
           <div className="lp-container lp-memory-grid">
-            <div><p className="lp-kicker">Память студии</p><h2 id="memory-title">AI, которому не нужно<br />каждый раз объяснять<br />всё с нуля</h2><p className="lp-body-large">Kubiki может хранить шаблоны, прошлые проекты, исполнителей, ставки и правила Вашей студии.</p><p>Kubiki AI использует релевантный контекст при подготовке новых смет — поэтому работает не только с текущим брифом, но и с накопленными знаниями Вашей команды.</p></div>
-            <div className="lp-memory-diagram" aria-label="Источники памяти студии сходятся в Kubiki">
+            <div><p className="lp-kicker">Память компании</p><h2 id="memory-title">AI, которому не нужно<br />каждый раз объяснять<br />всё с нуля</h2><p className="lp-body-large">Kubiki может хранить шаблоны, прошлые проекты, исполнителей, ставки и правила вашей компании.</p><p>Kubiki AI использует релевантный контекст при подготовке новых смет — поэтому работает не только с текущим брифом, но и с накопленными знаниями Вашей команды.</p></div>
+            <div className="lp-memory-diagram" aria-label="Источники памяти компании сходятся в Kubiki">
               <svg className="lp-memory-connections" viewBox="0 0 600 310" preserveAspectRatio="none" aria-hidden="true">
                 <path d="M78 48 L300 155 M300 48 L300 155 M522 48 L300 155 M78 155 L300 155 M522 155 L300 155 M78 262 L300 155 M410 262 L300 155" />
               </svg>
@@ -70,7 +70,7 @@ export function LandingPage() {
               <span className="lp-memory-source is-templates">Шаблоны</span>
               <span className="lp-memory-source is-performers">Исполнители</span>
               <span className="lp-memory-source is-payments">Типы оплаты</span>
-              <div className="lp-memory-core"><Logo size={28} /><strong>Kubiki AI</strong><small>Контекст студии</small></div>
+              <div className="lp-memory-core"><Logo size={28} /><strong>Kubiki AI</strong><small>Контекст компании</small></div>
               <span className="lp-memory-source is-rates">Ставки</span>
               <span className="lp-memory-source is-rules">Правила генерации</span>
               <span className="lp-memory-source is-personalization">Персонализация</span>
@@ -92,8 +92,8 @@ export function LandingPage() {
         </section>
 
         <section className="lp-section lp-container lp-knowledge" aria-labelledby="knowledge-title">
-          <div><p className="lp-kicker">Опыт команды</p><h2 id="knowledge-title">Знания не должны жить в голове одного продюсера</h2><p>Kubiki сохраняет информацию об исполнителях, ставках, рабочих правилах студии, типовых проектах, этапах и задачах, чтобы всё нужное всегда было под рукой.</p></div>
-          <div><figure className="lp-knowledge-shot"><div className="lp-knowledge-images"><img className="is-primary" src="/kubiki-personalization.png" alt="Персонализация и правила студии в Kubiki" /><img className="is-supporting" src="/kubiki-quick-access.png" alt="Быстрый доступ с исполнителями и ставками в Kubiki" /></div><figcaption>Правила студии, исполнители и ставки в Kubiki</figcaption></figure></div>
+          <div><p className="lp-kicker">Опыт команды</p><h2 id="knowledge-title">Знания не должны жить в голове одного продюсера</h2><p>Kubiki сохраняет информацию об исполнителях, ставках, рабочих правилах компании, типовых проектах, этапах и задачах, чтобы всё нужное всегда было под рукой.</p></div>
+          <div><figure className="lp-knowledge-shot"><div className="lp-knowledge-images"><img className="is-primary" src="/kubiki-personalization.png" alt="Персонализация и правила компании в Kubiki" /><img className="is-supporting" src="/kubiki-quick-access.png" alt="Быстрый доступ с исполнителями и ставками в Kubiki" /></div><figcaption>Правила компании, исполнители и ставки в Kubiki</figcaption></figure></div>
         </section>
 
         <section className="lp-section lp-container lp-small-features" aria-label="Возможности Kubiki">
@@ -102,7 +102,7 @@ export function LandingPage() {
             <ul className="lp-commands"><li>«Добавь этап препродакшна»</li><li>«Увеличь сроки композа»</li><li>«Добавь арт-директора»</li><li>«Пересчитай эту часть проекта»</li></ul>
           </article>
             <article id="import">
-            <p className="lp-kicker">Импорт</p><h2>Импортируйте готовые сметы</h2><p>Если у студии уже есть готовые сметы, их можно импортировать в Kubiki, доработать и сохранить как шаблоны студии.</p>
+            <p className="lp-kicker">Импорт</p><h2>Импортируйте готовые сметы</h2><p>Если у вашей компании уже есть готовые сметы, их можно импортировать в Kubiki, доработать и сохранить как шаблоны компании.</p>
           </article>
         </section>
 
@@ -110,7 +110,7 @@ export function LandingPage() {
           <div className="lp-export-finale-copy">
             <p className="lp-kicker">ГОТОВАЯ СМЕТА</p>
             <h2 id="export-finale-title">Собрали. Проверили. Отправили клиенту.</h2>
-            <p>Настройте оформление сметы под Вашу студию и экспортируйте готовый результат для отправки клиенту.</p>
+            <p>Настройте оформление сметы под вашу компанию и экспортируйте готовый результат для отправки клиенту.</p>
           </div>
           <figure className="lp-export-finale-shot">
             <img src="/kubiki-export-settings.png" alt="Предпросмотр готовой сметы и настройки экспорта в Kubiki" loading="lazy" />
@@ -119,9 +119,9 @@ export function LandingPage() {
         </section>
 
         <section className="lp-final lp-beta-note" aria-labelledby="beta-note-title">
-          <p className="lp-kicker">ЗАКРЫТАЯ BETA</p><h2 id="beta-note-title">Помогите сделать Kubiki удобнее для Вашей студии</h2>
-          <p className="lp-beta-note-copy">Мы хотим строить Kubiki вместе с теми, кто будет пользоваться им каждый день. Расскажите, что важно именно Вашей студии — и мы обязательно учтём это при разработке.</p>
-          <Cta /><small>Бесплатно для Вашей студии</small>
+          <p className="lp-kicker">ЗАКРЫТАЯ BETA</p><h2 id="beta-note-title">Помогите сделать Kubiki удобнее для вашей компании</h2>
+          <p className="lp-beta-note-copy">Мы хотим строить Kubiki вместе с теми, кто будет пользоваться им каждый день. Расскажите, что важно именно вашей компании — и мы обязательно учтём это при разработке.</p>
+          <Cta /><small>Бесплатно для вашей компании</small>
         </section>
       </main>
 

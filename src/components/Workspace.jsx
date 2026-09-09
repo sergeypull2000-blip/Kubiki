@@ -521,7 +521,7 @@ const toggleAllCollapsed = () =>
           <main className="kb-canvas" onMouseDown={clearSelection}>
             <div className="kb-canvas-scroll" onScroll={(event) => setCollapseButtonCompact(event.currentTarget.scrollTop > 12)}>
               <div ref={canvasInnerRef} className="kb-canvas-inner">
-              {project.metadata?.aiGeneration?.knowledgeNames?.length > 0 && <div className="kb-generation-knowledge">Использованы знания студии: {project.metadata.aiGeneration.knowledgeNames.join(", ")}</div>}
+              {project.metadata?.aiGeneration?.knowledgeNames?.length > 0 && <div className="kb-generation-knowledge">Использованы знания компании: {project.metadata.aiGeneration.knowledgeNames.join(", ")}</div>}
               {!isEmpty && <button type="button" className={`kb-collapse-all-btn${collapseButtonCompact ? " is-compact" : ""}`}
                 onMouseDown={(event) => event.stopPropagation()}
                 onClick={toggleAllCollapsed}

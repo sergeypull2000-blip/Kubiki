@@ -497,7 +497,7 @@ export function UnifiedImportEmptyState({ onPickFile, onGenerate, disabled = fal
           <FileSpreadsheet size={15} strokeWidth={1.5} /><span>{file.name}</span>
           <button type="button" className="kb-icon-btn" onClick={() => setFile(null)} title="Удалить файл"><X size={14} strokeWidth={1.5} /></button>
         </div>}
-        {disabled && <div className="kb-ai-hydration-note">Загружаем знания студии…</div>}
+        {disabled && <div className="kb-ai-hydration-note">Загружаем знания компании…</div>}
       </div>
     </div>
   );

@@ -50,5 +50,5 @@ test("Initial generation starts with Enter and keeps Shift+Enter for a newline",
 test("professional SYSTEM_PROMPT explicitly defines cost as internal cost", () => {
   const source = readFileSync(new URL("../api/generate-estimate.js", import.meta.url), "utf8");
   assert.match(source, /cost = внутренняя себестоимость задачи/);
-  assert.match(source, /Не добавляй агентский или студийный маркап, не добавляй налоги и не генерируй клиентскую цену/);
+  assert.match(source, /Не добавляй маркап, не добавляй налоги и не генерируй клиентскую цену/);
 });

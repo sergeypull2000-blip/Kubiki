@@ -166,7 +166,7 @@ function ProjectSourceModal({ mode, aiGenerationReady, onClose, onSubmit }) {
         {isImport && <textarea className="kb-generate-textarea kb-project-source-description is-secondary" rows={3}
           value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Дополнительные инструкции (необязательно)" />}
         <div className="kb-modal-actions">
-          {!aiGenerationReady && <span className="kb-ai-hydration-note">Загружаем знания студии…</span>}
+          {!aiGenerationReady && <span className="kb-ai-hydration-note">Загружаем знания компании…</span>}
           <button type="button" className="kb-btn kb-btn-ghost" onClick={onClose}>Отмена</button>
           <button type="button" className="kb-btn kb-btn-primary" disabled={!canSubmit}
             onClick={submit}>

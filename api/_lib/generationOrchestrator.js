@@ -9,7 +9,7 @@ export const GENERATED_ESTIMATE_MAX_TOKENS = 8000;
 const emit = (logger, requestId, event, success, diagnostic = undefined) => { try { logger({ event, requestId, success, ...(diagnostic ? { diagnostic } : {}) }); } catch {} };
 
 /* Диагностика для generation_compile: имена, подставленные детерминированным
-   авто-матчем «Использовать шаблоны студии» (roleAutoMatch, ключи auto-role-*). */
+   автоподбором «Использовать шаблоны компании» (roleAutoMatch, ключи auto-role-*). */
 function collectAutoMatchedPerformerNames(estimate) {
   const names = [];
   for (const stage of estimate?.stages || []) {

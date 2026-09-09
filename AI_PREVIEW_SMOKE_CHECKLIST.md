@@ -20,7 +20,7 @@ Run this checklist only on the authenticated Vercel Preview environment after th
 
 - Add a uniquely named Project/Stage/Task template and a Performer with a matching role.
 - Generate a matching brief and confirm the estimate remains relevant to the current brief.
-- Confirm the Project shows one compact “Использованы знания студии” line after acceptance and after reload.
+- Confirm the Project shows one compact “Использованы знания компании” line after acceptance and after reload.
 - Confirm no phone, email, Telegram, notes, `exportSettings`, tax data or full library appears in request payloads/logs.
 - Configure AI personalization, generate again and confirm it affects decomposition without overriding explicit brief requirements.
 - Disable history and confirm no historical project query is made; enable it explicitly and confirm only a bounded shortlist is used.

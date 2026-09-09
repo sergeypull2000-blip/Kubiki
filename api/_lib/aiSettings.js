@@ -17,7 +17,7 @@ export async function loadOwnAiSettings(client, userId) {
 }
 
 /* Fail-closed настройки для сбоя чтения из БД: ошибка сервера не должна молча
-   включать «шаблоны студии». Дефолт normalizeAiSettings (useStudioTemplates: true)
+   включать «шаблоны компании». Дефолт normalizeAiSettings (useStudioTemplates: true)
    применим только к новому пользователю без сохранённых настроек. */
 export function failClosedServerAiSettings() {
   return normalizeAiSettings({ use_studio_templates: false }, { defaults: false });

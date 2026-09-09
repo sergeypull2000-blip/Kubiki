@@ -43,7 +43,7 @@ export async function loadOwnSelectedKnowledge(client, userId, selection) {
     }).filter(Boolean);
   }
   const result = await client.from("template_libraries").select("user_id,library_data").eq("user_id", userId).maybeSingle();
-  const row = data(result, "Не удалось загрузить выбранные знания студии");
+  const row = data(result, "Не удалось загрузить выбранные знания компании");
   if (!row || row.user_id !== userId) return [];
   const library = row.library_data && typeof row.library_data === "object" ? row.library_data : {};
   const keyByKind = { project_template: "projectTemplates", stage_template: "stageTemplates", task_template: "taskTemplates" };

@@ -69,6 +69,6 @@ test("optional consent UI stays unchecked, cancellable and uses one equal-height
   assert.match(styles, /kb-ai-settings-modal \.kb-ai-history-option\{[^}]*min-height:92px/);
   assert.match(legal, /"\/ai-improvement-consent": AiImprovementConsent/);
   assert.match(legal, /количественные и стоимостные параметры \(например, ставки, прямые затраты и итоговые значения\)/);
-  assert.match(legal, /не публикуются и не предоставляются другим пользователям для анализа цен, ставок или коммерческих условий конкретной студии/);
+  assert.match(legal, /не публикуются и не предоставляются другим пользователям для анализа цен, ставок или коммерческих условий конкретной компании/);
   assert.match(legal, /включая при необходимости количественные и стоимостные параметры сметы/);
 });
