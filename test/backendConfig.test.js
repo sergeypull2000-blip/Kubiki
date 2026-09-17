@@ -3,12 +3,17 @@ import assert from "node:assert/strict";
 import { parseBackendConfig, parseBetterAuthConfig, parseObjectStorageConfig, parseSmtpConfig } from "../server/config.js";
 
 test("backend config uses safe beta pool-facing defaults", () => {
-  const config = parseBackendConfig({ NODE_ENV: "test", DATABASE_URL: "postgresql://app:secret@db.internal:5432/kubiki" });
+  const config = parseBackendConfig({
+    NODE_ENV: "test",
+    DATABASE_URL: "postgresql://app:secret@db.internal:5432/kubiki",
+    KUBIKI_TRUSTED_ORIGINS: "https://app.example.test/",
+  });
   assert.equal(config.host, "127.0.0.1");
   assert.equal(config.port, 3000);
   assert.equal(config.bodyLimitBytes, 1_048_576);
   assert.equal(config.readinessTimeoutMillis, 2_000);
   assert.equal(config.trustProxy, false);
+  assert.deepEqual(config.trustedOrigins, ["https://app.example.test"]);
   assert.equal(config.production, false);
 });
 

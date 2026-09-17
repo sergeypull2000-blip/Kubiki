@@ -37,6 +37,37 @@ const API_HANDLERS = new Map([
   ["/api/usage", usage],
 ]);
 const AI_PATHS = new Set(["/api/generate-estimate", "/api/edit-estimate", "/api/parse-excel"]);
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const JSON_METHODS = new Set(["POST", "PUT", "PATCH"]);
+
+function mediaType(request) {
+  return String(request.headers["content-type"] || "").split(";", 1)[0].trim().toLowerCase();
+}
+
+function mutationRequestError(request, trustedOrigins, expectedMediaType) {
+  const origin = request.headers.origin;
+  if (origin) {
+    let canonicalOrigin;
+    try { canonicalOrigin = new URL(origin).origin; } catch { return { status: 403, error: "origin_not_allowed" }; }
+    if (canonicalOrigin !== origin || !trustedOrigins.includes(canonicalOrigin)) {
+      return { status: 403, error: "origin_not_allowed" };
+    }
+  } else if (request.headers["sec-fetch-site"] === "cross-site") {
+    return { status: 403, error: "origin_not_allowed" };
+  }
+  if (expectedMediaType && mediaType(request) !== expectedMediaType) {
+    return { status: 415, error: "unsupported_media_type" };
+  }
+  return null;
+}
+
+function rejectUnsafeMutation(request, response, trustedOrigins, expectedMediaType) {
+  const error = mutationRequestError(request, trustedOrigins, expectedMediaType);
+  if (!error) return false;
+  sendJson(response, error.status, { error: error.error });
+  request.resume();
+  return true;
+}
 
 async function readJson(request, limit) {
   const chunks = [];
@@ -78,7 +109,7 @@ async function isDatabaseReady(pool, timeoutMillis) {
   }
 }
 
-export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMillis, authHandler, authenticate, serverData, ownerApi, objectStorage, requestSecurity, frontendDistPath = DEFAULT_FRONTEND_DIST_PATH, logger = console }) {
+export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMillis, trustedOrigins = [], authHandler, authenticate, serverData, ownerApi, objectStorage, requestSecurity, frontendDistPath = DEFAULT_FRONTEND_DIST_PATH, logger = console }) {
   return createServer((request, response) => {
     for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.setHeader(name, value);
     const contentLength = Number(request.headers["content-length"] || 0);
@@ -123,6 +154,8 @@ export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMill
     }
 
     if (logoRoute && authenticate && ownerApi && objectStorage) {
+      const expectedMediaType = logoRoute === "POST" ? "multipart/form-data" : undefined;
+      if (["POST", "DELETE"].includes(logoRoute) && rejectUnsafeMutation(request, response, trustedOrigins, expectedMediaType)) return;
       void (async () => {
         const authContext = await authenticate(request);
         if (!authContext) return sendJson(response, 401, { error: "authentication_required" });
@@ -137,6 +170,9 @@ export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMill
 
     const ownerRoute = matchOwnerApiRoute(request.method, path);
     if (ownerRoute && authenticate && ownerApi) {
+      const expectsJson = JSON_METHODS.has(request.method) || ownerRoute.name === "DELETE /api/legal-acceptances";
+      if (MUTATING_METHODS.has(request.method)
+        && rejectUnsafeMutation(request, response, trustedOrigins, expectsJson ? "application/json" : undefined)) return;
       void (async () => {
         const authContext = await authenticate(request);
         if (!authContext) return sendJson(response, 401, { error: "authentication_required" });
@@ -160,6 +196,8 @@ export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMill
           await handler(request, vercelResponse(response));
           return;
         }
+        if (!["GET", "HEAD"].includes(request.method)
+          && rejectUnsafeMutation(request, response, trustedOrigins, "application/json")) return;
         const authContext = await authenticate(request);
         if (!authContext) return sendJson(response, 401, { error: "authentication_required" });
         if (requestSecurity && !requestSecurity.allowApi(authContext.user.id, path)) return sendJson(response, 429, { error: "too_many_requests" });

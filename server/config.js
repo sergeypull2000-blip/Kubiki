@@ -36,6 +36,14 @@ function parseBoolean(value, fallback, name) {
   throw new Error(`${name} must be true or false`);
 }
 
+function parseTrustedOrigins(value) {
+  return String(value || "").split(",").map((entry) => entry.trim()).filter(Boolean).map((origin) => {
+    const parsed = new URL(origin);
+    if (parsed.origin !== origin.replace(/\/$/, "")) throw new Error("KUBIKI_TRUSTED_ORIGINS must contain origins only");
+    return parsed.origin;
+  });
+}
+
 export function parseBackendConfig(env = process.env) {
   const databaseUrl = parseDatabaseUrl(env.DATABASE_URL);
   if (!env.NODE_ENV) throw new Error("NODE_ENV is required to start the backend");
@@ -58,6 +66,7 @@ export function parseBackendConfig(env = process.env) {
       "READINESS_TIMEOUT_MILLIS",
     ),
     trustProxy: parseBoolean(env.TRUST_PROXY, false, "TRUST_PROXY"),
+    trustedOrigins: parseTrustedOrigins(env.KUBIKI_TRUSTED_ORIGINS),
     production,
   };
 }
@@ -72,11 +81,7 @@ export function parseBetterAuthConfig(env = process.env) {
   } catch {
     throw new Error("BETTER_AUTH_URL must be a valid absolute URL");
   }
-  const trustedOrigins = String(env.KUBIKI_TRUSTED_ORIGINS || "").split(",").map((value) => value.trim()).filter(Boolean);
-  for (const origin of trustedOrigins) {
-    const parsed = new URL(origin);
-    if (parsed.origin !== origin.replace(/\/$/, "")) throw new Error("KUBIKI_TRUSTED_ORIGINS must contain origins only");
-  }
+  const trustedOrigins = parseTrustedOrigins(env.KUBIKI_TRUSTED_ORIGINS);
   if (env.NODE_ENV === "production") {
     if (baseUrl.protocol !== "https:") throw new Error("BETTER_AUTH_URL must use HTTPS in production");
     if (!trustedOrigins.length) throw new Error("KUBIKI_TRUSTED_ORIGINS is required in production");

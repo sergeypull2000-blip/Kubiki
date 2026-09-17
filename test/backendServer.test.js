@@ -46,7 +46,7 @@ test("request security rejects limited auth and API requests before expensive wo
   t.after(() => server.close());
   const authResponse = await fetch(`${baseUrl}/api/auth/sign-in/email`, { method: "POST", body: "{}" });
   assert.equal(authResponse.status, 429);
-  const apiResponse = await fetch(`${baseUrl}/api/extract-doc`, { method: "POST", body: "{}" });
+  const apiResponse = await fetch(`${baseUrl}/api/extract-doc`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
   assert.equal(apiResponse.status, 429);
 });
 
@@ -58,7 +58,7 @@ test("document parsing rejects a concurrent request before reading its body", as
     serverData: {},
   });
   t.after(() => server.close());
-  const response = await fetch(`${baseUrl}/api/extract-doc`, { method: "POST", body: "{}" });
+  const response = await fetch(`${baseUrl}/api/extract-doc`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
   assert.equal(response.status, 429);
   assert.deepEqual(await response.json(), { error: "request_in_progress" });
 });
@@ -93,6 +93,52 @@ test("standalone API rejects an unauthenticated request with 401", async (t) => 
   const response = await fetch(`${baseUrl}/api/usage`);
   assert.equal(response.status, 401);
   assert.deepEqual(await response.json(), { error: "authentication_required" });
+});
+
+test("AI mutations reject an untrusted sibling origin before authentication", async (t) => {
+  let authenticated = false;
+  const { server, baseUrl } = await listen({ query: async () => ({ rows: [] }) }, {
+    trustedOrigins: ["https://app.example.test"],
+    authenticate: async () => { authenticated = true; return { user: { id: "current-user" } }; },
+    serverData: {},
+  });
+  t.after(() => server.close());
+  const response = await fetch(`${baseUrl}/api/generate-estimate`, {
+    method: "POST",
+    headers: { origin: "https://evil.example.test", "content-type": "text/plain" },
+    body: "{}",
+  });
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { error: "origin_not_allowed" });
+  assert.equal(authenticated, false);
+  const wrongType = await fetch(`${baseUrl}/api/generate-estimate`, {
+    method: "POST",
+    headers: { origin: "https://app.example.test", "content-type": "text/plain" },
+    body: "{}",
+  });
+  assert.equal(wrongType.status, 415);
+  assert.deepEqual(await wrongType.json(), { error: "unsupported_media_type" });
+  assert.equal(authenticated, false);
+});
+
+test("Better Auth routes remain delegated to Better Auth", async (t) => {
+  let delegated = false;
+  const { server, baseUrl } = await listen({ query: async () => ({ rows: [] }) }, {
+    trustedOrigins: ["https://app.example.test"],
+    authHandler: async (_request, response) => {
+      delegated = true;
+      response.writeHead(204);
+      response.end();
+    },
+  });
+  t.after(() => server.close());
+  const response = await fetch(`${baseUrl}/api/auth/sign-in/email`, {
+    method: "POST",
+    headers: { origin: "https://evil.example.test", "content-type": "text/plain" },
+    body: "{}",
+  });
+  assert.equal(response.status, 204);
+  assert.equal(delegated, true);
 });
 
 test("all AI APIs require the current disclosure before invoking an AI handler", async (t) => {
