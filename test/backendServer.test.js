@@ -33,7 +33,7 @@ test("health endpoint has no database dependency", async (t) => {
 
 test("request security rejects limited auth and API requests before expensive work", async (t) => {
   const requestSecurity = {
-    allowAuth: () => false,
+    consumeAuth: () => ({ allowed: false, retryAfterSeconds: 37 }),
     allowApi: () => false,
     acquire: () => assert.fail("concurrency must not be acquired after a rate rejection"),
   };
@@ -44,8 +44,12 @@ test("request security rejects limited auth and API requests before expensive wo
     serverData: {},
   });
   t.after(() => server.close());
-  const authResponse = await fetch(`${baseUrl}/api/auth/sign-in/email`, { method: "POST", body: "{}" });
+  const authResponse = await fetch(`${baseUrl}/api/auth/sign-in/email`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: "{}",
+  });
   assert.equal(authResponse.status, 429);
+  assert.equal(authResponse.headers.get("retry-after"), "37");
+  assert.deepEqual(await authResponse.json(), { error: "too_many_requests" });
   const apiResponse = await fetch(`${baseUrl}/api/extract-doc`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
   assert.equal(apiResponse.status, 429);
 });
@@ -121,24 +125,59 @@ test("AI mutations reject an untrusted sibling origin before authentication", as
   assert.equal(authenticated, false);
 });
 
-test("Better Auth routes remain delegated to Better Auth", async (t) => {
-  let delegated = false;
+test("auth prechecks reject unsafe POST requests and do not charge exempt methods", async (t) => {
+  const delegated = [];
+  let consumed = 0;
   const { server, baseUrl } = await listen({ query: async () => ({ rows: [] }) }, {
     trustedOrigins: ["https://app.example.test"],
-    authHandler: async (_request, response) => {
-      delegated = true;
+    requestSecurity: {
+      consumeAuth: () => { consumed += 1; return { allowed: true, retryAfterSeconds: null }; },
+    },
+    authHandler: async (request, response) => {
+      delegated.push(request.method);
       response.writeHead(204);
       response.end();
     },
   });
   t.after(() => server.close());
-  const response = await fetch(`${baseUrl}/api/auth/sign-in/email`, {
+
+  const options = await fetch(`${baseUrl}/api/auth/sign-in/email`, { method: "OPTIONS" });
+  assert.equal(options.status, 204);
+  const wrongMethod = await fetch(`${baseUrl}/api/auth/sign-in/email`);
+  assert.equal(wrongMethod.status, 204);
+  assert.equal(consumed, 0);
+
+  const wrongOrigin = await fetch(`${baseUrl}/api/auth/sign-in/email`, {
     method: "POST",
-    headers: { origin: "https://evil.example.test", "content-type": "text/plain" },
+    headers: { origin: "https://sibling.example.test", "content-type": "application/json" },
     body: "{}",
   });
-  assert.equal(response.status, 204);
-  assert.equal(delegated, true);
+  assert.equal(wrongOrigin.status, 403);
+  assert.deepEqual(await wrongOrigin.json(), { error: "origin_not_allowed" });
+  const wrongType = await fetch(`${baseUrl}/api/auth/sign-in/email`, {
+    method: "POST",
+    headers: { origin: "https://app.example.test", "content-type": "text/plain" },
+    body: "{}",
+  });
+  assert.equal(wrongType.status, 415);
+  assert.deepEqual(await wrongType.json(), { error: "unsupported_media_type" });
+  const crossSite = await fetch(`${baseUrl}/api/auth/sign-in/email`, {
+    method: "POST",
+    headers: { "sec-fetch-site": "cross-site", "content-type": "application/json" },
+    body: "{}",
+  });
+  assert.equal(crossSite.status, 403);
+  assert.equal(consumed, 0);
+  assert.deepEqual(delegated, ["OPTIONS", "GET"]);
+
+  const valid = await fetch(`${baseUrl}/api/auth/sign-in/email`, {
+    method: "POST",
+    headers: { origin: "https://app.example.test", "content-type": "application/json" },
+    body: "{}",
+  });
+  assert.equal(valid.status, 204);
+  assert.equal(consumed, 1);
+  assert.deepEqual(delegated, ["OPTIONS", "GET", "POST"]);
 });
 
 test("all AI APIs require the current disclosure before invoking an AI handler", async (t) => {

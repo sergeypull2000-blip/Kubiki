@@ -5,8 +5,9 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createBackendServer } from "../server/app.js";
 import { createBetterAuthHttpHandler } from "../server/betterAuthHttp.js";
+import { createBetterAuthRateLimitCustomRules } from "../server/requestSecurity.js";
 
-async function createFixture(t) {
+async function createFixture(t, { requestSecurity } = {}) {
   const db = { user: [], session: [], account: [], verification: [] };
   const emails = { verification: [], reset: [] };
   const legalAcceptances = [];
@@ -18,17 +19,21 @@ async function createFixture(t) {
   let verificationFailures = 0;
   let resetFailures = 0;
   let mountedHandler = async () => { throw new Error("auth handler is not ready"); };
+  const trustedOrigins = [];
   const server = createBackendServer({
     pool: { query: async () => ({ rows: [] }) },
     bodyLimitBytes: 1_048_576,
     readinessTimeoutMillis: 20,
     authHandler: (...args) => mountedHandler(...args),
+    requestSecurity,
+    trustedOrigins,
     logger: { error() {} },
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
   const baseURL = `http://127.0.0.1:${server.address().port}`;
+  trustedOrigins.push(baseURL);
   const auth = betterAuth({
     database: memoryAdapter(db),
     secret: "kubiki-http-bridge-regression-secret",
@@ -230,6 +235,51 @@ test("email sign-in with an invalid password does not distinguish account state"
   assert.equal(results[0].body.code, "INVALID_EMAIL_OR_PASSWORD");
 });
 
+test("Better Auth custom rules exempt rejected requests but preserve its valid-request boundary", async () => {
+  const baseURL = "http://better-auth-rate-limit.example.test";
+  const auth = betterAuth({
+    database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
+    secret: "kubiki-better-auth-rate-limit-test-secret",
+    baseURL,
+    trustedOrigins: [baseURL],
+    emailAndPassword: { enabled: true },
+    rateLimit: {
+      enabled: true,
+      window: 60,
+      max: 100,
+      storage: "memory",
+      customRules: createBetterAuthRateLimitCustomRules([baseURL]),
+    },
+  });
+  const ip = "198.51.100.73";
+  const call = (method, headers = {}, body) => auth.handler(new Request(`${baseURL}/api/auth/sign-in/email`, {
+    method,
+    headers: { "x-forwarded-for": ip, ...headers },
+    body,
+  }));
+
+  const exempt = [
+    ...await Promise.all(Array.from({ length: 4 }, () => call("OPTIONS"))),
+    ...await Promise.all(Array.from({ length: 4 }, () => call("GET"))),
+    ...await Promise.all(Array.from({ length: 4 }, () => call("POST", {
+      origin: "https://sibling.example.test", "content-type": "application/json",
+    }, JSON.stringify({ email: "missing@example.test", password: "wrong-password" })))),
+    ...await Promise.all(Array.from({ length: 4 }, () => call("POST", {
+      origin: baseURL, "content-type": "text/plain",
+    }, "{}"))),
+  ];
+  assert.ok(exempt.every((response) => response.status !== 429));
+
+  const validStatuses = [];
+  for (let index = 0; index < 4; index += 1) {
+    const response = await call("POST", {
+      origin: baseURL, "content-type": "application/json",
+    }, JSON.stringify({ email: "missing@example.test", password: "wrong-password" }));
+    validStatuses.push(response.status);
+  }
+  assert.deepEqual(validStatuses, [401, 401, 401, 429]);
+});
+
 test("Better Auth HTTP bridge rejects signup before Better Auth unless both legal acceptances are explicit", async (t) => {
   const fixture = await createFixture(t);
   const { baseURL, db, legalAcceptances } = fixture;
@@ -402,6 +452,49 @@ test("public email flows have identical HTTP responses for new, unverified, and 
   assert.equal(fixture.emails.reset.length, resetCountBefore + 2, "only existing accounts receive password-reset mail");
 });
 
+test("auth rate-limit responses remain identical for new, unverified, and verified emails", async (t) => {
+  let blocked = false;
+  const fixture = await createFixture(t, {
+    requestSecurity: {
+      consumeAuth: () => blocked
+        ? { allowed: false, retryAfterSeconds: 41 }
+        : { allowed: true, retryAfterSeconds: null },
+    },
+  });
+  const password = "correct-horse-battery-staple";
+  const unverifiedEmail = "limited-unverified@example.test";
+  const verifiedEmail = "limited-verified@example.test";
+  for (const email of [unverifiedEmail, verifiedEmail]) {
+    const response = await fetch(`${fixture.baseURL}/api/auth/sign-up/email`, jsonRequest(legalSignUp({
+      name: "Limited Existing", email, password,
+    }), fixture.baseURL));
+    assert.equal(response.status, 200);
+  }
+  fixture.db.user.find((user) => user.email === verifiedEmail).emailVerified = true;
+  const usersBefore = fixture.db.user.length;
+  const messagesBefore = fixture.emails.verification.length;
+  blocked = true;
+
+  const results = [];
+  for (const email of ["limited-new@example.test", unverifiedEmail, verifiedEmail]) {
+    const response = await fetch(`${fixture.baseURL}/api/auth/sign-up/email`, jsonRequest(legalSignUp({
+      name: "Limited Attempt", email, password,
+    }), fixture.baseURL));
+    results.push({
+      status: response.status,
+      retryAfter: response.headers.get("retry-after"),
+      body: await response.json(),
+    });
+  }
+  assert.deepEqual(results, Array.from({ length: 3 }, () => ({
+    status: 429,
+    retryAfter: "41",
+    body: { error: "too_many_requests" },
+  })));
+  assert.equal(fixture.db.user.length, usersBefore);
+  assert.equal(fixture.emails.verification.length, messagesBefore);
+});
+
 test("public resend and password-reset responses do not reveal mail delivery failures", async (t) => {
   const fixture = await createFixture(t);
   const email = "delivery-failure@example.test";
@@ -424,17 +517,20 @@ test("bridge normalizes an explicit Better Auth duplicate error without querying
   const authHandler = createBetterAuthHttpHandler(async () => Response.json({
     code: "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
   }, { status: 422 }));
+  const trustedOrigins = [];
   const server = createBackendServer({
     pool: { query: async () => ({ rows: [] }) },
     bodyLimitBytes: 1_048_576,
     readinessTimeoutMillis: 20,
     authHandler,
+    trustedOrigins,
     logger: { error() {} },
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
   const baseURL = `http://127.0.0.1:${server.address().port}`;
+  trustedOrigins.push(baseURL);
 
   const response = await fetch(`${baseURL}/api/auth/sign-up/email`, jsonRequest(legalSignUp({
     name: "Existing", email: "existing@example.test", password: "correct-horse-battery-staple",

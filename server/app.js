@@ -9,6 +9,7 @@ import { matchOwnerApiRoute, handleOwnerApiRoute } from "./ownerApiRoutes.js";
 import { MAX_LOGO_REQUEST_BYTES, handleLogoRoute, matchLogoRoute } from "./logoRoutes.js";
 import { serveFrontend } from "./frontend.js";
 import { LEGAL_DOCUMENT_VERSIONS } from "../src/legalConfig.js";
+import { inspectAuthRateLimitRequest } from "./requestSecurity.js";
 
 const DEFAULT_FRONTEND_DIST_PATH = fileURLToPath(new URL("../dist", import.meta.url));
 
@@ -24,8 +25,8 @@ const SECURITY_HEADERS = {
   "permissions-policy": "camera=(), microphone=(), geolocation=()",
 };
 
-function sendJson(response, statusCode, body) {
-  response.writeHead(statusCode, { ...SECURITY_HEADERS, ...JSON_HEADERS });
+function sendJson(response, statusCode, body, headers = {}) {
+  response.writeHead(statusCode, { ...SECURITY_HEADERS, ...JSON_HEADERS, ...headers });
   response.end(JSON.stringify(body));
 }
 
@@ -139,10 +140,21 @@ export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMill
 
     const path = pathname;
     if (path.startsWith("/api/auth/") && authHandler) {
-      if (requestSecurity && !requestSecurity.allowAuth(request, path)) {
-        sendJson(response, 429, { error: "too_many_requests" });
+      const authInspection = inspectAuthRateLimitRequest(request, path, trustedOrigins);
+      if (authInspection.rejection) {
+        sendJson(response, authInspection.rejection.status, { error: authInspection.rejection.error });
         request.resume();
         return;
+      }
+      if (requestSecurity && authInspection.shouldCount) {
+        const decision = requestSecurity.consumeAuth(request, path);
+        if (!decision.allowed) {
+          sendJson(response, 429, { error: "too_many_requests" }, {
+            "retry-after": String(decision.retryAfterSeconds),
+          });
+          request.resume();
+          return;
+        }
       }
       void authHandler(request, response).catch((error) => {
         const requestId = request.headers["x-request-id"] || crypto.randomUUID();

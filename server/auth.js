@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import pg from "pg";
 import { parseBackendConfig, parseBetterAuthConfig } from "./config.js";
 import { createAuthEmailSender } from "./email.js";
+import { createBetterAuthRateLimitCustomRules } from "./requestSecurity.js";
 
 const { Pool } = pg;
 
@@ -61,7 +62,13 @@ export function createBetterAuth({ pool = authPool, config = authConfig, emailSe
     secret: config.secret,
     baseURL: config.baseUrl,
     trustedOrigins: config.trustedOrigins,
-    rateLimit: { enabled: true, window: 60, max: 100, storage: "memory" },
+    rateLimit: {
+      enabled: true,
+      window: 60,
+      max: 100,
+      storage: "memory",
+      customRules: createBetterAuthRateLimitCustomRules(config.trustedOrigins),
+    },
     emailVerification: {
       sendVerificationEmail: emailSender.sendVerificationEmail,
       sendOnSignUp: false,
