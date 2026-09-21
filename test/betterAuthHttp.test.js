@@ -5,9 +5,15 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createBackendServer } from "../server/app.js";
 import { createBetterAuthHttpHandler } from "../server/betterAuthHttp.js";
+import { createAuthEmailSender } from "../server/email.js";
+import {
+  EMAIL_DELIVERY_CLASSES,
+  createAuthEmailDeliveryLimiter,
+  runWithEmailDeliveryClass,
+} from "../server/emailDeliveryLimiter.js";
 import { createBetterAuthRateLimitCustomRules } from "../server/requestSecurity.js";
 
-async function createFixture(t, { requestSecurity } = {}) {
+async function createFixture(t, { requestSecurity, authEmailSender } = {}) {
   const db = { user: [], session: [], account: [], verification: [] };
   const emails = { verification: [], reset: [] };
   const legalAcceptances = [];
@@ -34,6 +40,23 @@ async function createFixture(t, { requestSecurity } = {}) {
   t.after(() => server.close());
   const baseURL = `http://127.0.0.1:${server.address().port}`;
   trustedOrigins.push(baseURL);
+  const emailSender = authEmailSender || {
+    async sendVerificationEmail(message) {
+      if (verificationFailures > 0) {
+        verificationFailures -= 1;
+        throw new Error("injected verification delivery failure");
+      }
+      callOrder.push("verification_email");
+      emails.verification.push(message);
+    },
+    async sendPasswordResetEmail(message) {
+      if (resetFailures > 0) {
+        resetFailures -= 1;
+        throw new Error("injected reset delivery failure");
+      }
+      emails.reset.push(message);
+    },
+  };
   const auth = betterAuth({
     database: memoryAdapter(db),
     secret: "kubiki-http-bridge-regression-secret",
@@ -41,25 +64,12 @@ async function createFixture(t, { requestSecurity } = {}) {
     emailVerification: {
       sendOnSignUp: false,
       autoSignInAfterVerification: true,
-      async sendVerificationEmail(message) {
-        if (verificationFailures > 0) {
-          verificationFailures -= 1;
-          throw new Error("injected verification delivery failure");
-        }
-        callOrder.push("verification_email");
-        emails.verification.push(message);
-      },
+      sendVerificationEmail: emailSender.sendVerificationEmail,
     },
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true,
-      async sendResetPassword(message) {
-        if (resetFailures > 0) {
-          resetFailures -= 1;
-          throw new Error("injected reset delivery failure");
-        }
-        emails.reset.push(message);
-      },
+      sendResetPassword: emailSender.sendPasswordResetEmail,
     },
     rateLimit: { enabled: false },
   });
@@ -90,9 +100,10 @@ async function createFixture(t, { requestSecurity } = {}) {
       publicUsers.splice(0, publicUsers.length, ...publicUsers.filter((id) => id !== userId));
       legalAcceptances.splice(0, legalAcceptances.length, ...legalAcceptances.filter((row) => row.userId !== userId));
     },
-    sendSignUpVerificationEmail: ({ email, callbackURL, headers }) => auth.api.sendVerificationEmail({
-      body: { email, callbackURL }, headers,
-    }),
+    sendSignUpVerificationEmail: ({ email, callbackURL, headers }) => runWithEmailDeliveryClass(
+      EMAIL_DELIVERY_CLASSES.SIGNUP,
+      () => auth.api.sendVerificationEmail({ body: { email, callbackURL }, headers }),
+    ),
   });
   return {
     auth, baseURL, db, emails, legalAcceptances, publicUsers, rollbacks, callOrder,
@@ -202,12 +213,14 @@ test("unverified user still cannot sign in with valid credentials", async (t) =>
     name: "Still Unverified", email, password: "correct-horse-battery-staple",
   }), fixture.baseURL));
 
+  const emailCount = fixture.emails.verification.length;
   const signIn = await fetch(`${fixture.baseURL}/api/auth/sign-in/email`, jsonRequest({
     email, password: "correct-horse-battery-staple",
   }, fixture.baseURL));
   assert.equal(signIn.status, 403);
   assert.equal((await signIn.json()).code, "EMAIL_NOT_VERIFIED");
   assert.equal(signIn.headers.getSetCookie().length, 0);
+  assert.equal(fixture.emails.verification.length, emailCount, "sendOnSignIn remains disabled");
 });
 
 test("email sign-in with an invalid password does not distinguish account state", async (t) => {
@@ -511,6 +524,102 @@ test("public resend and password-reset responses do not reveal mail delivery fai
   const reset = await fetch(`${fixture.baseURL}/api/auth/request-password-reset`, jsonRequest({ email }, fixture.baseURL));
   assert.equal(reset.status, 200);
   assert.deepEqual(await reset.json(), genericPasswordResetResponse);
+});
+
+test("signup, resend, and unverified password reset share the PostgreSQL delivery gate", async (t) => {
+  const consumedScopes = [];
+  const smtpMessages = [];
+  const deliveryLimiter = createAuthEmailDeliveryLimiter({
+    hmacKey: Buffer.alloc(32, 5),
+    logger: { error() {} },
+    repository: {
+      async assertReady() {},
+      async pruneExpired() { return 0; },
+      async consume(buckets) {
+        consumedScopes.push(buckets.map(({ scope }) => scope));
+        return true;
+      },
+    },
+  });
+  const authEmailSender = createAuthEmailSender({
+    config: { from: "Kubiki <mailer@example.test>" },
+    deliveryLimiter,
+    transport: { async sendMail(message) { smtpMessages.push(message); } },
+    logger: { error() {} },
+  });
+  const fixture = await createFixture(t, { authEmailSender });
+  const email = "delivery-gate-unverified@example.test";
+
+  const signup = await fetch(`${fixture.baseURL}/api/auth/sign-up/email`, jsonRequest(legalSignUp({
+    name: "Delivery Gate", email, password: "correct-horse-battery-staple",
+  }), fixture.baseURL));
+  const resend = await fetch(`${fixture.baseURL}/api/auth/send-verification-email`, jsonRequest({ email }, fixture.baseURL));
+  const reset = await fetch(`${fixture.baseURL}/api/auth/request-password-reset`, jsonRequest({
+    email, redirectTo: `${fixture.baseURL}/reset-password`,
+  }, fixture.baseURL));
+
+  assert.deepEqual(await signup.json(), genericSignUpResponse);
+  assert.deepEqual(await resend.json(), genericEmailResponse);
+  assert.deepEqual(await reset.json(), genericPasswordResetResponse);
+  assert.equal(fixture.db.user[0].emailVerified, false, "password reset remains available before verification");
+  assert.equal(smtpMessages.length, 3);
+  assert.ok(consumedScopes[0].includes("smtp:signup"));
+  assert.ok(consumedScopes[1].includes("smtp:resend"));
+  assert.ok(consumedScopes[2].includes("smtp:password_reset"));
+});
+
+test("delivery limiter denial stays generic for every account state", async (t) => {
+  let smtpCalls = 0;
+  let limiterCalls = 0;
+  let denialReason = "rate_limited";
+  const authEmailSender = createAuthEmailSender({
+    config: { from: "Kubiki <mailer@example.test>" },
+    deliveryLimiter: {
+      async consume() {
+        limiterCalls += 1;
+        return { allowed: false, reason: denialReason };
+      },
+    },
+    transport: { async sendMail() { smtpCalls += 1; } },
+    logger: { error() {} },
+  });
+  const fixture = await createFixture(t, { authEmailSender });
+  const password = "correct-horse-battery-staple";
+  const unverified = "denied-unverified@example.test";
+  const verified = "denied-verified@example.test";
+  for (const email of [unverified, verified]) {
+    const response = await fetch(`${fixture.baseURL}/api/auth/sign-up/email`, jsonRequest(legalSignUp({
+      name: "Denied Delivery", email, password,
+    }), fixture.baseURL));
+    assert.deepEqual(await response.json(), genericSignUpResponse);
+  }
+  fixture.db.user.find((user) => user.email === verified).emailVerified = true;
+  const callsBeforeSignIn = limiterCalls;
+  const signIn = await fetch(`${fixture.baseURL}/api/auth/sign-in/email`, jsonRequest({
+    email: verified,
+    password,
+  }, fixture.baseURL));
+  assert.equal(signIn.status, 200);
+  assert.ok(signIn.headers.getSetCookie().length > 0);
+  assert.equal(limiterCalls, callsBeforeSignIn, "verified sign-in must not use the email limiter");
+
+  for (denialReason of ["rate_limited", "storage_error"]) {
+    const resendResults = [];
+    const resetResults = [];
+    for (const email of ["denied-missing@example.test", unverified, verified]) {
+      const resend = await fetch(`${fixture.baseURL}/api/auth/send-verification-email`, jsonRequest({ email }, fixture.baseURL));
+      resendResults.push({ status: resend.status, retryAfter: resend.headers.get("retry-after"), body: await resend.json() });
+      const reset = await fetch(`${fixture.baseURL}/api/auth/request-password-reset`, jsonRequest({ email }, fixture.baseURL));
+      resetResults.push({ status: reset.status, retryAfter: reset.headers.get("retry-after"), body: await reset.json() });
+    }
+    assert.deepEqual(resendResults, Array.from({ length: 3 }, () => ({
+      status: 200, retryAfter: null, body: genericEmailResponse,
+    })));
+    assert.deepEqual(resetResults, Array.from({ length: 3 }, () => ({
+      status: 200, retryAfter: null, body: genericPasswordResetResponse,
+    })));
+  }
+  assert.equal(smtpCalls, 0);
 });
 
 test("bridge normalizes an explicit Better Auth duplicate error without querying account state", async (t) => {

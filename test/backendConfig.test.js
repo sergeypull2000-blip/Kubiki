@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseBackendConfig, parseBetterAuthConfig, parseObjectStorageConfig, parseSmtpConfig } from "../server/config.js";
+import {
+  parseAuthEmailRateLimitConfig,
+  parseBackendConfig,
+  parseBetterAuthConfig,
+  parseObjectStorageConfig,
+  parseSmtpConfig,
+} from "../server/config.js";
 
 test("backend config uses safe beta pool-facing defaults", () => {
   const config = parseBackendConfig({
@@ -64,6 +70,20 @@ test("SMTP config requires a complete, valid server-side configuration", () => {
   assert.throws(() => parseSmtpConfig({}), /SMTP_PORT is required/);
   assert.throws(() => parseSmtpConfig({ ...env, SMTP_PORT: "70000" }), /SMTP_PORT/);
   assert.throws(() => parseSmtpConfig({ ...env, SMTP_SECURE: "yes" }), /SMTP_SECURE/);
+});
+
+test("auth email limiter requires a separate exact 32-byte base64 key", () => {
+  const encoded = Buffer.alloc(32, 7).toString("base64");
+  assert.deepEqual(parseAuthEmailRateLimitConfig({
+    AUTH_EMAIL_RATE_LIMIT_HMAC_KEY: encoded,
+  }).hmacKey, Buffer.alloc(32, 7));
+  assert.throws(() => parseAuthEmailRateLimitConfig({}), /AUTH_EMAIL_RATE_LIMIT_HMAC_KEY/);
+  assert.throws(() => parseAuthEmailRateLimitConfig({
+    AUTH_EMAIL_RATE_LIMIT_HMAC_KEY: "not-base64",
+  }), /base64/);
+  assert.throws(() => parseAuthEmailRateLimitConfig({
+    AUTH_EMAIL_RATE_LIMIT_HMAC_KEY: Buffer.alloc(31).toString("base64"),
+  }), /32 bytes/);
 });
 
 test("S3-compatible storage config keeps credentials backend-only and uses short-lived URLs", () => {

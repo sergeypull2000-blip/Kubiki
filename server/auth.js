@@ -1,8 +1,14 @@
 import { betterAuth } from "better-auth";
 import pg from "pg";
-import { parseBackendConfig, parseBetterAuthConfig } from "./config.js";
+import {
+  parseAuthEmailRateLimitConfig,
+  parseBackendConfig,
+  parseBetterAuthConfig,
+} from "./config.js";
 import { createAuthEmailSender } from "./email.js";
+import { createAuthEmailDeliveryLimiter } from "./emailDeliveryLimiter.js";
 import { createBetterAuthRateLimitCustomRules } from "./requestSecurity.js";
+import { createEmailDeliveryLimitRepository } from "./repositories/emailDeliveryLimitRepository.js";
 
 const { Pool } = pg;
 
@@ -15,6 +21,9 @@ const connectionString = isSchemaGeneration
 const authConfig = isSchemaGeneration
   ? { secret: "stage-1-schema-generation-only-secret", baseUrl: "http://localhost:3000" }
   : parseBetterAuthConfig(process.env);
+const emailRateLimitConfig = isSchemaGeneration
+  ? null
+  : parseAuthEmailRateLimitConfig(process.env);
 
 function createSchemaGenerationPool() {
   const client = {
@@ -48,13 +57,24 @@ export const authPool =
         connectionTimeoutMillis: 5_000,
       });
 
+export const emailDeliveryLimiter = isSchemaGeneration
+  ? {
+      async assertReady() {},
+      async consume() { return { allowed: true, reason: null }; },
+    }
+  : createAuthEmailDeliveryLimiter({
+      repository: createEmailDeliveryLimitRepository(authPool),
+      hmacKey: emailRateLimitConfig.hmacKey,
+    });
+
 const defaultEmailSender = isSchemaGeneration
   ? createAuthEmailSender({
       config: { from: "schema-generation@localhost" },
       transport: { async sendMail() {} },
+      deliveryLimiter: emailDeliveryLimiter,
       logger: { error() {} },
     })
-  : createAuthEmailSender();
+  : createAuthEmailSender({ deliveryLimiter: emailDeliveryLimiter });
 
 export function createBetterAuth({ pool = authPool, config = authConfig, emailSender = defaultEmailSender } = {}) {
   return betterAuth({

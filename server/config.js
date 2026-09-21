@@ -90,6 +90,21 @@ export function parseBetterAuthConfig(env = process.env) {
   return { secret: env.BETTER_AUTH_SECRET, baseUrl: baseUrl.toString(), trustedOrigins };
 }
 
+export function parseAuthEmailRateLimitConfig(env = process.env) {
+  const encoded = required(
+    env.AUTH_EMAIL_RATE_LIMIT_HMAC_KEY,
+    "AUTH_EMAIL_RATE_LIMIT_HMAC_KEY",
+  );
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded) || encoded.length % 4 !== 0) {
+    throw new Error("AUTH_EMAIL_RATE_LIMIT_HMAC_KEY must be standard base64");
+  }
+  const hmacKey = Buffer.from(encoded, "base64");
+  if (hmacKey.length !== 32 || hmacKey.toString("base64") !== encoded) {
+    throw new Error("AUTH_EMAIL_RATE_LIMIT_HMAC_KEY must encode exactly 32 bytes");
+  }
+  return { hmacKey };
+}
+
 export function parseSmtpConfig(env = process.env) {
   const port = parsePositiveInteger(required(env.SMTP_PORT, "SMTP_PORT"), undefined, "SMTP_PORT");
   if (port > 65_535) throw new Error("SMTP_PORT must not exceed 65535");

@@ -39,16 +39,21 @@ export function createSmtpTransport(config) {
 export function createAuthEmailSender({
   config = parseSmtpConfig(process.env),
   transport = createSmtpTransport(config),
+  deliveryLimiter,
   logger = console,
 } = {}) {
+  if (!deliveryLimiter?.consume) throw new TypeError("Auth email delivery limiter is required");
   const send = async ({ kind, to, url }) => {
+    const decision = await deliveryLimiter.consume({ email: to, kind });
+    if (!decision.allowed) return { delivered: false, reason: decision.reason };
     const content = renderEmail(kind, url);
     try {
       await transport.sendMail({ from: config.from, to, subject: SUBJECTS[kind], ...content });
+      return { delivered: true, reason: null };
     } catch {
       // Deliberately omit transport errors, recipients and auth URLs: they can contain secrets.
       logger.error?.("SMTP authentication email delivery failed", { kind });
-      throw new Error("Authentication email delivery failed");
+      return { delivered: false, reason: "smtp_error" };
     }
   };
   return {

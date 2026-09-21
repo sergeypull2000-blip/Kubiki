@@ -6,7 +6,7 @@ const migrationDirectory = new URL("../db/migrations/", import.meta.url);
 
 test("target migrations are ordered from Better Auth identity to application tables", async () => {
   const files = (await readdir(migrationDirectory)).sort();
-  assert.deepEqual(files, ["001_better_auth_1_7_1.generated.sql", "002_app_baseline.sql", "003_add_company_position.sql", "004_ai_usage_cycle_anchor.sql", "005_user_legal_acceptances.sql", "006_ai_feedback_samples.sql"]);
+  assert.deepEqual(files, ["001_better_auth_1_7_1.generated.sql", "002_app_baseline.sql", "003_add_company_position.sql", "004_ai_usage_cycle_anchor.sql", "005_user_legal_acceptances.sql", "006_ai_feedback_samples.sql", "007_auth_email_delivery_rate_limits.sql"]);
 });
 
 test("generated Better Auth 1.7.1 schema contains only configured core models", async () => {
@@ -19,6 +19,16 @@ test("generated Better Auth 1.7.1 schema contains only configured core models", 
   assert.equal((sql.match(/create table/g) || []).length, 4);
   assert.match(sql, /"id" uuid default pg_catalog\.gen_random_uuid\(\)/);
   assert.match(sql, /account_issuer_accountId_uidx/);
+});
+
+test("auth email limiter migration stores only bounded HMAC subjects", async () => {
+  const sql = await readFile(new URL("007_auth_email_delivery_rate_limits.sql", migrationDirectory), "utf8");
+  assert.match(sql, /create table auth\.email_delivery_rate_limits/);
+  assert.match(sql, /subject_hash bytea not null/);
+  assert.match(sql, /octet_length\(subject_hash\) = 32/);
+  assert.match(sql, /primary key \(bucket_scope, subject_hash, window_seconds\)/);
+  assert.match(sql, /email_delivery_rate_limits_expires_at_idx/);
+  assert.doesNotMatch(sql, /email_address|recipient_email/i);
 });
 
 test("application baseline preserves Stage 0 schema invariants", async () => {

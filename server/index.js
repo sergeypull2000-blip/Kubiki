@@ -4,6 +4,7 @@ import { parseBackendConfig, parseObjectStorageConfig } from "./config.js";
 import { closeDatabasePool, createDatabasePool } from "./db.js";
 import { auth, authPool } from "./auth.js";
 import { createBetterAuthHttpHandler } from "./betterAuthHttp.js";
+import { EMAIL_DELIVERY_CLASSES, runWithEmailDeliveryClass } from "./emailDeliveryLimiter.js";
 import { createRequestAuthenticator } from "./requestAuth.js";
 import { createServerDataRepository } from "./repositories/serverDataRepository.js";
 import { createUsageRepository } from "./repositories/usageRepository.js";
@@ -26,10 +27,13 @@ export async function startBackend({ env = process.env, logger = console } = {})
     logger,
     recordSignUpAcceptances: (authUserId) => recordSignUpLegalAcceptances(pool, authUserId),
     rollbackSignUp: (authUserId) => rollbackFailedSignUp(pool, authUserId),
-    sendSignUpVerificationEmail: ({ email, callbackURL, headers }) => auth.api.sendVerificationEmail({
-      body: { email, callbackURL },
-      headers,
-    }),
+    sendSignUpVerificationEmail: ({ email, callbackURL, headers }) => runWithEmailDeliveryClass(
+      EMAIL_DELIVERY_CLASSES.SIGNUP,
+      () => auth.api.sendVerificationEmail({
+        body: { email, callbackURL },
+        headers,
+      }),
+    ),
   });
   const server = createBackendServer({ pool, authHandler, authenticate, serverData, ownerApi, objectStorage, requestSecurity, logger, ...config });
   await new Promise((resolve, reject) => {
