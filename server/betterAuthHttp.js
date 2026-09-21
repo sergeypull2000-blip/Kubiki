@@ -61,18 +61,50 @@ async function writeWebResponse(response, webResponse) {
 }
 
 const SIGN_UP_PATH = "/api/auth/sign-up/email";
+const SEND_VERIFICATION_EMAIL_PATH = "/api/auth/send-verification-email";
+const REQUEST_PASSWORD_RESET_PATH = "/api/auth/request-password-reset";
+const PUBLIC_EMAIL_RESPONSE_MINIMUM_MS = 500;
+const GENERIC_SIGN_UP_RESPONSE = Object.freeze({
+  status: true,
+  verificationEmailResendAvailable: true,
+});
+const GENERIC_EMAIL_RESPONSE = Object.freeze({ status: true });
+const GENERIC_PASSWORD_RESET_RESPONSE = Object.freeze({
+  status: true,
+  message: "If this email exists in our system, check your email for the reset link",
+});
+const DUPLICATE_SIGN_UP_CODES = new Set([
+  "USER_ALREADY_EXISTS",
+  "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
+]);
+
+function normalizedJsonResponse(webResponse, body) {
+  const headers = new Headers(webResponse?.headers);
+  headers.delete("content-length");
+  headers.set("content-type", "application/json");
+  return Response.json(body, { status: 200, headers });
+}
+
+async function enforceMinimumResponseTime(startedAt) {
+  const remaining = PUBLIC_EMAIL_RESPONSE_MINIMUM_MS - (Date.now() - startedAt);
+  if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
+}
 
 export function createBetterAuthHttpHandler(handler, {
   recordSignUpAcceptances,
   rollbackSignUp,
   sendSignUpVerificationEmail,
-  classifyExistingSignUp,
   logger = console,
 } = {}) {
   if (typeof handler !== "function") throw new TypeError("Better Auth handler must be a function");
   return async (request, response) => {
     const webRequest = toWebRequest(request);
-    const isSignUp = new URL(webRequest.url).pathname === SIGN_UP_PATH && webRequest.method === "POST";
+    const pathname = new URL(webRequest.url).pathname;
+    const isPost = webRequest.method === "POST";
+    const isSignUp = pathname === SIGN_UP_PATH && isPost;
+    const isSendVerificationEmail = pathname === SEND_VERIFICATION_EMAIL_PATH && isPost;
+    const isRequestPasswordReset = pathname === REQUEST_PASSWORD_RESET_PATH && isPost;
+    const publicEmailResponseStartedAt = Date.now();
     let signUpBody;
     if (isSignUp) {
       signUpBody = await webRequest.clone().json().catch(() => null);
@@ -80,19 +112,24 @@ export function createBetterAuthHttpHandler(handler, {
         return writeWebResponse(response, Response.json({ code: "LEGAL_ACCEPTANCE_REQUIRED" }, { status: 400 }));
       }
     }
-    let webResponse = await handler(webRequest);
+    let webResponse;
+    try {
+      webResponse = await handler(webRequest);
+    } catch (error) {
+      if (!isSendVerificationEmail && !isRequestPasswordReset) throw error;
+      logger.error("Public auth email request failed", { route: pathname });
+      webResponse = normalizedJsonResponse(
+        undefined,
+        isSendVerificationEmail ? GENERIC_EMAIL_RESPONSE : GENERIC_PASSWORD_RESET_RESPONSE,
+      );
+    }
     if (!(webResponse instanceof Response)) {
       throw new TypeError("Better Auth handler must return a Response");
     }
-    if (isSignUp && !webResponse.ok && classifyExistingSignUp) {
+    if (isSignUp && !webResponse.ok) {
       const duplicate = await webResponse.clone().json().catch(() => null);
-      if (duplicate?.code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL") {
-        const state = await classifyExistingSignUp(signUpBody?.email);
-        if (state === "verified") {
-          webResponse = Response.json({ code: "ACCOUNT_EXISTS_VERIFIED" }, { status: 409 });
-        } else if (state === "unverified") {
-          webResponse = Response.json({ code: "ACCOUNT_EXISTS_UNVERIFIED" }, { status: 409 });
-        }
+      if (DUPLICATE_SIGN_UP_CODES.has(duplicate?.code)) {
+        webResponse = normalizedJsonResponse(webResponse, GENERIC_SIGN_UP_RESPONSE);
       }
     }
     if (isSignUp && webResponse.ok && recordSignUpAcceptances) {
@@ -121,16 +158,22 @@ export function createBetterAuthHttpHandler(handler, {
               headers: webRequest.headers,
             });
           } catch {
-            const headers = new Headers(webResponse.headers);
-            headers.delete("content-length");
-            webResponse = Response.json({
-              ...result,
-              verificationEmailSent: false,
-              verificationEmailResendAvailable: true,
-            }, { status: webResponse.status, headers });
+            logger.error("Signup verification email request failed", { route: pathname });
           }
         }
       }
+    }
+    if (isSignUp && webResponse.ok) {
+      webResponse = normalizedJsonResponse(webResponse, GENERIC_SIGN_UP_RESPONSE);
+    } else if (isSendVerificationEmail && (webResponse.ok || webResponse.status >= 500)) {
+      if (!webResponse.ok) logger.error("Public auth email response was suppressed", { route: pathname, status: webResponse.status });
+      webResponse = normalizedJsonResponse(webResponse, GENERIC_EMAIL_RESPONSE);
+    } else if (isRequestPasswordReset && (webResponse.ok || webResponse.status >= 500)) {
+      if (!webResponse.ok) logger.error("Public auth email response was suppressed", { route: pathname, status: webResponse.status });
+      webResponse = normalizedJsonResponse(webResponse, GENERIC_PASSWORD_RESET_RESPONSE);
+    }
+    if (webResponse.ok && (isSignUp || isSendVerificationEmail || isRequestPasswordReset)) {
+      await enforceMinimumResponseTime(publicEmailResponseStartedAt);
     }
     await writeWebResponse(response, webResponse);
   };

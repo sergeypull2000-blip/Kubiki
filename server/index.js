@@ -30,11 +30,6 @@ export async function startBackend({ env = process.env, logger = console } = {})
       body: { email, callbackURL },
       headers,
     }),
-    classifyExistingSignUp: async (email) => {
-      const result = await authPool.query('select "emailVerified" from auth."user" where lower(email)=lower($1) limit 1', [email]);
-      if (!result.rows[0]) return null;
-      return result.rows[0].emailVerified ? "verified" : "unverified";
-    },
   });
   const server = createBackendServer({ pool, authHandler, authenticate, serverData, ownerApi, objectStorage, requestSecurity, logger, ...config });
   await new Promise((resolve, reject) => {

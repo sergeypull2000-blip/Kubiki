@@ -125,7 +125,7 @@ test("session gateway delegates to the prepared Better Auth client without activ
 test("auth errors are always localized and never expose Better Auth details", () => {
   assert.equal(describeAuthError({ message: "Invalid email or password" }), "Неверный email или пароль");
   assert.equal(describeAuthError({ code: "EMAIL_NOT_VERIFIED" }), "EMAIL_NOT_VERIFIED");
-  assert.equal(describeAuthError({ message: "User already exists" }), "Пользователь с таким email уже зарегистрирован");
+  assert.equal(describeAuthError({ message: "User already exists" }), "Если адрес можно использовать для регистрации, письмо с подтверждением будет отправлено.");
   assert.equal(describeAuthError({ message: "password too short" }), "Пароль не соответствует требованиям");
   assert.equal(describeAuthError({ message: "too many requests" }), "Слишком много попыток. Попробуйте немного позже.");
   assert.equal(describeAuthError({ message: "SQLSTATE 42P01 secret internal code" }), "Что-то пошло не так. Попробуйте ещё раз.");
@@ -134,8 +134,9 @@ test("auth errors are always localized and never expose Better Auth details", ()
 test("successful signup switches directly to verify-email view", () => {
   const source = fs.readFileSync(new URL("../src/AuthScreen.jsx", import.meta.url), "utf8");
   assert.match(source, /setVerificationEmail\(email\)\s*\n\s*setView\('verify-email'\)/);
-  assert.match(source, /data\?\.verificationEmailSent === false/);
-  assert.match(source, /Не удалось отправить письмо\. Отправьте его повторно кнопкой ниже\./);
+  assert.doesNotMatch(source, /verificationEmailSent|account_exists_verified|account_exists_unverified/);
+  assert.match(source, /Если для адреса \{verificationEmail\} требуется подтверждение/);
+  assert.match(source, /Если аккаунт с таким email существует, ссылка для сброса будет отправлена на почту\./);
   assert.doesNotMatch(source, /setNotice\('Аккаунт создан[\s\S]*?setView\('signin'\)/);
 });
 

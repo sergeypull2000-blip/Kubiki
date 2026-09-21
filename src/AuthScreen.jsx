@@ -74,32 +74,12 @@ export function AuthScreen({ mode = 'signin', resetToken, verificationError, onP
     }
     setSubmitting(true)
     try {
-      const { data, error } = await auth.signUp(email, password, email)
+      const { error } = await auth.signUp(email, password, email)
       if (error) {
-        const code = String(error?.code || '').toLowerCase()
-        if (code === 'account_exists_verified') {
-          setError('Аккаунт с таким email уже существует. Войдите или восстановите пароль.')
-          setView('signin')
-        } else if (code === 'account_exists_unverified') {
-          setVerificationEmail(email)
-          setNotice('Для этого email уже создан аккаунт, но email ещё не подтверждён.')
-          setView('verify-email')
-        } else if (code.includes('already') || /already exists|already registered/i.test(String(error?.message || ''))) {
-          setVerificationEmail(email)
-          if (code.includes('verified') || /verified|confirmed/i.test(String(error?.message || ''))) {
-            setError('Аккаунт с таким email уже существует. Войдите или восстановите пароль.')
-            setView('signin')
-          } else {
-            setNotice('Для этого email уже создан аккаунт, но email ещё не подтверждён.')
-            setView('verify-email')
-          }
-        } else setError(describeAuthError(error))
+        setError(describeAuthError(error))
         return
       }
       setVerificationEmail(email)
-      if (data?.verificationEmailSent === false) {
-        setNotice('Не удалось отправить письмо. Отправьте его повторно кнопкой ниже.')
-      }
       setView('verify-email')
     } catch (error) {
       setError(describeAuthError(error))
@@ -114,7 +94,7 @@ export function AuthScreen({ mode = 'signin', resetToken, verificationError, onP
     try {
       const { error } = await auth.sendVerificationEmail(verificationEmail)
       if (error) setError(describeAuthError(error))
-      else setNotice('Письмо отправлено повторно.')
+      else setNotice('Если для этого адреса требуется подтверждение, письмо будет отправлено.')
     } finally { setSubmitting(false) }
   }
 
@@ -143,7 +123,7 @@ export function AuthScreen({ mode = 'signin', resetToken, verificationError, onP
     try {
       const { error } = await auth.requestPasswordReset(email, `${window.location.origin}/reset-password`)
       if (error) setError(describeAuthError(error))
-      else setNotice('Ссылка для сброса пароля отправлена на почту.')
+      else setNotice('Если аккаунт с таким email существует, ссылка для сброса будет отправлена на почту.')
     } finally {
       setSubmitting(false)
     }
@@ -173,7 +153,7 @@ export function AuthScreen({ mode = 'signin', resetToken, verificationError, onP
   if (view === 'verify-email' && verificationEmail) return (
     <div className="kb-auth-screen"><div className="kb-auth-card">
       <div className="kb-auth-heading">Подтвердите email</div>
-      <div className="kb-auth-subtext">Мы отправили письмо на {verificationEmail}. Перейдите по ссылке из письма, чтобы активировать аккаунт.</div>
+      <div className="kb-auth-subtext">Если для адреса {verificationEmail} требуется подтверждение, письмо будет отправлено. Перейдите по ссылке из письма, чтобы активировать аккаунт.</div>
       {notice && <div className="kb-auth-notice" role="status">{notice}</div>}
       {error && <div className="kb-auth-error" role="alert">{error}</div>}
       <button className="kb-auth-submit" type="button" onClick={resendVerification} disabled={submitting}>Отправить письмо повторно</button>

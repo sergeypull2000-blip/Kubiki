@@ -16,6 +16,7 @@ async function createFixture(t) {
   let betterAuthSignUps = 0;
   let legalFailure = null;
   let verificationFailures = 0;
+  let resetFailures = 0;
   let mountedHandler = async () => { throw new Error("auth handler is not ready"); };
   const server = createBackendServer({
     pool: { query: async () => ({ rows: [] }) },
@@ -47,7 +48,13 @@ async function createFixture(t) {
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true,
-      async sendResetPassword(message) { emails.reset.push(message); },
+      async sendResetPassword(message) {
+        if (resetFailures > 0) {
+          resetFailures -= 1;
+          throw new Error("injected reset delivery failure");
+        }
+        emails.reset.push(message);
+      },
     },
     rateLimit: { enabled: false },
   });
@@ -87,6 +94,7 @@ async function createFixture(t) {
     get betterAuthSignUps() { return betterAuthSignUps; },
     setLegalFailure(value) { legalFailure = value; },
     failNextVerification() { verificationFailures += 1; },
+    failNextReset() { resetFailures += 1; },
   };
 }
 
@@ -99,6 +107,12 @@ function jsonRequest(body, origin) {
 }
 
 const legalSignUp = (body) => ({ ...body, acceptedBetaTerms: true, acceptedPersonalDataConsent: true });
+const genericSignUpResponse = { status: true, verificationEmailResendAvailable: true };
+const genericEmailResponse = { status: true };
+const genericPasswordResetResponse = {
+  status: true,
+  message: "If this email exists in our system, check your email for the reset link",
+};
 
 function cookieHeader(response) {
   return response.headers.getSetCookie().map((value) => value.split(";", 1)[0]).join("; ");
@@ -114,10 +128,10 @@ test("Better Auth HTTP bridge preserves sign-up and email verification responses
     callbackURL: `${baseURL}/verified`,
   }), baseURL));
 
-  const signUpBody = await signUp.text();
-  assert.equal(signUp.status, 200, signUpBody);
+  const signUpBody = await signUp.json();
+  assert.equal(signUp.status, 200);
   assert.match(signUp.headers.get("content-type"), /^application\/json/);
-  assert.ok(signUpBody.length > 0, "response body must not become a synthetic empty 200");
+  assert.deepEqual(signUpBody, genericSignUpResponse);
   assert.equal(db.user.find((user) => user.email === email)?.emailVerified, false);
   assert.equal(emails.verification.length, 1);
   const userId = db.user.find((user) => user.email === email).id;
@@ -191,6 +205,31 @@ test("unverified user still cannot sign in with valid credentials", async (t) =>
   assert.equal(signIn.headers.getSetCookie().length, 0);
 });
 
+test("email sign-in with an invalid password does not distinguish account state", async (t) => {
+  const fixture = await createFixture(t);
+  const password = "correct-horse-battery-staple";
+  const unverifiedEmail = "signin-unverified@example.test";
+  const verifiedEmail = "signin-verified@example.test";
+  for (const email of [unverifiedEmail, verifiedEmail]) {
+    await fetch(`${fixture.baseURL}/api/auth/sign-up/email`, jsonRequest(legalSignUp({
+      name: "Sign In Matrix", email, password,
+    }), fixture.baseURL));
+  }
+  fixture.db.user.find((user) => user.email === verifiedEmail).emailVerified = true;
+
+  const results = [];
+  for (const email of ["signin-missing@example.test", unverifiedEmail, verifiedEmail]) {
+    const response = await fetch(`${fixture.baseURL}/api/auth/sign-in/email`, jsonRequest({
+      email, password: "definitely-wrong-password",
+    }, fixture.baseURL));
+    results.push({ status: response.status, body: await response.json() });
+  }
+  assert.deepEqual(results[0], results[1]);
+  assert.deepEqual(results[1], results[2]);
+  assert.equal(results[0].status, 401);
+  assert.equal(results[0].body.code, "INVALID_EMAIL_OR_PASSWORD");
+});
+
 test("Better Auth HTTP bridge rejects signup before Better Auth unless both legal acceptances are explicit", async (t) => {
   const fixture = await createFixture(t);
   const { baseURL, db, legalAcceptances } = fixture;
@@ -239,8 +278,7 @@ test("verification delivery failure after legal commit keeps signup recoverable 
 
   assert.equal(response.status, 200);
   const body = await response.json();
-  assert.equal(body.verificationEmailSent, false);
-  assert.equal(body.verificationEmailResendAvailable, true);
+  assert.deepEqual(body, genericSignUpResponse);
   assert.equal(fixture.db.user.length, 1);
   assert.equal(fixture.db.account.length, 1);
   assert.equal(fixture.publicUsers.length, 1);
@@ -253,6 +291,7 @@ test("verification delivery failure after legal commit keeps signup recoverable 
     email, callbackURL: `${fixture.baseURL}/verified`,
   }, fixture.baseURL));
   assert.equal(resend.status, 200);
+  assert.deepEqual(await resend.json(), genericEmailResponse);
   assert.equal(fixture.emails.verification.length, 1);
 });
 
@@ -267,6 +306,7 @@ test("duplicate signup never rolls back or deletes the existing account", async 
   fixture.setLegalFailure("first");
   const duplicate = await fetch(`${fixture.baseURL}/api/auth/sign-up/email`, jsonRequest(body, fixture.baseURL));
   assert.equal(duplicate.status, 200, "Better Auth keeps its generic duplicate response");
+  assert.deepEqual(await duplicate.json(), genericSignUpResponse);
   assert.equal(fixture.db.user.length, 1);
   assert.equal(fixture.db.user[0].id, existingUserId);
   assert.deepEqual(fixture.rollbacks, []);
@@ -295,11 +335,112 @@ test("verified existing account keeps the generic duplicate behavior without new
 
   const duplicate = await fetch(`${fixture.baseURL}/api/auth/sign-up/email`, jsonRequest(body, fixture.baseURL));
   assert.equal(duplicate.status, 200);
+  assert.deepEqual(await duplicate.json(), genericSignUpResponse);
   assert.equal(fixture.db.user.length, 1);
   assert.equal(fixture.publicUsers.length, 1);
   assert.equal(fixture.legalAcceptances.length, 2);
   assert.deepEqual(fixture.rollbacks, []);
   assert.equal(fixture.emails.verification.length, 1);
+});
+
+test("public email flows have identical HTTP responses for new, unverified, and verified accounts", async (t) => {
+  const fixture = await createFixture(t);
+  const password = "correct-horse-battery-staple";
+  const unverifiedEmail = "matrix-unverified@example.test";
+  const verifiedEmail = "matrix-verified@example.test";
+  const newEmail = "matrix-new@example.test";
+
+  for (const email of [unverifiedEmail, verifiedEmail]) {
+    const response = await fetch(`${fixture.baseURL}/api/auth/sign-up/email`, jsonRequest(legalSignUp({
+      name: "Matrix User", email, password,
+    }), fixture.baseURL));
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), genericSignUpResponse);
+  }
+  fixture.db.user.find((user) => user.email === verifiedEmail).emailVerified = true;
+
+  const verificationCountBeforeSignups = fixture.emails.verification.length;
+  const signUpResponses = [];
+  for (const email of [newEmail, unverifiedEmail, verifiedEmail]) {
+    const response = await fetch(`${fixture.baseURL}/api/auth/sign-up/email`, jsonRequest(legalSignUp({
+      name: "Matrix Attempt", email, password,
+    }), fixture.baseURL));
+    signUpResponses.push({
+      status: response.status,
+      contentType: response.headers.get("content-type"),
+      setCookie: response.headers.getSetCookie(),
+      body: await response.json(),
+    });
+  }
+  assert.deepEqual(signUpResponses, Array(3).fill(null).map(() => ({
+    status: 200,
+    contentType: "application/json",
+    setCookie: [],
+    body: genericSignUpResponse,
+  })));
+  assert.equal(fixture.emails.verification.length, verificationCountBeforeSignups + 1, "only the new account receives signup mail");
+
+  const missingResendEmail = "matrix-missing-resend@example.test";
+  const verificationCountBeforeResends = fixture.emails.verification.length;
+  const resendResponses = [];
+  for (const email of [missingResendEmail, unverifiedEmail, verifiedEmail]) {
+    const response = await fetch(`${fixture.baseURL}/api/auth/send-verification-email`, jsonRequest({ email }, fixture.baseURL));
+    resendResponses.push({ status: response.status, body: await response.json() });
+  }
+  assert.deepEqual(resendResponses, Array(3).fill(null).map(() => ({ status: 200, body: genericEmailResponse })));
+  assert.equal(fixture.emails.verification.length, verificationCountBeforeResends + 1, "only the unverified account receives resend mail");
+
+  const resetCountBefore = fixture.emails.reset.length;
+  const resetResponses = [];
+  for (const email of ["matrix-missing-reset@example.test", unverifiedEmail, verifiedEmail]) {
+    const response = await fetch(`${fixture.baseURL}/api/auth/request-password-reset`, jsonRequest({
+      email, redirectTo: `${fixture.baseURL}/reset-password`,
+    }, fixture.baseURL));
+    resetResponses.push({ status: response.status, body: await response.json() });
+  }
+  assert.deepEqual(resetResponses, Array(3).fill(null).map(() => ({ status: 200, body: genericPasswordResetResponse })));
+  assert.equal(fixture.emails.reset.length, resetCountBefore + 2, "only existing accounts receive password-reset mail");
+});
+
+test("public resend and password-reset responses do not reveal mail delivery failures", async (t) => {
+  const fixture = await createFixture(t);
+  const email = "delivery-failure@example.test";
+  await fetch(`${fixture.baseURL}/api/auth/sign-up/email`, jsonRequest(legalSignUp({
+    name: "Delivery Failure", email, password: "correct-horse-battery-staple",
+  }), fixture.baseURL));
+
+  fixture.failNextVerification();
+  const resend = await fetch(`${fixture.baseURL}/api/auth/send-verification-email`, jsonRequest({ email }, fixture.baseURL));
+  assert.equal(resend.status, 200);
+  assert.deepEqual(await resend.json(), genericEmailResponse);
+
+  fixture.failNextReset();
+  const reset = await fetch(`${fixture.baseURL}/api/auth/request-password-reset`, jsonRequest({ email }, fixture.baseURL));
+  assert.equal(reset.status, 200);
+  assert.deepEqual(await reset.json(), genericPasswordResetResponse);
+});
+
+test("bridge normalizes an explicit Better Auth duplicate error without querying account state", async (t) => {
+  const authHandler = createBetterAuthHttpHandler(async () => Response.json({
+    code: "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
+  }, { status: 422 }));
+  const server = createBackendServer({
+    pool: { query: async () => ({ rows: [] }) },
+    bodyLimitBytes: 1_048_576,
+    readinessTimeoutMillis: 20,
+    authHandler,
+    logger: { error() {} },
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  t.after(() => server.close());
+  const baseURL = `http://127.0.0.1:${server.address().port}`;
+
+  const response = await fetch(`${baseURL}/api/auth/sign-up/email`, jsonRequest(legalSignUp({
+    name: "Existing", email: "existing@example.test", password: "correct-horse-battery-staple",
+  }), baseURL));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), genericSignUpResponse);
 });
 
 test("signup ignores a client-supplied user_id for legal ownership", async (t) => {
@@ -352,7 +493,7 @@ test("Better Auth HTTP bridge preserves password-reset and invalid-request statu
     email, redirectTo: `${baseURL}/reset-password`,
   }, baseURL));
   assert.equal(reset.status, 200);
-  assert.ok((await reset.text()).length > 0);
+  assert.deepEqual(await reset.json(), genericPasswordResetResponse);
   assert.equal(emails.reset.length, 1);
 
   const resetUrl = new URL(emails.reset[0].url);
