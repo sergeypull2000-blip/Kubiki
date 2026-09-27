@@ -53,7 +53,7 @@ function createSecurityHeaders({ production, cspAssetOrigin }) {
   if (!cspAssetOrigin) throw new TypeError("cspAssetOrigin is required");
   return {
     ...SECURITY_HEADERS,
-    "content-security-policy-report-only": buildContentSecurityPolicyReportOnly(cspAssetOrigin),
+    "content-security-policy": buildContentSecurityPolicyReportOnly(cspAssetOrigin),
     ...(production ? { "strict-transport-security": "max-age=31536000" } : {}),
   };
 }

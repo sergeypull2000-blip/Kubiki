@@ -34,8 +34,8 @@ function assertSecurityHeaders(response, { production = false } = {}) {
   assert.equal(response.headers.get("x-frame-options"), "DENY");
   assert.equal(response.headers.get("cross-origin-opener-policy"), "same-origin");
   assert.equal(response.headers.get("cross-origin-resource-policy"), "same-origin");
-  assert.equal(response.headers.get("content-security-policy-report-only"), EXPECTED_CSP);
-  assert.equal(response.headers.get("content-security-policy"), null);
+  assert.equal(response.headers.get("content-security-policy"), EXPECTED_CSP);
+  assert.equal(response.headers.get("content-security-policy-report-only"), null);
   assert.equal(response.headers.get("cross-origin-embedder-policy"), null);
   assert.equal(response.headers.get("strict-transport-security"), production ? "max-age=31536000" : null);
 }
