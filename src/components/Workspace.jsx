@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ArrowUp, ChevronsUp, ChevronsDown } from "lucide-react";
+import { ArrowUp, ChevronsUp, ChevronsDown, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X } from "lucide-react";
 import { formatMoney } from "../utils.js";
 import { projectTotalWithTax } from "../calculations.js";
 import { activeSheetId as getActiveSheetId } from "../sheets.js";
@@ -25,12 +25,11 @@ import { AccountControl } from "./AccountControl.jsx";
 import { BetaBadge } from "./BetaBadge.jsx";
 import { blockGlobalUndo, shouldHandleExecutorCopy, shouldHandleExecutorPaste } from "../keyboardShortcuts.js";
 
-const WORKSPACE_FIXED_WIDTH = 1350;
-const WORKSPACE_SIDEBAR_GAP = 24;
+const WORKSPACE_MIN_CANVAS_WIDTH = 720;
 const LEFT_PANEL_RANGE = [210, Number.POSITIVE_INFINITY];
 const RIGHT_PANEL_RANGE = [250, Number.POSITIVE_INFINITY];
 const clampPanelWidth = (value, [min, max], fallback) => Math.min(max, Math.max(min, Number(value) || fallback));
-const panelViewportMax = ([min]) => Math.max(min, Math.floor((window.innerWidth - WORKSPACE_FIXED_WIDTH) / 2 - WORKSPACE_SIDEBAR_GAP));
+const panelViewportMax = (min, occupiedWidth) => Math.max(min, Math.floor(window.innerWidth - WORKSPACE_MIN_CANVAS_WIDTH - occupiedWidth));
 
 /* ============================================================
    Вкладка сметы: single click переключает лист, double click — rename.
@@ -92,6 +91,9 @@ function SheetTab({ sheet, isActive, canRemove, onSwitch, onRename, onDuplicate,
 export function Workspace({ project, onChange, onBack, editingTemplate = false, performers, onSavePerformer, quickAccess, onToggleQuickAccessPin, onRemoveQuickAccess, onOpenAiSettings, onOpenUsage, onOpenFeedback, onOpenHelp, onTrackAiGenerate, onSignOut, userAccount, aiGenerationReady = false, saveState = "saved", saveError = "", onRetrySave, taskTemplates = [], stageTemplates = [], onTaskTemplatesChange, onStageTemplatesChange, onRequestAiEdit, onCancelAiEdit, onApplyAiEdit, onUndoAiEdit, canUndoAiEdit = false }) {
   const [leftPanelWidth, setLeftPanelWidth] = useState(() => clampPanelWidth(localStorage.getItem("kb-workspace-left-width"), LEFT_PANEL_RANGE, 298));
   const [rightPanelWidth, setRightPanelWidth] = useState(() => clampPanelWidth(localStorage.getItem("kb-workspace-right-width"), RIGHT_PANEL_RANGE, 338));
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(() => localStorage.getItem("kb-workspace-left-collapsed") === "1");
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(() => localStorage.getItem("kb-workspace-right-collapsed") === "1");
+  const [compactPanel, setCompactPanel] = useState(null);
   // Брендинг клиентского PDF. В превью — React-стейт (localStorage в артефакте не работает);
   // в Клайне можно persist'ить в localStorage.
   const [importFile, setImportFile] = useState(null);
@@ -138,7 +140,10 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
     const startWidth = side === "left" ? leftPanelWidth : rightPanelWidth;
     const range = side === "left" ? LEFT_PANEL_RANGE : RIGHT_PANEL_RANGE;
     const [min] = range;
-    const max = panelViewportMax(range);
+    const otherPanelWidth = side === "left"
+      ? (rightPanelCollapsed ? 0 : rightPanelWidth)
+      : (leftPanelCollapsed ? 0 : leftPanelWidth);
+    const max = panelViewportMax(min, otherPanelWidth);
     const onMove = (moveEvent) => {
       const delta = (moveEvent.clientX - startX) * (side === "left" ? 1 : -1);
       const width = Math.min(max, Math.max(min, startWidth + delta));
@@ -151,9 +156,24 @@ export function Workspace({ project, onChange, onBack, editingTemplate = false, 
     document.body.classList.add("kb-is-panel-resizing");
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, { once: true });
-  }, [leftPanelWidth, rightPanelWidth]);
+  }, [leftPanelCollapsed, leftPanelWidth, rightPanelCollapsed, rightPanelWidth]);
   useEffect(() => { localStorage.setItem("kb-workspace-left-width", String(leftPanelWidth)); }, [leftPanelWidth]);
   useEffect(() => { localStorage.setItem("kb-workspace-right-width", String(rightPanelWidth)); }, [rightPanelWidth]);
+  useEffect(() => { localStorage.setItem("kb-workspace-left-collapsed", leftPanelCollapsed ? "1" : "0"); }, [leftPanelCollapsed]);
+  useEffect(() => { localStorage.setItem("kb-workspace-right-collapsed", rightPanelCollapsed ? "1" : "0"); }, [rightPanelCollapsed]);
+  useEffect(() => {
+    if (!compactPanel) return undefined;
+    const closeOnEscape = (event) => { if (event.key === "Escape") setCompactPanel(null); };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [compactPanel]);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return undefined;
+    const desktop = window.matchMedia("(min-width: 1200px)");
+    const closeCompactPanel = (event) => { if (event.matches) setCompactPanel(null); };
+    desktop.addEventListener?.("change", closeCompactPanel);
+    return () => desktop.removeEventListener?.("change", closeCompactPanel);
+  }, []);
 
   // теги выделенного исполнителя — для контекстной подсказки под «Кубиками исполнителя»
   const activeExecutorTags = (() => {
@@ -458,7 +478,7 @@ const toggleAllCollapsed = () =>
   const accountControl = <AccountControl userAccount={userAccount} onOpenAiSettings={onOpenAiSettings} onOpenUsage={onOpenUsage} onOpenFeedback={onOpenFeedback} onSignOut={onSignOut} />;
 
   return (
-    <div className={`kb-root kb-root-workspace${editingTemplate ? " is-template-edit" : ""}`}>
+    <div className={`kb-root kb-root-workspace${editingTemplate ? " is-template-edit" : ""}${leftPanelCollapsed ? " is-left-panel-collapsed" : ""}${rightPanelCollapsed ? " is-right-panel-collapsed" : ""}`}>
       {importFile && (
         <ImportModal file={importFile.file} instruction={importFile.instruction} onClose={() => setImportFile(null)}
           onConfirm={(stages, meta) => { insertParsedStages(stages, meta); setImportFile(null); }} />
@@ -493,7 +513,12 @@ const toggleAllCollapsed = () =>
       </header>
 
       <div className="kb-layout">
-          <div className="kb-panel-shell kb-panel-shell-left" style={{ width: leftPanelWidth, left: 0 }}>
+          {compactPanel && <button type="button" className="kb-panel-backdrop" aria-label="Закрыть боковую панель" onClick={() => setCompactPanel(null)} />}
+          <button type="button" className="kb-compact-panel-trigger kb-compact-panel-trigger-left" aria-label="Открыть левую панель" aria-controls="kb-workspace-left-panel" aria-expanded={compactPanel === "left"} onClick={() => setCompactPanel((open) => open === "left" ? null : "left")}><PanelLeftOpen size={18} /></button>
+          {!editingTemplate && <button type="button" className="kb-compact-panel-trigger kb-compact-panel-trigger-right" aria-label="Открыть правую панель" aria-controls="kb-workspace-right-panel" aria-expanded={compactPanel === "right"} onClick={() => setCompactPanel((open) => open === "right" ? null : "right")}><PanelRightOpen size={18} /></button>}
+          {leftPanelCollapsed && <button type="button" className="kb-panel-reopen kb-panel-reopen-left" aria-label="Развернуть левую панель" onClick={() => setLeftPanelCollapsed(false)}><PanelLeftOpen size={17} /></button>}
+          {!editingTemplate && rightPanelCollapsed && <button type="button" className="kb-panel-reopen kb-panel-reopen-right" aria-label="Развернуть правую панель" onClick={() => setRightPanelCollapsed(false)}><PanelRightOpen size={17} /></button>}
+          <div id="kb-workspace-left-panel" className={`kb-panel-shell kb-panel-shell-left${compactPanel === "left" ? " is-compact-open" : ""}`} style={{ "--kb-panel-width": `${leftPanelWidth}px` }}>
           <PalettePanel
             activeExecutorId={activeExecutorId}
             activeExecutorTags={activeExecutorTags}
@@ -515,6 +540,8 @@ const toggleAllCollapsed = () =>
             onOpenFeedback={onOpenFeedback}
             onOpenHelp={onOpenHelp}
           />
+          <button type="button" className="kb-panel-collapse kb-panel-collapse-left" aria-label="Свернуть левую панель" onClick={() => setLeftPanelCollapsed(true)}><PanelLeftClose size={16} /></button>
+          <button type="button" className="kb-panel-drawer-close" aria-label="Закрыть левую панель" onClick={() => setCompactPanel(null)}><X size={17} /></button>
           <div className="kb-panel-resizer kb-panel-resizer-left" role="separator" aria-label="Изменить ширину левой панели" aria-orientation="vertical" onPointerDown={(event) => beginPanelResize("left", event)} />
         </div>
           {/* клик по нейтральной зоне листа снимает все выделения. */}
@@ -602,9 +629,11 @@ const toggleAllCollapsed = () =>
               </div>
             )}
           </main>
-          {!editingTemplate && <div className="kb-panel-shell kb-panel-shell-right" style={{ width: rightPanelWidth, right: 0 }}>
+          {!editingTemplate && <div id="kb-workspace-right-panel" className={`kb-panel-shell kb-panel-shell-right${compactPanel === "right" ? " is-compact-open" : ""}`} style={{ "--kb-panel-width": `${rightPanelWidth}px` }}>
             <div className="kb-panel-resizer kb-panel-resizer-right" role="separator" aria-label="Изменить ширину правой панели" aria-orientation="vertical" onPointerDown={(event) => beginPanelResize("right", event)} />
             {rightPanel}
+            <button type="button" className="kb-panel-collapse kb-panel-collapse-right" aria-label="Свернуть правую панель" onClick={() => setRightPanelCollapsed(true)}><PanelRightClose size={16} /></button>
+            <button type="button" className="kb-panel-drawer-close" aria-label="Закрыть правую панель" onClick={() => setCompactPanel(null)}><X size={17} /></button>
           </div>}
           {performerModal && <PerformerModal initial={performerModal.draft} isNew={!performerModal.existingId} initialAddToQuickAccess={performerModal.addToQuickAccess} onSave={savePerformerCard} onClose={() => setPerformerModal(null)} />}
           {localAiPopover && <AiEditTechnicalModal variant="inline" position={{ x: localAiPopover.x, y: localAiPopover.y }} scope={localScope(localAiPopover.context)} contextLabel={localAiPopover.context.label} onRequest={onRequestAiEdit} onCancelRequest={onCancelAiEdit} onApply={onApplyAiEdit} onClose={() => setLocalAiPopover(null)} />}

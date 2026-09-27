@@ -16,22 +16,25 @@ test("performer grade is a dropdown wired to the existing save callback", async 
   assert.match(page, /className="kb-performer-grade-select"/); assert.match(page, /onSavePerformer\(\{ \.\.\.performer, grade: event\.target\.value \}/);
 });
 
-test("workspace uses edge-to-edge flex center and bounded panel resizers", async () => {
+test("workspace keeps laptop sidebars, uses a fluid canvas, and exposes compact drawers", async () => {
   const [workspace, styles] = await Promise.all([source("src/components/Workspace.jsx"), source("src/styles.js")]);
-  assert.match(styles, /\.kb-layout\{[^}]*width:100%; min-width:0/);
+  assert.match(styles, /\.kb-layout\{[^}]*grid-template-columns:auto minmax\(0,1fr\) auto/);
   assert.doesNotMatch(styles, /\.kb-layout\{[^}]*max-width/);
   assert.match(styles, /\.kb-canvas-inner\{width:100%; min-width:0/);
   assert.match(workspace, /const LEFT_PANEL_RANGE = \[210, Number\.POSITIVE_INFINITY\]/);
   assert.match(workspace, /const RIGHT_PANEL_RANGE = \[250, Number\.POSITIVE_INFINITY\]/);
-  assert.match(workspace, /const WORKSPACE_FIXED_WIDTH = 1350/);
-  assert.match(workspace, /const WORKSPACE_SIDEBAR_GAP = 24/);
+  assert.match(workspace, /const WORKSPACE_MIN_CANVAS_WIDTH = 720/);
   assert.match(workspace, /side === "left" \? LEFT_PANEL_RANGE : RIGHT_PANEL_RANGE/);
   assert.match(workspace, /kb-panel-resizer-left/);
   assert.match(workspace, /kb-panel-resizer-right/);
-  assert.match(styles, /--workspace-readable-width: 1000px/);
-  assert.match(styles, /@media\(min-width:1508px\) and \(max-width:1897px\)/);
-  assert.match(styles, /grid-template-columns:210px minmax\(var\(--workspace-readable-width\),var\(--workspace-fixed-width\)\) 250px/);
-  assert.match(styles, /@media\(max-width:1507px\)\{\s*\.kb-panel-shell\{display:none\}/);
+  assert.match(styles, /@media\(min-width:1200px\) and \(max-width:1599px\)/);
+  assert.match(styles, /\.kb-panel-shell-left\{width:min\(var\(--kb-panel-width,298px\),220px\)\}/);
+  assert.match(styles, /@media\(max-width:1199px\)/);
+  assert.match(styles, /\.kb-panel-shell\.is-compact-open\{transform:translateX\(0\); visibility:visible; pointer-events:auto\}/);
+  assert.doesNotMatch(styles, /@media\(max-width:1507px\)\{\s*\.kb-panel-shell\{display:none\}/);
+  assert.match(workspace, /kb-workspace-left-collapsed/);
+  assert.match(workspace, /kb-compact-panel-trigger-left/);
+  assert.match(workspace, /event\.key === "Escape"/);
   assert.match(workspace, /const visibleRight = Math\.min\(window\.innerWidth, rect\.right\)/);
   assert.match(workspace, /right: Math\.max\(12, window\.innerWidth - visibleRight - 10\)/);
 });
@@ -40,7 +43,7 @@ test("template editor keeps the reusable left performer quick-access panel and o
   const [workspace, styles] = await Promise.all([source("src/components/Workspace.jsx"), source("src/styles.js")]);
   assert.match(workspace, /quickAccessItems=\{visibleQuickAccess\}/);
   assert.match(workspace, /onApplyQuickAccess=\{applyQuickAccess\}/);
-  assert.match(workspace, /\{!editingTemplate && <div className="kb-panel-shell kb-panel-shell-right"/);
+  assert.match(workspace, /\{!editingTemplate && <div id="kb-workspace-right-panel" className=\{`kb-panel-shell kb-panel-shell-right/);
   assert.doesNotMatch(styles, /is-template-edit \.kb-panel-shell\{display:none\}/);
 });
 

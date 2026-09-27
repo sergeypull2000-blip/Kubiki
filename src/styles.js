@@ -25,9 +25,7 @@ export const CSS = `
      были прижаты к рабочему поле, а не растянуты по краям экрана */
   --layout-max: 1602px;
   /* Ширина центрального Workspace рассчитана на полный ряд Executor-тегов и полей. */
-  --workspace-fixed-width: 1350px;
-  --workspace-readable-width: 1000px;
-  --workspace-sidebar-gap: 24px;
+  --workspace-min-canvas-width: 720px;
 
   /* dashboard sidebar */
   --dash-sidebar-w: 240px;
@@ -156,10 +154,10 @@ export const CSS = `
 /* п.2: вся группа (палитра + рабочее поле + правая панель) центрирована и
    ограничена по ширине — палитра и правая панель «приклеены» к рабочему
    полю, а не растянуты по краям широкого экрана */
-.kb-layout{position:relative; display:flex; align-items:stretch; justify-content:center; height:calc(100vh - var(--kb-header-h)); overflow:hidden; width:100%; min-width:0}
+.kb-layout{position:relative; display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:stretch; height:calc(100vh - var(--kb-header-h)); overflow:hidden; width:100%; min-width:0}
 .kb-template-context{font-size:var(--fs-sm); color:var(--text-muted); white-space:nowrap}
-.kb-panel-shell{position:absolute; top:0; bottom:0; flex:0 0 auto; min-width:0; display:flex; overflow:visible}
-.kb-panel-shell-left{min-width:210px; max-width:calc((100vw - var(--workspace-fixed-width)) / 2 - var(--workspace-sidebar-gap))}.kb-panel-shell-right{min-width:250px; max-width:calc((100vw - var(--workspace-fixed-width)) / 2 - var(--workspace-sidebar-gap))}
+.kb-panel-shell{position:relative; min-width:0; display:flex; overflow:visible; z-index:2}
+.kb-panel-shell-left{grid-column:1; width:min(var(--kb-panel-width,298px),calc((100vw - var(--workspace-min-canvas-width)) / 2)); min-width:210px}.kb-panel-shell-right{grid-column:3; width:min(var(--kb-panel-width,338px),calc((100vw - var(--workspace-min-canvas-width)) / 2)); min-width:250px}
 .kb-panel-shell>.kb-palette,.kb-panel-shell>.kb-rightpanel{width:100%; min-width:0}
 .kb-panel-resizer{position:absolute; z-index:20; top:0; bottom:0; width:9px; cursor:col-resize; touch-action:none}
 .kb-panel-resizer::after{content:""; position:absolute; top:0; bottom:0; left:4px; width:1px; background:transparent; transition:background .12s}
@@ -169,22 +167,52 @@ export const CSS = `
 .kb-palette{width:298px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--line-strong);
   display:flex; flex-direction:column; overflow:hidden; min-height:0}
 .kb-palette-scroll{flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:14px 12px 22px; display:flex; flex-direction:column; gap:2px}
-.kb-canvas{flex:0 0 var(--workspace-fixed-width); width:var(--workspace-fixed-width); min-width:var(--workspace-fixed-width); display:flex; flex-direction:column; align-items:stretch; overflow:hidden}
+.kb-canvas{grid-column:2; width:100%; min-width:0; display:flex; flex-direction:column; align-items:stretch; overflow:hidden}
 .kb-canvas-scroll{flex:1 1 auto; min-height:0; overflow-y:auto; padding:20px 28px 120px}
 /* рабочее поле центрировано в своей колонке между палитрой и правой панелью */
 .kb-canvas-inner{width:100%; min-width:0; margin:0 auto}
 
-/* Between full desktop and collapse, keep all three columns at their real minima:
-   210px + 24px + 1000px + 24px + 250px = 1508px. */
-@media(min-width:1508px) and (max-width:1897px){
-  .kb-root-workspace:not(.is-template-edit) .kb-layout{display:grid; grid-template-columns:210px minmax(var(--workspace-readable-width),var(--workspace-fixed-width)) 250px; justify-content:space-between; gap:var(--workspace-sidebar-gap)}
-  .kb-root-workspace:not(.is-template-edit) .kb-panel-shell{position:relative; inset:auto!important; width:100%!important; max-width:none}
-  .kb-root-workspace:not(.is-template-edit) .kb-panel-resizer{display:none}
-  .kb-root-workspace:not(.is-template-edit) .kb-canvas{width:100%; min-width:0; max-width:var(--workspace-fixed-width)}
+.kb-panel-collapse,.kb-panel-reopen,.kb-compact-panel-trigger,.kb-panel-drawer-close{display:grid; place-items:center; width:28px; height:28px; padding:0; border:1px solid var(--line-strong); border-radius:7px; background:var(--surface); color:var(--text-muted); box-shadow:0 4px 14px rgba(20,30,50,.1); cursor:pointer}
+.kb-panel-collapse:hover,.kb-panel-reopen:hover,.kb-compact-panel-trigger:hover,.kb-panel-drawer-close:hover{border-color:var(--accent); color:var(--accent); background:var(--accent-soft)}
+.kb-panel-collapse{position:absolute; z-index:21; top:10px}.kb-panel-collapse-left{right:-14px}.kb-panel-collapse-right{left:-14px}
+.kb-panel-reopen{position:absolute; z-index:12; top:50%; transform:translateY(-50%)}.kb-panel-reopen-left{left:10px}.kb-panel-reopen-right{right:10px}
+.kb-compact-panel-trigger,.kb-panel-drawer-close,.kb-panel-backdrop{display:none}
+.kb-root-workspace.is-left-panel-collapsed .kb-panel-shell-left,.kb-root-workspace.is-right-panel-collapsed .kb-panel-shell-right{display:none}
+
+/* On laptop-sized screens the tools remain visible, while the canvas receives
+   a dependable working width instead of keeping a fixed 1350px column. */
+@media(min-width:1200px) and (max-width:1599px){
+  .kb-panel-shell-left{width:min(var(--kb-panel-width,298px),220px)}
+  .kb-panel-shell-right{width:min(var(--kb-panel-width,338px),260px)}
+  .kb-panel-resizer{display:none}
 }
-@media(max-width:1507px){
-  .kb-panel-shell{display:none}
-  .kb-canvas{flex:1 1 auto; width:100%; min-width:0; max-width:var(--workspace-fixed-width)}
+@media(max-width:1199px){
+  .kb-layout{display:flex}
+  .kb-canvas{flex:1 1 auto}
+  .kb-root-workspace.is-left-panel-collapsed .kb-panel-shell-left,.kb-root-workspace.is-right-panel-collapsed .kb-panel-shell-right,
+  .kb-panel-shell{display:flex}
+  .kb-panel-shell{position:absolute; top:0; bottom:0; z-index:32; width:min(var(--kb-panel-width),calc(100vw - 48px)); max-width:360px; min-width:0; box-shadow:0 18px 50px rgba(20,30,50,.22); transition:transform .2s ease,visibility .2s; visibility:hidden; pointer-events:none}
+  .kb-panel-shell-left{left:0; transform:translateX(-102%)}
+  .kb-panel-shell-right{right:0; transform:translateX(102%)}
+  .kb-panel-shell.is-compact-open{transform:translateX(0); visibility:visible; pointer-events:auto}
+  .kb-panel-resizer,.kb-panel-collapse,.kb-panel-reopen{display:none}
+  .kb-compact-panel-trigger{display:grid; position:absolute; z-index:12; top:10px}
+  .kb-compact-panel-trigger-left{left:10px}.kb-compact-panel-trigger-right{right:10px}
+  .kb-panel-drawer-close{display:grid; position:absolute; z-index:34; top:10px; right:10px}
+  .kb-panel-shell-right .kb-panel-drawer-close{right:auto; left:10px}
+  .kb-panel-shell-left .kb-palette-scroll{padding-top:46px}
+  .kb-panel-shell-right .kb-rightpanel{padding-top:42px}
+  .kb-panel-backdrop{display:block; position:absolute; inset:0; z-index:31; width:100%; height:100%; padding:0; border:0; background:rgba(20,30,50,.22); cursor:default}
+  .kb-canvas-scroll{padding-inline:20px}
+}
+@media(max-width:760px){
+  .kb-header{padding-inline:12px}
+  .kb-header-min .kb-header-inner{gap:7px}
+  .kb-project-name{min-width:0; width:min(34vw,220px)}
+  .kb-save-status{display:none}
+  .kb-total-badge{padding-inline:9px}
+  .kb-canvas-scroll{padding:18px 12px 108px}
+  .kb-stage-title-edit{flex-basis:220px}
 }
 
 /* Below that threshold Workspace owns the viewport and remains fluid. */
