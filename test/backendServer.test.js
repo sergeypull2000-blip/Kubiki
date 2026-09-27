@@ -1,17 +1,51 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createBackendServer } from "../server/app.js";
+import { createBackendServer, INLINE_BOOTSTRAP_SCRIPT_CSP_HASH } from "../server/app.js";
+
+const CSP_ASSET_ORIGIN = "https://assets.example.test";
+const EXPECTED_CSP = [
+  "default-src 'self'",
+  "base-uri 'none'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "frame-src 'none'",
+  "media-src 'none'",
+  "form-action 'self'",
+  `script-src 'self' '${INLINE_BOOTSTRAP_SCRIPT_CSP_HASH}'`,
+  "script-src-attr 'none'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  `img-src 'self' ${CSP_ASSET_ORIGIN}`,
+  `connect-src 'self' ${CSP_ASSET_ORIGIN}`,
+  "worker-src 'self'",
+  "manifest-src 'self'",
+].join("; ") + ";";
+
+function assertSecurityHeaders(response, { production = false } = {}) {
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("referrer-policy"), "strict-origin-when-cross-origin");
+  assert.equal(response.headers.get("permissions-policy"), "camera=(), microphone=(), geolocation=()");
+  assert.equal(response.headers.get("x-frame-options"), "DENY");
+  assert.equal(response.headers.get("cross-origin-opener-policy"), "same-origin");
+  assert.equal(response.headers.get("cross-origin-resource-policy"), "same-origin");
+  assert.equal(response.headers.get("content-security-policy-report-only"), EXPECTED_CSP);
+  assert.equal(response.headers.get("content-security-policy"), null);
+  assert.equal(response.headers.get("cross-origin-embedder-policy"), null);
+  assert.equal(response.headers.get("strict-transport-security"), production ? "max-age=31536000" : null);
+}
 
 async function listen(pool, overrides = {}) {
   const server = createBackendServer({
     pool,
     bodyLimitBytes: 16,
     readinessTimeoutMillis: 20,
+    cspAssetOrigin: CSP_ASSET_ORIGIN,
     ...overrides,
   });
   server.listen(0, "127.0.0.1");
@@ -26,9 +60,23 @@ test("health endpoint has no database dependency", async (t) => {
   const response = await fetch(`${baseUrl}/healthz`);
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: "ok" });
-  assert.equal(response.headers.get("x-frame-options"), "DENY");
-  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
-  assert.equal(response.headers.get("referrer-policy"), "strict-origin-when-cross-origin");
+  assertSecurityHeaders(response);
+});
+
+test("HSTS is emitted only by a production server", async (t) => {
+  const production = await listen({ query: async () => ({ rows: [] }) }, { production: true });
+  t.after(() => production.server.close());
+  const response = await fetch(`${production.baseUrl}/healthz`);
+  assertSecurityHeaders(response, { production: true });
+});
+
+test("CSP script hash matches the real inline bootstrap", async () => {
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const inlineScripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)]
+    .map((match) => match[1]);
+  assert.equal(inlineScripts.length, 1);
+  const actual = `sha256-${createHash("sha256").update(inlineScripts[0], "utf8").digest("base64")}`;
+  assert.equal(actual, INLINE_BOOTSTRAP_SCRIPT_CSP_HASH);
 });
 
 test("request security rejects limited auth and API requests before expensive work", async (t) => {
@@ -83,6 +131,7 @@ test("server makes body limit explicit and closes gracefully", async () => {
   const { server, baseUrl } = await listen({ query: async () => ({ rows: [] }) });
   const response = await fetch(`${baseUrl}/unknown`, { method: "POST", body: "this body is definitely too large" });
   assert.equal(response.status, 413);
+  assertSecurityHeaders(response);
   server.close();
   await once(server, "close");
   assert.equal(server.listening, false);
@@ -176,6 +225,7 @@ test("auth prechecks reject unsafe POST requests and do not charge exempt method
     body: "{}",
   });
   assert.equal(valid.status, 204);
+  assertSecurityHeaders(valid);
   assert.equal(consumed, 1);
   assert.deepEqual(delegated, ["OPTIONS", "GET", "POST"]);
 });
@@ -214,6 +264,7 @@ test("production server serves the frontend root and SPA routes", async (t) => {
     const response = await fetch(`${baseUrl}${path}`);
     assert.equal(response.status, 200);
     assert.match(response.headers.get("content-type"), /^text\/html/);
+    assertSecurityHeaders(response);
     assert.match(await response.text(), /Kubiki UI/);
   }
 });
@@ -226,6 +277,7 @@ test("production server serves typed, immutable Vite assets", async (t) => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /^text\/javascript/);
   assert.equal(response.headers.get("cache-control"), "public, max-age=31536000, immutable");
+  assertSecurityHeaders(response);
   assert.equal(await response.text(), "globalThis.kubiki = true;");
 });
 
@@ -236,6 +288,7 @@ test("unknown API routes remain JSON 404 responses", async (t) => {
   const response = await fetch(`${baseUrl}/api/unknown`);
   assert.equal(response.status, 404);
   assert.match(response.headers.get("content-type"), /^application\/json/);
+  assertSecurityHeaders(response);
   assert.deepEqual(await response.json(), { error: "not_found" });
 });
 

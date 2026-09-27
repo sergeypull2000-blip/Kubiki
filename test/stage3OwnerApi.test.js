@@ -6,7 +6,7 @@ import { createOwnerApiRepository } from "../server/repositories/ownerApiReposit
 
 async function serverFor({ userId = "user-a", repository = {}, authenticated = true, trustedOrigins = [] } = {}) {
   const server = createBackendServer({ pool:{query:async()=>({rows:[]})},bodyLimitBytes:600_000,readinessTimeoutMillis:20,
-    authenticate:async()=>authenticated?{user:{id:userId}}:null,ownerApi:repository,trustedOrigins,logger:{error(){}} });
+    cspAssetOrigin:"https://assets.example.test",authenticate:async()=>authenticated?{user:{id:userId}}:null,ownerApi:repository,trustedOrigins,logger:{error(){}} });
   server.listen(0,"127.0.0.1"); await once(server,"listening");
   return {server,url:`http://127.0.0.1:${server.address().port}`};
 }

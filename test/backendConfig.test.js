@@ -13,6 +13,7 @@ test("backend config uses safe beta pool-facing defaults", () => {
     NODE_ENV: "test",
     DATABASE_URL: "postgresql://app:secret@db.internal:5432/kubiki",
     KUBIKI_TRUSTED_ORIGINS: "https://app.example.test/",
+    KUBIKI_CSP_ASSET_ORIGIN: "https://assets.example.test",
   });
   assert.equal(config.host, "127.0.0.1");
   assert.equal(config.port, 3000);
@@ -20,7 +21,28 @@ test("backend config uses safe beta pool-facing defaults", () => {
   assert.equal(config.readinessTimeoutMillis, 2_000);
   assert.equal(config.trustProxy, false);
   assert.deepEqual(config.trustedOrigins, ["https://app.example.test"]);
+  assert.equal(config.cspAssetOrigin, "https://assets.example.test");
   assert.equal(config.production, false);
+});
+
+test("CSP asset origin is required and accepts only one exact HTTPS origin", () => {
+  const env = {
+    NODE_ENV: "production",
+    DATABASE_URL: "postgresql://app:secret@db.internal:5432/kubiki",
+    KUBIKI_CSP_ASSET_ORIGIN: "https://assets.example.test/",
+  };
+  assert.equal(parseBackendConfig(env).cspAssetOrigin, "https://assets.example.test");
+  assert.throws(() => parseBackendConfig({ ...env, KUBIKI_CSP_ASSET_ORIGIN: "" }), /required/);
+  assert.throws(() => parseBackendConfig({ ...env, KUBIKI_CSP_ASSET_ORIGIN: "http://assets.example.test" }), /must use HTTPS/);
+  for (const value of [
+    "https://assets.example.test/path",
+    "https://assets.example.test?query=1",
+    "https://assets.example.test#fragment",
+    "https://user:password@assets.example.test",
+    "https://*.example.test",
+  ]) {
+    assert.throws(() => parseBackendConfig({ ...env, KUBIKI_CSP_ASSET_ORIGIN: value }), /must be an origin/);
+  }
 });
 
 test("backend config is required only when standalone backend is parsed", () => {

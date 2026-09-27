@@ -23,7 +23,40 @@ const SECURITY_HEADERS = {
   "x-frame-options": "DENY",
   "referrer-policy": "strict-origin-when-cross-origin",
   "permissions-policy": "camera=(), microphone=(), geolocation=()",
+  "cross-origin-opener-policy": "same-origin",
+  "cross-origin-resource-policy": "same-origin",
 };
+
+export const INLINE_BOOTSTRAP_SCRIPT_CSP_HASH = "sha256-+wjbvfAq8SBtnvSoNFUCTT0pLgTnl1A48qWU4HFjIGA=";
+
+function buildContentSecurityPolicyReportOnly(assetOrigin) {
+  return [
+    "default-src 'self'",
+    "base-uri 'none'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "frame-src 'none'",
+    "media-src 'none'",
+    "form-action 'self'",
+    `script-src 'self' '${INLINE_BOOTSTRAP_SCRIPT_CSP_HASH}'`,
+    "script-src-attr 'none'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    `img-src 'self' ${assetOrigin}`,
+    `connect-src 'self' ${assetOrigin}`,
+    "worker-src 'self'",
+    "manifest-src 'self'",
+  ].join("; ") + ";";
+}
+
+function createSecurityHeaders({ production, cspAssetOrigin }) {
+  if (!cspAssetOrigin) throw new TypeError("cspAssetOrigin is required");
+  return {
+    ...SECURITY_HEADERS,
+    "content-security-policy-report-only": buildContentSecurityPolicyReportOnly(cspAssetOrigin),
+    ...(production ? { "strict-transport-security": "max-age=31536000" } : {}),
+  };
+}
 
 function sendJson(response, statusCode, body, headers = {}) {
   response.writeHead(statusCode, { ...SECURITY_HEADERS, ...JSON_HEADERS, ...headers });
@@ -110,9 +143,10 @@ async function isDatabaseReady(pool, timeoutMillis) {
   }
 }
 
-export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMillis, trustedOrigins = [], authHandler, authenticate, serverData, ownerApi, objectStorage, requestSecurity, frontendDistPath = DEFAULT_FRONTEND_DIST_PATH, logger = console }) {
+export function createBackendServer({ pool, bodyLimitBytes, readinessTimeoutMillis, production = false, cspAssetOrigin, trustedOrigins = [], authHandler, authenticate, serverData, ownerApi, objectStorage, requestSecurity, frontendDistPath = DEFAULT_FRONTEND_DIST_PATH, logger = console }) {
+  const securityHeaders = createSecurityHeaders({ production, cspAssetOrigin });
   return createServer((request, response) => {
-    for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.setHeader(name, value);
+    for (const [name, value] of Object.entries(securityHeaders)) response.setHeader(name, value);
     const contentLength = Number(request.headers["content-length"] || 0);
     const rawPathname = request.url.split("?", 1)[0];
     const pathname = new URL(request.url, "http://localhost").pathname;

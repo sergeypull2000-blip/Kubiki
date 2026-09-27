@@ -29,6 +29,21 @@ function required(value, name) {
   return value;
 }
 
+function parseHttpsOrigin(value, name) {
+  const input = required(value, name).trim();
+  let url;
+  try {
+    url = new URL(input);
+  } catch {
+    throw new Error(`${name} must be a valid HTTPS origin`);
+  }
+  if (url.protocol !== "https:") throw new Error(`${name} must use HTTPS`);
+  if (input.includes("*") || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
+    throw new Error(`${name} must be an origin without path, query, hash, credentials, or wildcard`);
+  }
+  return url.origin;
+}
+
 function parseBoolean(value, fallback, name) {
   if (value === undefined || value === "") return fallback;
   if (value === "true") return true;
@@ -67,6 +82,7 @@ export function parseBackendConfig(env = process.env) {
     ),
     trustProxy: parseBoolean(env.TRUST_PROXY, false, "TRUST_PROXY"),
     trustedOrigins: parseTrustedOrigins(env.KUBIKI_TRUSTED_ORIGINS),
+    cspAssetOrigin: parseHttpsOrigin(env.KUBIKI_CSP_ASSET_ORIGIN, "KUBIKI_CSP_ASSET_ORIGIN"),
     production,
   };
 }

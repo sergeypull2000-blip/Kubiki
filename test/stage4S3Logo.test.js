@@ -14,6 +14,7 @@ async function serverFor({ userId = USER_A, repository = {}, storage = {}, authe
     pool: { query: async () => ({ rows: [] }) },
     bodyLimitBytes: 600_000,
     readinessTimeoutMillis: 20,
+    cspAssetOrigin: "https://assets.example.test",
     authenticate: async () => authenticated ? { user: { id: userId } } : null,
     ownerApi: repository,
     objectStorage: storage,
