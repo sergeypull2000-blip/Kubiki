@@ -19,7 +19,7 @@
 export const AI_PRICING_VERSION = 2;
 
 // Лимит на одного пользователя в месяц по умолчанию, USD (Beta).
-export const DEFAULT_MONTHLY_LIMIT_USD = 5;
+export const DEFAULT_MONTHLY_LIMIT_USD = 1.5;
 
 const MODEL = "deepseek-v4-flash";
 

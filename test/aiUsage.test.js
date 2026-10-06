@@ -106,13 +106,13 @@ test("estimateCostUsd derives cache miss from input minus hit when miss not repo
   });
 });
 
-test("DEFAULT_MONTHLY_LIMIT_USD is five dollars", () => {
-  assert.equal(DEFAULT_MONTHLY_LIMIT_USD, 5);
+test("DEFAULT_MONTHLY_LIMIT_USD is one dollar and fifty cents", () => {
+  assert.equal(DEFAULT_MONTHLY_LIMIT_USD, 1.5);
 });
 
 test("loadEffectiveLimit falls back to default when row missing or error", async () => {
-  assert.deepEqual(await loadEffectiveLimit(quotaClient({ limitRow: null }), "u1"), { limitUsd: 5, unlimited: false });
-  assert.deepEqual(await loadEffectiveLimit(quotaClient({ limitRow: null, limitError: { message: "boom" } }), "u1"), { limitUsd: 5, unlimited: false });
+  assert.deepEqual(await loadEffectiveLimit(quotaClient({ limitRow: null }), "u1"), { limitUsd: 1.5, unlimited: false });
+  assert.deepEqual(await loadEffectiveLimit(quotaClient({ limitRow: null, limitError: { message: "boom" } }), "u1"), { limitUsd: 1.5, unlimited: false });
 });
 
 test("loadEffectiveLimit reads override and unlimited rows", async () => {
@@ -120,9 +120,16 @@ test("loadEffectiveLimit reads override and unlimited rows", async () => {
   assert.deepEqual(await loadEffectiveLimit(quotaClient({ limitRow: { monthly_limit_usd: 5, unlimited: true } }), "u1"), { limitUsd: null, unlimited: true });
 });
 
-test("assertAllowed enforces default five-dollar limit when no override", async () => {
-  const recorder = createUsageRecorder({ client: quotaClient({ spent: [{ cost_usd: 4.9 }, { cost_usd: 0.2 }] }), userId: "u1" });
+test("assertAllowed enforces the default one-dollar-fifty limit when no override", async () => {
+  const recorder = createUsageRecorder({ client: quotaClient({ spent: [{ cost_usd: 1.4 }, { cost_usd: 0.2 }] }), userId: "u1" });
   await assert.rejects(() => recorder.assertAllowed(), UsageLimitError);
+});
+
+test("forward migration lowers the AI usage default and only caps higher stored limits", () => {
+  const migration = readFileSync(new URL("../db/migrations/008_set_ai_usage_limit_1_50.sql", import.meta.url), "utf8");
+  assert.match(migration, /alter column monthly_limit_usd set default 1\.5/i);
+  assert.match(migration, /update public\.ai_usage_limits\s+set monthly_limit_usd = 1\.5\s+where monthly_limit_usd > 1\.5/i);
+  assert.doesNotMatch(migration, /set\s+unlimited/i);
 });
 
 test("assertAllowed enforces a custom override limit", async () => {
